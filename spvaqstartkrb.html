@@ -1,0 +1,1135 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>developer_guide Quick Start KRB &#8212; PVXS 1.3.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=bb516dca"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="icon" href="_static/favicon.png"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="developer_guide Quick Start LDAP" href="spvaqstartldap.html" />
+    <link rel="prev" title="developer_guide Quick Start Std" href="spvaqstartstd.html" />
+
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+<!-- Material Icons -->
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+
+<!-- Inject extra CSS for pages starting with 'spva' -->
+<link rel="stylesheet" type="text/css" href="_static/style.css" />
+
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="guide-quick-start-krb">
+<span id="quick-start-krb"></span><h1><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start KRB<a class="headerlink" href="#guide-quick-start-krb" title="Link to this heading">¶</a></h1>
+<p>This section contains a Quick Start <i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> for the Secure PVAccess <em>Kerberos Authenticator</em>.</p>
+<blockquote>
+<div><p>The Kerberos Authenticator is an Authenticator that uses a kerberos ticket to create an X.509
+certificate.</p>
+<p>It takes the <code class="docutils literal notranslate"><span class="pre">PRINCIPAL</span></code> from the ticket and splits it up on ‘&#64;’ to extract the
+<code class="docutils literal notranslate"><span class="pre">common</span> <span class="pre">name</span></code>, and <code class="docutils literal notranslate"><span class="pre">organization</span></code> for the certificate’s
+subject while leaving the <code class="docutils literal notranslate"><span class="pre">organizational</span> <span class="pre">unit</span></code> blank.</p>
+<p>The information
+is sent to the PVACMS which validates that the request is authentic and the credentials
+correct by contacting the KDC.  If all checks-out then certificates are generated in the <code class="docutils literal notranslate"><span class="pre">VALID</span></code> state.</p>
+</div></blockquote>
+<p>Our starting point for this Quick Start Guide is the end of the <a class="reference internal" href="spvaqstartstd.html#quick-start-std"><span class="std std-ref"> Quick Start Std</span></a> so if you haven’t gone through it yet
+do that now then come back here.  You need to have users’s configured (<code class="docutils literal notranslate"><span class="pre">pvacms</span></code>, <code class="docutils literal notranslate"><span class="pre">admin</span></code>, <code class="docutils literal notranslate"><span class="pre">softioc</span></code>, and <code class="docutils literal notranslate"><span class="pre">client</span></code>).
+We will set up a containerised KDC and configure it so that the users can get tickets.  We will create
+a pvacms Kerberos service and provide PVACMS a keytab for passwordless authentication so that it can verify CCRs presented
+by clients requesting new certificates.</p>
+<p>See <a class="reference internal" href="spva.html#secure-pvaccess"><span class="std std-ref"> Secure PVAccess</span></a> for general documentation on Secure PVAccess.</p>
+<p>Other Quick Start Guides:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="spvaqstart.html#quick-start"><span class="std std-ref"> Quick Start PVXS</span></a></p></li>
+<li><p><a class="reference internal" href="spvaqstartstd.html#quick-start-std"><span class="std std-ref"> Quick Start Std</span></a></p></li>
+<li><p><a class="reference internal" href="spvaqstartldap.html#quick-start-ldap"><span class="std std-ref"> Quick Start LDAP</span></a></p></li>
+</ul>
+<section id="learn-you-will-learn">
+<h2><i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i> You will learn:<a class="headerlink" href="#learn-you-will-learn" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="#spva-qs-krb-kdc"><span class="std std-ref">Creating a containerised KDC</span></a>,</p></li>
+<li><p><a class="reference internal" href="#spva-qs-krb-build"><span class="std std-ref">Building PVXS with Kerberos Authenticator support</span></a>,</p></li>
+<li><p><a class="reference internal" href="#spva-qs-krb-pvacms"><span class="std std-ref">Exporting pvacms keytab from KDC and configuring pvacms to use it</span></a>,</p></li>
+<li><p><a class="reference internal" href="#spva-qs-krb-server"><span class="std std-ref">Creating certificates using the Kerberos Authenticator</span></a> and</p></li>
+<li><p><a class="reference internal" href="#spva-qs-krb-client"><span class="std std-ref">Connecting a Kerberos Client to an SPVA Server</span></a></p></li>
+</ul>
+</section>
+<section id="pre-packagedprepackaged">
+<h2><i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>Prepackaged<a class="headerlink" href="#pre-packagedprepackaged" title="Link to this heading">¶</a></h2>
+<p>If you want a prepackaged environment, try the following.  You will need three terminal sessions.</p>
+<section id="load-image">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Load image<a class="headerlink" href="#load-image" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>¹</p></li>
+<li><p>start new container with Prepackaged Secure PVAccess with Kerberos Authenticator and 4 Users</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--name<span class="w"> </span>spva_krb<span class="w"> </span>georgeleveln/spva_krb:latest
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">2025-03-08 14:40:43,319 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.</span>
+<span class="go">2025-03-08 14:40:43,319 INFO Included extra file &quot;/etc/supervisor/conf.d/kadmind.conf&quot; during parsing</span>
+<span class="go">2025-03-08 14:40:43,319 INFO Included extra file &quot;/etc/supervisor/conf.d/krb5kdc.conf&quot; during parsing</span>
+<span class="go">2025-03-08 14:40:43,319 INFO Included extra file &quot;/etc/supervisor/conf.d/pvacms.conf&quot; during parsing</span>
+<span class="go">2025-03-08 14:40:43,322 INFO supervisord started with pid 1</span>
+<span class="go">2025-03-08 14:40:44,334 INFO spawned: &#39;krb5-admin-server&#39; with pid 7</span>
+<span class="go">2025-03-08 14:40:44,338 INFO spawned: &#39;krb5-kdc&#39; with pid 8</span>
+<span class="go">2025-03-08 14:40:44,346 INFO spawned: &#39;pvacms&#39; with pid 9</span>
+<span class="go">2025-03-08 14:40:45,589 INFO success: krb5-admin-server entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+<span class="go">2025-03-08 14:40:45,589 INFO success: krb5-kdc entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+<span class="go">2025-03-08 14:40:45,589 INFO success: pvacms entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+</pre></div>
+</div>
+</section>
+<section id="service">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Service<a class="headerlink" href="#service" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>²</p></li>
+<li><p>log in as softioc service account</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>softioc<span class="w"> </span>spva_krb<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>get a kerberos ticket.  Enter “secret” as the password when prompted</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>kinit
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Password for softioc@EPICS.ORG:</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>klist
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Ticket cache: FILE:/tmp/krb5cc_1003</span>
+<span class="go">Default principal: softioc@EPICS.ORG</span>
+
+<span class="go">Valid starting     Expires            Service principal</span>
+<span class="go">03/08/25 15:23:09  03/09/25 15:23:09  krbtgt/EPICS.ORG@EPICS.ORG</span>
+<span class="go">    renew until 03/08/25 15:23:09</span>
+<span class="go">03/08/25 15:23:21  03/09/25 15:23:09  pvacms/cluster@EPICS.ORG</span>
+<span class="go">    renew until 03/08/25 15:23:09</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>create a server certificate using the Kerberos Authenticator</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnkrb<span class="w"> </span>-u<span class="w"> </span>server
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/softioc/.config/pva/1.3/server.p12</span>
+<span class="go">Certificate identifier  : 47530d89:3826361579604613181</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-f<span class="w"> </span>~/.config/pva/1.3/server.p12
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Details:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID : 47530d89:3826361579604613181</span>
+<span class="go">Entity Subject : CN=softioc, O=EPICS.ORG</span>
+<span class="go">Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority</span>
+<span class="go">Valid From     : Sat Mar 08 15:23:21 2025 UTC</span>
+<span class="go">Expires On     : Sun Mar 09 15:23:09 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+
+<span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: 47530d89:3826361579604613181</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Sat Mar 08 15:47:14 2025 UTC</span>
+<span class="go">Status Expires: Sat Mar 08 16:17:14 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="client">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Client<a class="headerlink" href="#client" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+<li><p>log in as a Secure PVAccess client</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>client<span class="w"> </span>spva_krb<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>get a kerberos ticket.  Enter “secret” as the password when prompted</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>kinit
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Password for client@EPICS.ORG:</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>klist
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Ticket cache: FILE:/tmp/krb5cc_1004</span>
+<span class="go">Default principal: client@EPICS.ORG</span>
+
+<span class="go">Valid starting     Expires            Service principal</span>
+<span class="go">03/08/25 15:27:50  03/09/25 15:27:50  krbtgt/EPICS.ORG@EPICS.ORG</span>
+<span class="go">    renew until 03/08/25 15:27:50</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>create a client certificate using the Kerberos Authenticator</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnkrb
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/client/.config/pva/1.3/client.p12</span>
+<span class="go">Certificate identifier  : 47530d89:15177030356392297708</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-f<span class="w"> </span>~/.config/pva/1.3/client.p12
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Details:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID : 47530d89:15177030356392297708</span>
+<span class="go">Entity Subject : CN=client, O=EPICS.ORG</span>
+<span class="go">Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority</span>
+<span class="go">Valid From     : Sat Mar 08 15:31:44 2025 UTC</span>
+<span class="go">Expires On     : Sun Mar 09 15:27:50 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+
+<span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: 47530d89:15177030356392297708</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Sat Mar 08 15:40:20 2025 UTC</span>
+<span class="go">Status Expires: Sat Mar 08 16:10:20 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="start-softioc">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Start SoftIOC<a class="headerlink" href="#start-softioc" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>²</p></li>
+<li><p>start SoftIOC</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>softIocPVX<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-m<span class="w"> </span><span class="nv">user</span><span class="o">=</span>test,N<span class="o">=</span>tst,P<span class="o">=</span>tst<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testiocg.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-G<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.json<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-a<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.acf
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">INFO: PVXS QSRV2 is loaded, permitted, and ENABLED.</span>
+<span class="go">2025-03-08T15:36:11.265341125 WARN pvxs.tcp.init Server unable to bind TCP port 5075, falling back to [::]:39377</span>
+<span class="go">2025-03-08T15:36:11.265436375 WARN pvxs.tcp.init Server unable to bind TLS port 5076, falling back to [::]:34381</span>
+<span class="go">Starting iocInit</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="gp">#</span><span class="c1"># EPICS R7.0.8.2-DEV</span>
+<span class="gp">#</span><span class="c1"># Rev. R7.0.8.1-123-g48607a42586b1a316cd6</span>
+<span class="gp">#</span><span class="c1"># Rev. Date Git: 2024-11-29 17:08:28 +0000</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="go">iocRun: All initialization complete</span>
+<span class="go">epics&gt;</span>
+</pre></div>
+</div>
+</section>
+<section id="get-pv-value">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Get PV value<a class="headerlink" href="#get-pv-value" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+<li><p>get a PV <code class="docutils literal notranslate"><span class="pre">test:enumExample</span></code> value from the SoftIOC</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxinfo<span class="w"> </span>-v<span class="w"> </span>test:enumExample
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Effective config</span>
+<span class="go">EPICS_PVA_AUTO_ADDR_LIST=YES</span>
+<span class="go">EPICS_PVA_BROADCAST_PORT=5076</span>
+<span class="go">EPICS_PVA_CONN_TMO=30</span>
+<span class="go">EPICS_PVA_SERVER_PORT=5075</span>
+<span class="go">EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.3/client.p12</span>
+<span class="go">EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp on_no_cms=fallback-to-tcp</span>
+<span class="go">EPICS_PVA_TLS_PORT=5076</span>
+<span class="go">XDG_CONFIG_HOME=/home/client/.config/pva/1.3</span>
+<span class="go">XDG_DATA_HOME=/home/client/.local/share/pva/1.3</span>
+<span class="gp"># </span>TLS<span class="w"> </span>x509:47530d89:3826361579604613181:EPICS<span class="w"> </span>Root<span class="w"> </span>Certificate<span class="w"> </span>Authority/softioc@172.17.0.2:34381
+<span class="go">test:enumExample from 172.17.0.2:34381</span>
+<span class="go">struct &quot;epics:nt/NTEnum:1.0&quot; {</span>
+<span class="go">    struct &quot;enum_t&quot; {</span>
+<span class="go">        int32_t index</span>
+<span class="go">        string[] choices</span>
+<span class="go">    } value</span>
+<span class="go">    struct &quot;alarm_t&quot; {</span>
+<span class="go">        int32_t severity</span>
+<span class="go">        int32_t status</span>
+<span class="go">        string message</span>
+<span class="go">    } alarm</span>
+<span class="go">    struct &quot;time_t&quot; {</span>
+<span class="go">        int64_t secondsPastEpoch</span>
+<span class="go">        int32_t nanoseconds</span>
+<span class="go">        int32_t userTag</span>
+<span class="go">    } timeStamp</span>
+<span class="go">    struct {</span>
+<span class="go">        string description</span>
+<span class="go">    } display</span>
+<span class="go">}</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>verify that connection is TLS</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">TLS</span> <span class="pre">x509:47530d89:3826361579604613181:EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority/softioc</span> <span class="pre">&#64;</span> <span class="pre">172.17.0.2</span></code> indicates that:</p>
+<ul>
+<li><p>The connection is <code class="docutils literal notranslate"><span class="pre">TLS</span></code>,</p></li>
+<li><p>The Server end of the channel has been authenticated by the Root Certificate Authority <code class="docutils literal notranslate"><span class="pre">EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority</span></code></p></li>
+<li><p>The Server end of the channel’s name has been authenticated as <code class="docutils literal notranslate"><span class="pre">softioc</span></code> and is connecting from host <code class="docutils literal notranslate"><span class="pre">172.17.0.2</span></code></p></li>
+</ul>
+</li>
+</ul>
+</section>
+</section>
+<section id="step-by-step-step-by-step">
+<h2><i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i> Step-By-Step<a class="headerlink" href="#step-by-step-step-by-step" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Env. <em>authnkrb</em></p></th>
+<th class="head"><p>Env. <em>pvacms</em></p></th>
+<th class="head"><p>Params. <em>authkrb</em></p></th>
+<th class="head"><p>Params. <em>pvacms</em></p></th>
+<th class="head"><p>Keys and Values</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td rowspan="2"><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">KRB5_KTNAME</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">--krb-keytab</span></code></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">{string location of keytab file}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">/etc/security/keytab</span></code></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">This is the keytab file shared with <a class="reference internal" href="spvacerts.html#pvacms"><span class="std std-ref">PVACMS</span></a> by the KDC so</div>
+<div class="line">that it can verify kerberos tickets</div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">KRB5_CLIENT_KTNAME</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td colspan="2"><div class="line-block">
+<div class="line">EPICS_AUTH_KRB_VALIDATOR_SERVICE</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td colspan="2"><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">--krb-validator</span></code></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{this is validator service name}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">pvacms</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">The name of the service user created in the KDC that the pvacms</div>
+<div class="line">service will log in as.  <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">/cluster&#64;{realm}</span></code> will be added</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td colspan="2"><div class="line-block">
+<div class="line">EPICS_AUTH_KRB_REALM</div>
+</div>
+</td>
+<td colspan="2"><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">--krb-realm</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">EPICS.ORG</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">Kerberos REALM to authenticate against</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<section id="step-docker-image">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Docker Image<a class="headerlink" href="#step-docker-image" title="Link to this heading">¶</a></h3>
+<section id="use-a-prepackaged-spva-std-image">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Use a Prepackaged spva_std image<a class="headerlink" href="#use-a-prepackaged-spva-std-image" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>¹</p></li>
+<li><p>open a terminal and load pre-built image</p></li>
+<li><p>don’t forget to add /bin/bash at the end to suppress running the pvacms</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--name<span class="w"> </span>spva_krb<span class="w"> </span>georgeleveln/spva_std:latest<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-kdc-kadmin">
+<span id="spva-qs-krb-kdc"></span><h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> KDC &amp; KAdmin<a class="headerlink" href="#step-kdc-kadmin" title="Link to this heading">¶</a></h3>
+<p>This section shows how to install and configure a Kerberos KDC and kadmin.  This
+is included to enable you to test the Kerberos Authenticator before deploying it
+into your network.  It will enable you to configure EPICS agents that
+have valid kerberos tickets that can be exchanged for X.509 certificates
+using the Kerberos Authenticator.</p>
+<section id="install-prerequisites">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Install prerequisites<a class="headerlink" href="#install-prerequisites" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Add kerberos dependencies</p>
+<ul>
+<li><p>krb5 admin server (kadmin)</p></li>
+<li><p>krb5 KDC</p></li>
+<li><p>libkrb5 development library for compiling pvxs with Kerberos Authenticator support</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>apt-get<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+apt-get<span class="w"> </span>-y<span class="w"> </span>install<span class="w"> </span><span class="se">\</span>
+<span class="w">        </span>--no-install-recommends<span class="w"> </span><span class="se">\</span>
+<span class="w">        </span>krb5-admin-server<span class="w"> </span><span class="se">\</span>
+<span class="w">        </span>krb5-kdc<span class="w"> </span><span class="se">\</span>
+<span class="w">        </span>libkrb5-dev
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Hit:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease</span>
+<span class="go">Get:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease [126 kB]</span>
+<span class="go">Get:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease [126 kB]</span>
+<span class="go">Get:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease [126 kB]</span>
+<span class="go">...</span>
+<span class="go">invoke-rc.d: policy-rc.d denied execution of start.</span>
+<span class="go">Setting up krb5-admin-server (1.20.1-6ubuntu2.5) ...</span>
+<span class="go">invoke-rc.d: could not determine current runlevel</span>
+<span class="go">invoke-rc.d: policy-rc.d denied execution of start.</span>
+<span class="go">Processing triggers for libc-bin (2.39-0ubuntu8.4) ...</span>
+</pre></div>
+</div>
+</section>
+<section id="rebuild-pvxs">
+<span id="spva-qs-krb-build"></span><h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Rebuild pvxs<a class="headerlink" href="#rebuild-pvxs" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>enable Kerberos Authenticator by updating <code class="docutils literal notranslate"><span class="pre">CONFIG_SITE.local</span></code></p></li>
+<li><p>do a clean rebuild of pvxs</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">PROJECT_HOME</span><span class="o">=</span>/opt/epics
+<span class="nb">cd</span><span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>
+
+cat<span class="w"> </span>&gt;&gt;<span class="w"> </span>CONFIG_SITE.local<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">EVENT2_HAS_OPENSSL = YES</span>
+<span class="s">PVXS_ENABLE_PVACMS = YES</span>
+<span class="s">PVXS_ENABLE_KRB_AUTH = YES</span>
+<span class="s">EOF</span>
+
+<span class="nb">cd</span><span class="w"> </span>pvxs<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+make<span class="w"> </span>distclean<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>make<span class="w"> </span>-j10<span class="w"> </span>all
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">make -C ./configure realclean</span>
+<span class="go">make[1]: Entering directory &#39;/opt/epics/pvxs/configure&#39;</span>
+<span class="go">rm -rf O.*</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/configure&#39;</span>
+<span class="go">make -C ./setup realclean</span>
+<span class="go">make[1]: Entering directory &#39;/opt/epics/pvxs/setup&#39;</span>
+<span class="go">rm -rf O.*</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/setup&#39;</span>
+<span class="go">make -C ./src realclean</span>
+<span class="go">make[1]: Entering directory &#39;/opt/epics/pvxs/src&#39;</span>
+<span class="go">rm -rf O.*</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/src&#39;</span>
+<span class="go">make -C ./tools realclean</span>
+<span class="go">make[1]: Entering directory &#39;/opt/epics/pvxs/tools&#39;</span>
+<span class="go">rm -rf O.*</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/tools&#39;</span>
+<span class="go">...</span>
+<span class="go">/usr/bin/g++ -o testtlswithcms  -L/opt/epics/epics-base/lib/linux-aarch64 -L/opt/epics/pvxs/lib/linux-aarch64 -Wl,-rpath,/opt/epics/epics-base/lib/linux-aarch64 -Wl,-rpath,/opt/epics/pvxs/lib/linux-aarch64     -Wl,--as-needed -Wl,--compress-debug-sections=zlib      -rdynamic         testtlswithcms.o certstatusfactory.o certstatusmanager.o certstatus.o    -lpvxs -lCom  -levent_openssl -levent_core -levent_pthreads -lssl -lcrypto</span>
+<span class="go">perl -CSD /opt/epics/epics-base/bin/linux-aarch64/makeTestfile.pl linux-aarch64 linux-aarch64 testtlswithcms.t testtlswithcms</span>
+<span class="go">make[2]: Leaving directory &#39;/opt/epics/pvxs/test/O.linux-aarch64&#39;</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/test&#39;</span>
+</pre></div>
+</div>
+</section>
+<section id="configure-kdc-and-kadmin">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Configure KDC and KAdmin<a class="headerlink" href="#configure-kdc-and-kadmin" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>configure the KDC</p>
+<ul>
+<li><p>set standard ports (as its in the container it won’t interact with your local network)</p></li>
+<li><p>define the realm as <code class="docutils literal notranslate"><span class="pre">EPICS.ORG</span></code></p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/etc/krb5kdc/kdc.conf<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">[kdcdefaults]</span>
+<span class="s">kdc_ports = 88,750</span>
+<span class="s">kdc_tcp_ports = 88</span>
+<span class="s">kadmind_port = 749</span>
+<span class="s">kpasswd_port = 464</span>
+
+<span class="s">[realms]</span>
+<span class="s">    EPICS.ORG = {</span>
+<span class="s">        dict_file = /etc/krb5kdc/badpass.txt</span>
+<span class="s">        kdc_ports = 88,750</span>
+<span class="s">        kdc_tcp_ports = 88</span>
+<span class="s">        kadmind_port = 749</span>
+<span class="s">        kpasswd_port = 464</span>
+<span class="s">    }</span>
+
+<span class="s">[logging]</span>
+<span class="s">default = FILE:/var/log/krb5kdc.log</span>
+<span class="s">admin_server = FILE:/var/log/kadmin.log</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>set kadmin access control list</p>
+<ul>
+<li><p>set administrator user to <code class="docutils literal notranslate"><span class="pre">admin&#64;EPICS.ORG</span></code></p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/etc/krb5kdc/kadm5.acl<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">admin@EPICS.ORG *</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>set the KDC bad password file</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/etc/krb5kdc/badpass.txt<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">password</span>
+<span class="s">123456</span>
+<span class="s">letmein</span>
+<span class="s">admin</span>
+<span class="s">kerberos</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+</section>
+<section id="configure-kerberos-users">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Configure Kerberos Users<a class="headerlink" href="#configure-kerberos-users" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>set default kerberos user configuration</p>
+<ul>
+<li><p>default realm <code class="docutils literal notranslate"><span class="pre">EPICS.ORG</span></code></p></li>
+<li><p>don’t lookup DNS (this is v.important)</p></li>
+<li><p>ticket lifetime 1 day and renewable up to 1 week</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/etc/krb5.conf<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">[libdefaults]</span>
+<span class="s">default_realm = EPICS.ORG</span>
+<span class="s">dns_lookup_kdc = false</span>
+<span class="s">dns_lookup_realm = false</span>
+<span class="s">dns_canonicalize_hostname = false</span>
+<span class="s">forwardable = yes</span>
+<span class="s">proxiable = yes</span>
+<span class="s">ticket_lifetime = 24h</span>
+<span class="s">renew_lifetime = 7d</span>
+
+<span class="s">[realms]</span>
+<span class="s">EPICS.ORG = {</span>
+<span class="s">    kdc = localhost:88</span>
+<span class="s">    admin_server = localhost:749</span>
+<span class="s">    kpasswd_server = localhost:464</span>
+<span class="s">    default_domain = epics.org</span>
+<span class="s">}</span>
+
+<span class="s">[domain_realm]</span>
+<span class="s">    .epics.org = EPICS.ORG</span>
+<span class="s">    epics.org = EPICS.ORG</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+</section>
+<section id="make-and-install-keytab-for-pvacms">
+<span id="spva-qs-krb-pvacms"></span><h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Make and Install Keytab for PVACMS<a class="headerlink" href="#make-and-install-keytab-for-pvacms" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>establish master password for kerberos database</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>kdb5_util<span class="w"> </span>create<span class="w"> </span>-s<span class="w"> </span>-P<span class="w"> </span>secret
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Initializing database &#39;/var/lib/krb5kdc/principal&#39; for realm &#39;EPICS.ORG&#39;,</span>
+<span class="go">master key name &#39;K/M@EPICS.ORG&#39;</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>start KDC and kadmin server temporarily to allow creation of various principals</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>service<span class="w"> </span>krb5-kdc<span class="w"> </span>start<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+service<span class="w"> </span>krb5-admin-server<span class="w"> </span>start
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">* Starting Kerberos KDC krb5kdc                      [ OK ]</span>
+<span class="go">* Starting Kerberos administrative servers kadmind   [ OK ]</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>create kerberos principals</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">admin</span></code> user</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pvacms/cluster</span></code> user</p>
+<ul>
+<li><p>note that this is created as a user (not a service)</p></li>
+<li><p>allocated a random password which is exported to the keytab and shared with pvacms user</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">softioc</span></code> user allowed to act as a server</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">client</span></code> user</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>kadmin.local<span class="w"> </span>-q<span class="w"> </span><span class="s1">&#39;addprinc -pw secret -allow_svr admin&#39;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+kadmin.local<span class="w"> </span>-q<span class="w"> </span><span class="s1">&#39;addprinc -randkey pvacms/cluster@EPICS.ORG&#39;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+kadmin.local<span class="w"> </span>-q<span class="w"> </span><span class="s1">&#39;addprinc -pw secret -allow_svr softioc&#39;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+kadmin.local<span class="w"> </span>-q<span class="w"> </span><span class="s1">&#39;addprinc -pw secret client&#39;</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Authenticating as principal root/admin@EPICS.ORG with password.</span>
+<span class="go">No policy specified for admin@EPICS.ORG; defaulting to no policy</span>
+<span class="go">Principal &quot;admin@EPICS.ORG&quot; created.</span>
+<span class="go">Authenticating as principal root/admin@EPICS.ORG with password.</span>
+<span class="go">No policy specified for pvacms/cluster@EPICS.ORG; defaulting to no policy</span>
+<span class="go">Principal &quot;pvacms/cluster@EPICS.ORG&quot; created.</span>
+<span class="go">Authenticating as principal root/admin@EPICS.ORG with password.</span>
+<span class="go">No policy specified for softioc@EPICS.ORG; defaulting to no policy</span>
+<span class="go">Principal &quot;softioc@EPICS.ORG&quot; created.</span>
+<span class="go">Authenticating as principal root/admin@EPICS.ORG with password.</span>
+<span class="go">No policy specified for client@EPICS.ORG; defaulting to no policy</span>
+<span class="go">Principal &quot;client@EPICS.ORG&quot; created.</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>export the pvacms keytab that will allow it to log in without a password</p></li>
+<li><p>copy it to the pvacms configuration directory and lock down access to it</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>kadmin.local<span class="w"> </span>-q<span class="w"> </span><span class="s1">&#39;ktadd -k /home/pvacms/.config/krb5/pvacms.keytab pvacms/cluster@EPICS.ORG&#39;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+chown<span class="w"> </span>pvacms:pvacms<span class="w"> </span>/home/pvacms/.config/krb5/pvacms.keytab<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+chmod<span class="w"> </span><span class="m">600</span><span class="w"> </span>/home/pvacms/.config/krb5/pvacms.keytab
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Authenticating as principal root/admin@EPICS.ORG with password.</span>
+<span class="go">Entry for principal pvacms/cluster@EPICS.ORG with kvno 2, encryption type aes256-cts-hmac-sha1-96 added to keytab WRFILE:/home/pvacms/.config/krb5/pvacms.keytab.</span>
+<span class="go">Entry for principal pvacms/cluster@EPICS.ORG with kvno 2, encryption type aes128-cts-hmac-sha1-96 added to keytab WRFILE:/home/pvacms/.config/krb5/pvacms.keytab.</span>
+</pre></div>
+</div>
+</section>
+<section id="configure-pvacms-for-kerberos-authenticator">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_6</i> Configure PVACMS for Kerberos Authenticator<a class="headerlink" href="#configure-pvacms-for-kerberos-authenticator" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>set up environment for pvacms</p>
+<ul>
+<li><p>location of keytab file.  Note that this uses the krb5 environment variable, not a Secure PVAccess specific one</p></li>
+<li><p>default realm name <code class="docutils literal notranslate"><span class="pre">EPICS.ORG</span></code></p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;&gt;<span class="w"> </span>/home/pvacms/.bashrc<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">export KRB5_KTNAME=/home/pvacms/.config/krb5/pvacms.keytab</span>
+<span class="s">export KRB5_CLIENT_KTNAME=/home/pvacms/.config/krb5/pvacms.keytab</span>
+<span class="s">export EPICS_AUTH_KRB_REALM=EPICS.ORG</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+</section>
+<section id="configure-supervisor-to-run-kdc-and-kadmin">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_7</i> Configure Supervisor to run KDC and KAdmin<a class="headerlink" href="#configure-supervisor-to-run-kdc-and-kadmin" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>configure kadmin supervisord</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/etc/supervisor/conf.d/kadmind.conf<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">[program:krb5-admin-server]</span>
+<span class="s">command=/usr/sbin/kadmind -nofork</span>
+<span class="s">autostart=true</span>
+<span class="s">autorestart=true</span>
+<span class="s">stderr_logfile=/var/log/supervisor/kadmind.err.log</span>
+<span class="s">stdout_logfile=/var/log/supervisor/kadmind.out.log</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>configure KDC supervisord</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/etc/supervisor/conf.d/krb5kdc.conf<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">[program:krb5-kdc]</span>
+<span class="s">command=/usr/sbin/krb5kdc -n</span>
+<span class="s">autostart=true</span>
+<span class="s">autorestart=true</span>
+<span class="s">stderr_logfile=/var/log/supervisor/krb5kdc.err.log</span>
+<span class="s">stdout_logfile=/var/log/supervisor/krb5kdc.out.log</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+</section>
+<section id="start-services">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_8</i> Start Services<a class="headerlink" href="#start-services" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>make sure config dir exists in pvacms home before starting service</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>-p<span class="w"> </span>/home/pvacms/.config/krb5/
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>update pvacms supervisor config to include Kerberos Authenticator configuration</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;&gt;<span class="w"> </span>/etc/supervisor/conf.d/pvacms.conf<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">environment=KRB5_KTNAME=&quot;/home/pvacms/.config/krb5/pvacms.keytab&quot;,KRB5_CLIENT_KTNAME=&quot;/home/pvacms/.config/krb5/pvacms.keytab&quot;,EPICS_AUTH_KRB_REALM=&quot;EPICS.ORG&quot;</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>start KDC, kadmin daemon, and pvacms with Kerberos Authenticator support</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>/usr/bin/supervisord<span class="w"> </span>-c<span class="w"> </span>/etc/supervisor/supervisord.conf
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">2025-03-10 02:31:38,694 INFO Included extra file &quot;/etc/supervisor/conf.d/kadmind.conf&quot; during parsing</span>
+<span class="go">2025-03-10 02:31:38,694 INFO Included extra file &quot;/etc/supervisor/conf.d/krb5kdc.conf&quot; during parsing</span>
+<span class="go">2025-03-10 02:31:38,694 INFO Included extra file &quot;/etc/supervisor/conf.d/pvacms.conf&quot; during parsing</span>
+<span class="go">2025-03-10 02:31:38,694 INFO Set uid to user 0 succeeded</span>
+<span class="go">2025-03-10 02:31:38,695 INFO supervisord started with pid 2275</span>
+<span class="go">2025-03-10 02:31:39,708 INFO spawned: &#39;krb5-admin-server&#39; with pid 2276</span>
+<span class="go">2025-03-10 02:31:39,711 INFO spawned: &#39;krb5-kdc&#39; with pid 2277</span>
+<span class="go">2025-03-10 02:31:39,719 INFO spawned: &#39;pvacms&#39; with pid 2278</span>
+<span class="go">2025-03-10 02:31:40,825 INFO success: krb5-admin-server entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+<span class="go">2025-03-10 02:31:40,825 INFO success: krb5-kdc entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+<span class="go">2025-03-10 02:31:40,825 INFO success: pvacms entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-run-softioc">
+<span id="spva-qs-krb-server"></span><h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run SoftIOC<a class="headerlink" href="#step-run-softioc" title="Link to this heading">¶</a></h3>
+<section id="login-as-softioc-in-a-new-shell">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Login as softioc in a new shell<a class="headerlink" href="#login-as-softioc-in-a-new-shell" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>²</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>softioc<span class="w"> </span>spva_krb<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+<section id="kerberos-login">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> kerberos login<a class="headerlink" href="#kerberos-login" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>do a kerberos login to get a kerberos ticket.  Enter “secret” as the password when prompted</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>kinit
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Password for softioc@EPICS.ORG:</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>klist
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Ticket cache: FILE:/tmp/krb5cc_1003</span>
+<span class="go">Default principal: softioc@EPICS.ORG</span>
+
+<span class="go">Valid starting     Expires            Service principal</span>
+<span class="go">03/10/25 03:16:25  03/11/25 03:16:25  krbtgt/EPICS.ORG@EPICS.ORG</span>
+<span class="go">    renew until 03/10/25 03:16:25</span>
+</pre></div>
+</div>
+</section>
+<section id="get-certificate">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Get Certificate<a class="headerlink" href="#get-certificate" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>create a softioc server certificate</p>
+<ul>
+<li><p>creates softioc server certificate</p></li>
+<li><p>at location specified by <code class="docutils literal notranslate"><span class="pre">EPICS_PVAS_TLS_KEYCHAIN</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_CONFIG_HOME}/pva/1.3/server.p12</span></code> by default</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnkrb<span class="w"> </span>-u<span class="w"> </span>server
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/softioc/.config/pva/1.3/server.p12</span>
+<span class="go">Certificate identifier  : b271f07a:12421554925305118824</span>
+</pre></div>
+</div>
+</section>
+<section id="check-the-certificate-status-is-valid">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Check the certificate status is VALID<a class="headerlink" href="#check-the-certificate-status-is-valid" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>check that the generated certificate is <code class="docutils literal notranslate"><span class="pre">VALID</span></code></p></li>
+<li><p>note that the <em>name</em> is <code class="docutils literal notranslate"><span class="pre">softioc</span></code> - picked up from <code class="docutils literal notranslate"><span class="pre">principal</span></code> in kerberos ticket</p></li>
+<li><p>note that the <em>organization</em> is <code class="docutils literal notranslate"><span class="pre">EPICS.ORG</span></code> - picked up from <code class="docutils literal notranslate"><span class="pre">REALM</span></code> in kerberos ticket</p></li>
+<li><p>note that the <em>expiration date</em> is the same as the expiration of the kerberos ticket</p></li>
+<li><p>note that the <em>start date</em> is set to the date of certificate issuance</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-f<span class="w"> </span>~/.config/pva/1.3/server.p12
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Details:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID : b271f07a:12421554925305118824</span>
+<span class="go">Entity Subject : CN=softioc, O=EPICS.ORG</span>
+<span class="go">Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority</span>
+<span class="go">Valid From     : Mon Mar 10 03:20:05 2025 UTC</span>
+<span class="go">Expires On     : Tue Mar 11 03:16:25 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+
+<span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: b271f07a:12421554925305118824</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Mon Mar 10 03:22:14 2025 UTC</span>
+<span class="go">Status Expires: Mon Mar 10 03:52:14 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="run-secure-pvaccess-service">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Run Secure PVAccess Service<a class="headerlink" href="#run-secure-pvaccess-service" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>start the service</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>softIocPVX<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-m<span class="w"> </span><span class="nv">user</span><span class="o">=</span>test,N<span class="o">=</span>tst,P<span class="o">=</span>tst<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testiocg.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-G<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.json<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-a<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.acf
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">INFO: PVXS QSRV2 is loaded, permitted, and ENABLED.</span>
+<span class="go">2025-03-10T03:28:17.264206926 WARN pvxs.tcp.init Server unable to bind TCP port 5075, falling back to [::]:46831</span>
+<span class="go">2025-03-10T03:28:17.264284426 WARN pvxs.tcp.init Server unable to bind TLS port 5076, falling back to [::]:37027</span>
+<span class="go">Starting iocInit</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="gp">#</span><span class="c1"># EPICS R7.0.8.2-DEV</span>
+<span class="gp">#</span><span class="c1"># Rev. R7.0.8.1-123-g48607a42586b1a316cd6</span>
+<span class="gp">#</span><span class="c1"># Rev. Date Git: 2024-11-29 17:08:28 +0000</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="go">iocRun: All initialization complete</span>
+<span class="go">epics&gt;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-spva-client">
+<span id="spva-qs-krb-client"></span><h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> SPVA Client<a class="headerlink" href="#step-spva-client" title="Link to this heading">¶</a></h3>
+<section id="login-as-client-in-a-new-shell">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Login as client in a new shell<a class="headerlink" href="#login-as-client-in-a-new-shell" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>client<span class="w"> </span>spva_krb<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+<section id="id1">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> kerberos login<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>do a kerberos login to get a kerberos ticket.  Enter “secret” as the password when prompted</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>kinit
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Password for client@EPICS.ORG:</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>klist
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Ticket cache: FILE:/tmp/krb5cc_1004</span>
+<span class="go">Default principal: client@EPICS.ORG</span>
+
+<span class="go">Valid starting     Expires            Service principal</span>
+<span class="go">03/10/25 03:30:32  03/11/25 03:30:32  krbtgt/EPICS.ORG@EPICS.ORG</span>
+<span class="go">    renew until 03/10/25 03:30:32</span>
+</pre></div>
+</div>
+</section>
+<section id="id2">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Get Certificate<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>create a client certificate</p>
+<ul>
+<li><p>creates a client certificate</p></li>
+<li><p>at location specified by <code class="docutils literal notranslate"><span class="pre">EPICS_PVA_TLS_KEYCHAIN</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_CONFIG_HOME}/pva/1.3/client.p12</span></code> by default</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnkrb
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/client/.config/pva/1.3/client.p12</span>
+<span class="go">Certificate identifier  : b271f07a:1204731550645534180</span>
+</pre></div>
+</div>
+</section>
+<section id="id3">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Check the certificate status is VALID<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>check that the generated certificate is <code class="docutils literal notranslate"><span class="pre">VALID</span></code></p></li>
+<li><p>note that the <em>name</em> is <code class="docutils literal notranslate"><span class="pre">client</span></code> - picked up from <code class="docutils literal notranslate"><span class="pre">principal</span></code> in kerberos ticket</p></li>
+<li><p>note that the <em>organization</em> is <code class="docutils literal notranslate"><span class="pre">EPICS.ORG</span></code> - picked up from <code class="docutils literal notranslate"><span class="pre">REALM</span></code> in kerberos ticket</p></li>
+<li><p>note that the <em>expiration date</em> is the same as the expiration of the kerberos ticket</p></li>
+<li><p>note that the <em>start date</em> is set to the date of certificate issuance</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-f<span class="w"> </span>~/.config/pva/1.3/client.p12
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Details:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID : b271f07a:1204731550645534180</span>
+<span class="go">Entity Subject : CN=client, O=EPICS.ORG</span>
+<span class="go">Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority</span>
+<span class="go">Valid From     : Mon Mar 10 03:32:57 2025 UTC</span>
+<span class="go">Expires On     : Tue Mar 11 03:30:32 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+
+<span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: b271f07a:1204731550645534180</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Mon Mar 10 03:33:58 2025 UTC</span>
+<span class="go">Status Expires: Mon Mar 10 04:03:58 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="test-tls-client-operations">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Test TLS client operations<a class="headerlink" href="#test-tls-client-operations" title="Link to this heading">¶</a></h4>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxget<span class="w"> </span>-F<span class="w"> </span>tree<span class="w"> </span>test:structExample
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">test:structExample</span>
+<span class="go">...</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>show that TLS is being used</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxinfo<span class="w"> </span>-v<span class="w"> </span>test:enumExample
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Effective config</span>
+<span class="go">EPICS_PVA_AUTO_ADDR_LIST=YES</span>
+<span class="go">EPICS_PVA_BROADCAST_PORT=5076</span>
+<span class="go">EPICS_PVA_CONN_TMO=30</span>
+<span class="go">EPICS_PVA_SERVER_PORT=5075</span>
+<span class="go">EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.3/client.p12</span>
+<span class="go">EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp on_no_cms=fallback-to-tcp</span>
+<span class="go">EPICS_PVA_TLS_PORT=5076</span>
+<span class="go">XDG_CONFIG_HOME=/home/client/.config/pva/1.3</span>
+<span class="go">XDG_DATA_HOME=/home/client/.local/share/pva/1.3</span>
+<span class="gp"># </span>TLS<span class="w"> </span>x509:b271f07a:12421554925305118824:EPICS<span class="w"> </span>Root<span class="w"> </span>Certificate<span class="w"> </span>Authority/softioc@172.17.0.2:37027
+<span class="go">test:enumExample from 172.17.0.2:37027</span>
+<span class="go">struct &quot;epics:nt/NTEnum:1.0&quot; {</span>
+<span class="go">    struct &quot;enum_t&quot; {</span>
+<span class="go">        int32_t index</span>
+<span class="go">        string[] choices</span>
+<span class="go">    } value</span>
+<span class="go">    struct &quot;alarm_t&quot; {</span>
+<span class="go">        int32_t severity</span>
+<span class="go">        int32_t status</span>
+<span class="go">        string message</span>
+<span class="go">    } alarm</span>
+<span class="go">    struct &quot;time_t&quot; {</span>
+<span class="go">        int64_t secondsPastEpoch</span>
+<span class="go">        int32_t nanoseconds</span>
+<span class="go">        int32_t userTag</span>
+<span class="go">    } timeStamp</span>
+<span class="go">    struct {</span>
+<span class="go">        string description</span>
+<span class="go">    } display</span>
+<span class="go">}</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">TLS</span> <span class="pre">x509:b271f07a:12421554925305118824:EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority/softioc</span> <span class="pre">&#64;</span> <span class="pre">172.17.0.2</span></code> indicates that:</p>
+<ul>
+<li><p>The connection is <code class="docutils literal notranslate"><span class="pre">TLS</span></code>,</p></li>
+<li><p>The Server end of the channel has been authenticated by the Root Certificate Authority <code class="docutils literal notranslate"><span class="pre">EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority</span></code></p></li>
+<li><p>The Server end of the channel’s name has been authenticated as <code class="docutils literal notranslate"><span class="pre">softioc</span></code> and is connecting from host <code class="docutils literal notranslate"><span class="pre">172.17.0.2</span></code></p></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">PVXS</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="netconfig.html">PVA Network Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstart.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start PVXS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartstd.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start Std</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start KRB</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#learn-you-will-learn"><i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i> You will learn:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pre-packagedprepackaged"><i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>Prepackaged</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#load-image"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Load image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#service"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Service</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#client"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#start-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Start SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#get-pv-value"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Get PV value</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#step-by-step-step-by-step"><i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i> Step-By-Step</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#step-docker-image"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Docker Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-kdc-kadmin"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> KDC &amp; KAdmin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-run-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-spva-client"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> SPVA Client</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartldap.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start LDAP</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spva.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Secure PVAccess</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaauth.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> AuthN &amp; AuthZ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvacerts.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Cert Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building from Source</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html#including-pvxs-in-your-application">Including PVXS in your application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cli.html">Command Line Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="value.html">Value Container API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="client.html">Client API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server.html">Server API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html">IOC Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html#qsrv-2">QSRV 2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Misc</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaglossary.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> SPVA Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releasenotes.html">Release Notes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="spvaqstartstd.html" title="previous chapter"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start Std</a></li>
+      <li>Next: <a href="spvaqstartldap.html" title="next chapter"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start LDAP</a></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025 Michael Davidsaver, George McIntyre, Osprey DCS LLC, and SLAC.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/spvaqstartkrb.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

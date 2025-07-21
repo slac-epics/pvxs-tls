@@ -1,0 +1,1284 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>developer_guide Quick Start LDAP &#8212; PVXS 1.3.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=bb516dca"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="icon" href="_static/favicon.png"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="security Secure PVAccess" href="spva.html" />
+    <link rel="prev" title="developer_guide Quick Start KRB" href="spvaqstartkrb.html" />
+
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+<!-- Material Icons -->
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+
+<!-- Inject extra CSS for pages starting with 'spva' -->
+<link rel="stylesheet" type="text/css" href="_static/style.css" />
+
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="guide-quick-start-ldap">
+<span id="quick-start-ldap"></span><h1><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start LDAP<a class="headerlink" href="#guide-quick-start-ldap" title="Link to this heading">¶</a></h1>
+<p>This section contains a Quick Start <i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> for the Secure PVAccess <em>LDAP Authenticator</em>.</p>
+<blockquote>
+<div><p>The LDAP Authenticator is an Authenticator that creates an X.509
+certificate from LDAP credentials.</p>
+<p>It prompts the user to log in to the LDAP directory service.
+It then signs a certificate creation request with its private key and passes
+it to the PVACMS, which decodes it with the public key that
+it finds in the LDAP directory entry for the user.  If this succeeds it means that the
+requester holds the matching private key and so the certificate is generated.</p>
+<p>It uses the LDAP username as the <code class="docutils literal notranslate"><span class="pre">common</span> <span class="pre">name</span></code> and then concatenates all the <code class="docutils literal notranslate"><span class="pre">dc</span></code> components it finds
+to create the organisation while leaving the <code class="docutils literal notranslate"><span class="pre">organizational</span> <span class="pre">unit</span></code> blank.
+e.g. <code class="docutils literal notranslate"><span class="pre">dn:</span> <span class="pre">uid=admin,dc=epics,dc=org</span></code> becomes <code class="docutils literal notranslate"><span class="pre">CN=admin</span></code>, <code class="docutils literal notranslate"><span class="pre">O=epics.org</span></code>.</p>
+</div></blockquote>
+<p>Our starting point for this Quick Start Guide is the end of the <a class="reference internal" href="spvaqstartstd.html#quick-start-std"><span class="std std-ref"> Quick Start Std</span></a> so if you haven’t gone through it yet
+do that now then come back here.  You need to have user’s configured (<code class="docutils literal notranslate"><span class="pre">pvacms</span></code>, <code class="docutils literal notranslate"><span class="pre">admin</span></code>, <code class="docutils literal notranslate"><span class="pre">softioc</span></code>, and <code class="docutils literal notranslate"><span class="pre">client</span></code>).
+We will set up a containerised LDAP Service and configure it so that the users can log in.</p>
+<p>When to use the LDAP Authenticator?</p>
+<ul>
+<li><p>Your network uses Kerberos for login</p>
+<p>If, as is normally the case, you use Kerberos for authentication and
+LDAP for user profile information - <em>group</em>, <em>contact details</em>, etc - then
+use the Kerberos Authenticator.</p>
+</li>
+<li><p>Your network clients login directly to LDAP</p>
+<p>If you’ve configured your LDAP server for user login then we will
+show how you could use LDAP login credentials to get
+an X.509 certificate.</p>
+</li>
+</ul>
+<p>See <a class="reference internal" href="spva.html#secure-pvaccess"><span class="std std-ref"> Secure PVAccess</span></a> for general documentation on Secure PVAccess.</p>
+<p>Other Quick Start Guides:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="spvaqstart.html#quick-start"><span class="std std-ref"> Quick Start PVXS</span></a></p></li>
+<li><p><a class="reference internal" href="spvaqstartstd.html#quick-start-std"><span class="std std-ref"> Quick Start Std</span></a></p></li>
+<li><p><a class="reference internal" href="spvaqstartkrb.html#quick-start-krb"><span class="std std-ref"> Quick Start KRB</span></a></p></li>
+</ul>
+<section id="learn-you-will-learn">
+<h2><i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i> You will learn:<a class="headerlink" href="#learn-you-will-learn" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><span class="xref std std-ref">Creating a containerised LDAP Service</span>,</p></li>
+<li><p><a class="reference internal" href="#spva-qs-ldap-build"><span class="std std-ref">Building PVXS with LDAP Authenticator support</span></a>,</p></li>
+<li><p><a class="reference internal" href="#spva-qs-ldap-pvacms"><span class="std std-ref">Configuring the LDAP schema to support the LDAP Authenticator</span></a>,</p></li>
+<li><p><a class="reference internal" href="#spva-qs-ldap-server"><span class="std std-ref">Creating certificates using the LDAP Authenticator</span></a> and</p></li>
+<li><p><a class="reference internal" href="#spva-qs-ldap-client"><span class="std std-ref">Connecting a LDAP Client to an SPVA Server</span></a></p></li>
+</ul>
+</section>
+<section id="pre-packagedprepackaged">
+<h2><i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>Prepackaged<a class="headerlink" href="#pre-packagedprepackaged" title="Link to this heading">¶</a></h2>
+<p>If you want a prepackaged environment, try the following.  You will need three terminal sessions.</p>
+<section id="load-image">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Load image<a class="headerlink" href="#load-image" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>¹</p></li>
+<li><p>start new container with Prepackaged Secure PVAccess with LDAP Authenticator and 4 Users</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--name<span class="w"> </span>spva_ldap<span class="w"> </span>georgeleveln/spva_ldap:latest
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">2025-03-08 19:53:45,557 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.</span>
+<span class="go">2025-03-08 19:53:45,557 INFO Included extra file &quot;/etc/supervisor/conf.d/ldap.conf&quot; during parsing</span>
+<span class="go">2025-03-08 19:53:45,557 INFO Included extra file &quot;/etc/supervisor/conf.d/pvacms.conf&quot; during parsing</span>
+<span class="go">2025-03-08 19:53:45,557 INFO Included extra file &quot;/etc/supervisor/conf.d/sssd.conf&quot; during parsing</span>
+<span class="go">2025-03-08 19:53:45,559 INFO supervisord started with pid 1</span>
+<span class="go">2025-03-08 19:53:46,568 INFO spawned: &#39;ldap&#39; with pid 7</span>
+<span class="go">2025-03-08 19:53:46,573 INFO spawned: &#39;pvacms&#39; with pid 8</span>
+<span class="go">2025-03-08 19:53:46,574 INFO spawned: &#39;sssd&#39; with pid 9</span>
+<span class="go">2025-03-08 19:53:47,688 INFO success: ldap entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+<span class="go">2025-03-08 19:53:47,688 INFO success: pvacms entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+<span class="go">2025-03-08 19:53:47,688 INFO success: sssd entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+</pre></div>
+</div>
+</section>
+<section id="service">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Service<a class="headerlink" href="#service" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>²</p></li>
+<li><p>log in as softioc service account</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>softioc<span class="w"> </span>spva_ldap<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+<p>create a server certificate using the LDAP Authenticator, enter <code class="docutils literal notranslate"><span class="pre">secret</span></code> when prompted for LDAP password</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnldap<span class="w"> </span>-u<span class="w"> </span>server
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Enter password for softioc@ca130cc9b352:</span>
+<span class="go">Keychain file created   : /home/softioc/.config/pva/1.3/server.p12</span>
+<span class="go">Certificate identifier  : 47530d89:12147807175996825338</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-f<span class="w"> </span>~/.config/pva/1.3/server.p12
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Details:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID : 47530d89:12147807175996825338</span>
+<span class="go">Entity Subject : CN=softioc, O=epics.org</span>
+<span class="go">Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority</span>
+<span class="go">Valid From     : Sat Mar 08 19:56:17 2025 UTC</span>
+<span class="go">Expires On     : Sun Mar 08 19:56:17 2026 UTC</span>
+<span class="go">--------------------------------------------</span>
+
+<span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: 47530d89:12147807175996825338</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Sat Mar 08 19:57:22 2025 UTC</span>
+<span class="go">Status Expires: Sat Mar 08 20:27:22 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="client">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Client<a class="headerlink" href="#client" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+<li><p>log in as a Secure PVAccess client</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>client<span class="w"> </span>spva_ldap<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>create a client certificate using the LDAP Authenticator, enter <code class="docutils literal notranslate"><span class="pre">secret</span></code> when prompted for LDAP password</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnldap
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Enter password for client@epics.org:</span>
+<span class="go">Keychain file created   : /home/client/.config/pva/1.3/client.p12</span>
+<span class="go">Certificate identifier  : 47530d89:11547935522995899879</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-f<span class="w"> </span>~/.config/pva/1.3/client.p12
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Details:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID : 47530d89:11547935522995899879</span>
+<span class="go">Entity Subject : CN=client, O=epics.org</span>
+<span class="go">Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority</span>
+<span class="go">Valid From     : Sat Mar 08 20:00:41 2025 UTC</span>
+<span class="go">Expires On     : Sun Mar 08 20:00:41 2026 UTC</span>
+<span class="go">--------------------------------------------</span>
+
+<span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: 47530d89:11547935522995899879</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Sat Mar 08 20:01:59 2025 UTC</span>
+<span class="go">Status Expires: Sat Mar 08 20:31:59 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="start-softioc">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Start SoftIOC<a class="headerlink" href="#start-softioc" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>²</p></li>
+<li><p>start SoftIOC</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>softIocPVX<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-m<span class="w"> </span><span class="nv">user</span><span class="o">=</span>test,N<span class="o">=</span>tst,P<span class="o">=</span>tst<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testiocg.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-G<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.json<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-a<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.acf
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">INFO: PVXS QSRV2 is loaded, permitted, and ENABLED.</span>
+<span class="go">2025-03-08T20:02:23.012770920 WARN pvxs.tcp.init Server unable to bind TCP port 5075, falling back to [::]:40965</span>
+<span class="go">2025-03-08T20:02:23.012856587 WARN pvxs.tcp.init Server unable to bind TLS port 5076, falling back to [::]:35255</span>
+<span class="go">Starting iocInit</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="gp">#</span><span class="c1"># EPICS R7.0.8.2-DEV</span>
+<span class="gp">#</span><span class="c1"># Rev. R7.0.8.1-123-g48607a42586b1a316cd6</span>
+<span class="gp">#</span><span class="c1"># Rev. Date Git: 2024-11-29 17:08:28 +0000</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="go">iocRun: All initialization complete</span>
+<span class="go">epics&gt;</span>
+</pre></div>
+</div>
+</section>
+<section id="get-pv-value">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Get PV value<a class="headerlink" href="#get-pv-value" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+<li><p>get a PV <code class="docutils literal notranslate"><span class="pre">test:enumExample</span></code> value from the SoftIOC</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxinfo<span class="w"> </span>-v<span class="w"> </span>test:enumExample
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Effective config</span>
+<span class="go">EPICS_PVA_AUTO_ADDR_LIST=YES</span>
+<span class="go">EPICS_PVA_BROADCAST_PORT=5076</span>
+<span class="go">EPICS_PVA_CONN_TMO=30</span>
+<span class="go">EPICS_PVA_SERVER_PORT=5075</span>
+<span class="go">EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.3/client.p12</span>
+<span class="go">EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp on_no_cms=fallback-to-tcp</span>
+<span class="go">EPICS_PVA_TLS_PORT=5076</span>
+<span class="go">XDG_CONFIG_HOME=/home/client/.config/pva/1.3</span>
+<span class="go">XDG_DATA_HOME=/home/client/.local/share/pva/1.3</span>
+<span class="gp"># </span>TLS<span class="w"> </span>x509:47530d89:12147807175996825338:EPICS<span class="w"> </span>Root<span class="w"> </span>Certificate<span class="w"> </span>Authority/softioc@172.17.0.2:35255
+<span class="go">test:enumExample from 172.17.0.2:35255</span>
+<span class="go">struct &quot;epics:nt/NTEnum:1.0&quot; {</span>
+<span class="go">    struct &quot;enum_t&quot; {</span>
+<span class="go">        int32_t index</span>
+<span class="go">        string[] choices</span>
+<span class="go">    } value</span>
+<span class="go">    struct &quot;alarm_t&quot; {</span>
+<span class="go">        int32_t severity</span>
+<span class="go">        int32_t status</span>
+<span class="go">        string message</span>
+<span class="go">    } alarm</span>
+<span class="go">    struct &quot;time_t&quot; {</span>
+<span class="go">        int64_t secondsPastEpoch</span>
+<span class="go">        int32_t nanoseconds</span>
+<span class="go">        int32_t userTag</span>
+<span class="go">    } timeStamp</span>
+<span class="go">    struct {</span>
+<span class="go">        string description</span>
+<span class="go">    } display</span>
+<span class="go">}</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>verify that connection is TLS</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">TLS</span> <span class="pre">x509:47530d89:12147807175996825338:EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority/softioc</span> <span class="pre">&#64;</span> <span class="pre">172.17.0.2</span></code> indicates that:</p>
+<ul>
+<li><p>The connection is <code class="docutils literal notranslate"><span class="pre">TLS</span></code>,</p></li>
+<li><p>The Server end of the channel has been authenticated by the Root Certificate Authority <code class="docutils literal notranslate"><span class="pre">EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority</span></code></p></li>
+<li><p>The Server end of the channel’s name has been authenticated as <code class="docutils literal notranslate"><span class="pre">softioc</span></code> and is connecting from host <code class="docutils literal notranslate"><span class="pre">172.17.0.2</span></code></p></li>
+</ul>
+</li>
+</ul>
+</section>
+</section>
+<section id="step-by-step-step-by-step">
+<h2><i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i> Step-By-Step<a class="headerlink" href="#step-by-step-step-by-step" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Env. <em>authnldap</em></p></th>
+<th class="head"><p>Env. <em>pvacms</em></p></th>
+<th class="head"><p>Params. <em>authldap</em></p></th>
+<th class="head"><p>Params. <em>pvacms</em></p></th>
+<th class="head"><p>Keys and Values</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_AUTH_LDAP</div>
+<div class="line">_ACCOUNT_PWD_FILE</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{location of password file}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">~/.config/ldap.pass/</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">file containing password for the given LDAP user account</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">-p</span></code></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">--password</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{LDAP account password}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">secret</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">password for the given LDAP user account</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td colspan="2"><div class="line-block">
+<div class="line">EPICS_AUTH_LDAP_HOST</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td colspan="2"><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">--ldap-host</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{hostname of LDAP server}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">ldap.stanford.edu</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">Trusted hostname of the LDAP server</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td colspan="2"><div class="line-block">
+<div class="line">EPICS_AUTH_LDAP_PORT</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td colspan="2"><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">--ldap-port</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;port_number&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">389</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">LDAP server port number. Default is 389</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<section id="step-docker-image">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Docker Image<a class="headerlink" href="#step-docker-image" title="Link to this heading">¶</a></h3>
+<section id="use-a-prepackaged-spva-std-image">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Use a Prepackaged spva_std image<a class="headerlink" href="#use-a-prepackaged-spva-std-image" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>¹</p></li>
+<li><p>open a terminal and load pre-built image</p></li>
+<li><p>don’t forget to add /bin/bash at the end to suppress running the pvacms</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--name<span class="w"> </span>spva_ldap<span class="w"> </span>georgeleveln/spva_std:latest<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-ldap-service">
+<span id="spva-qs-ldap-kdc"></span><h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> LDAP Service<a class="headerlink" href="#step-ldap-service" title="Link to this heading">¶</a></h3>
+<p>This section shows how to install and configure a LDAP Service.  This
+is included to enable you to test the LDAP Authenticator before deploying it
+into your network.  It will enable you to configure EPICS agents to
+log in to the LDAP service using the LDAP Authenticator to authenticate and
+then generate X.509 certificates.</p>
+<section id="install-prerequisites">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Install prerequisites<a class="headerlink" href="#install-prerequisites" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>pre-seed debconf for slapd so that it uses our desired domain and organization</p>
+<ul>
+<li><p>domain: <code class="docutils literal notranslate"><span class="pre">epics.org</span></code></p></li>
+<li><p>organization: <code class="docutils literal notranslate"><span class="pre">EPICS</span></code></p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">PROJECT_HOME</span><span class="o">=</span>/opt/epics
+<span class="nb">export</span><span class="w"> </span><span class="nv">DEBIAN_FRONTEND</span><span class="o">=</span>noninteractive
+
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;slapd slapd/no_configuration boolean false&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>debconf-set-selections<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;slapd slapd/domain string epics.org&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>debconf-set-selections<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;slapd shared/organization string EPICS&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>debconf-set-selections<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;slapd slapd/password1 password secret&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>debconf-set-selections<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;slapd slapd/password2 password secret&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>debconf-set-selections<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;slapd slapd/backend string MDB&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>debconf-set-selections<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;slapd slapd/purge_database boolean true&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>debconf-set-selections<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;slapd slapd/move_old_database boolean true&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>debconf-set-selections
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Add LDAP dependencies</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">slapd</span></code> - LDAP service</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ldap-utils</span></code> - LDAP utilities</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sssd</span></code> - sssd daemon for centralised identity service access</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">libldap2-dev</span></code> - development library for compiling pvxs with LDAP Authenticator support</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">libnss</span></code> and <code class="docutils literal notranslate"><span class="pre">libpam</span></code> - development libraries that integrate <code class="docutils literal notranslate"><span class="pre">sssd</span></code> with <code class="docutils literal notranslate"><span class="pre">LDAP</span></code></p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>apt-get<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+apt-get<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>--no-install-recommends<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>slapd<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ldap-utils<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>sssd<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>libldap2-dev<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>libnss-sss<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>libpam-sss<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+rm<span class="w"> </span>-rf<span class="w"> </span>/var/lib/apt/lists/*
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Hit:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease</span>
+<span class="go">Get:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease [126 kB]</span>
+<span class="go">Get:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease [126 kB]</span>
+<span class="go">Get:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease [126 kB]</span>
+<span class="go">Get:5 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 Packages [1147 kB]</span>
+<span class="go">Get:6 http://ports.ubuntu.com/ubuntu-ports noble-updates/multiverse arm64 Packages [32.7 kB]</span>
+<span class="go">Get:7 http://ports.ubuntu.com/ubuntu-ports noble-updates/restricted arm64 Packages [1076 kB]</span>
+<span class="go">Get:8 http://ports.ubuntu.com/ubuntu-ports noble-updates/universe arm64 Packages [1305 kB]</span>
+<span class="go">Get:9 http://ports.ubuntu.com/ubuntu-ports noble-security/universe arm64 Packages [1028 kB]</span>
+<span class="go">...</span>
+<span class="go">warn: The home directory `/var/lib/sss&#39; already exists.  Not touching this directory.</span>
+<span class="go">warn: Warning: The home directory `/var/lib/sss&#39; does not belong to the user you are currently creating.</span>
+<span class="go">invoke-rc.d: could not determine current runlevel</span>
+<span class="go">invoke-rc.d: policy-rc.d denied execution of start.</span>
+<span class="go">Setting up sssd-proxy (2.9.4-1.1ubuntu6.2) ...</span>
+<span class="go">Setting up sssd-ad-common (2.9.4-1.1ubuntu6.2) ...</span>
+<span class="go">Setting up sssd-krb5-common (2.9.4-1.1ubuntu6.2) ...</span>
+<span class="go">Setting up sssd-krb5 (2.9.4-1.1ubuntu6.2) ...</span>
+<span class="go">Setting up sssd-ldap (2.9.4-1.1ubuntu6.2) ...</span>
+<span class="go">Setting up sssd-ad (2.9.4-1.1ubuntu6.2) ...</span>
+<span class="go">Setting up sssd-ipa (2.9.4-1.1ubuntu6.2) ...</span>
+<span class="go">Setting up sssd (2.9.4-1.1ubuntu6.2) ...</span>
+<span class="go">Processing triggers for libc-bin (2.39-0ubuntu8.4) ...</span>
+</pre></div>
+</div>
+</section>
+<section id="rebuild-pvxs">
+<span id="spva-qs-ldap-build"></span><h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Rebuild pvxs<a class="headerlink" href="#rebuild-pvxs" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>enable LDAP Authenticator by updating <code class="docutils literal notranslate"><span class="pre">CONFIG_SITE.local</span></code></p></li>
+<li><p>do a clean rebuild of pvxs</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>
+
+cat<span class="w"> </span>&gt;&gt;<span class="w"> </span>CONFIG_SITE.local<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">EVENT2_HAS_OPENSSL = YES</span>
+<span class="s">PVXS_ENABLE_PVACMS = YES</span>
+<span class="s">PVXS_ENABLE_LDAP_AUTH = YES</span>
+<span class="s">EOF</span>
+
+<span class="nb">cd</span><span class="w"> </span>pvxs<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+make<span class="w"> </span>distclean<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+make<span class="w"> </span>-j10<span class="w"> </span>all
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">make -C ./configure realclean</span>
+<span class="go">make[1]: Entering directory &#39;/opt/epics/pvxs/configure&#39;</span>
+<span class="go">rm -rf O.*</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/configure&#39;</span>
+<span class="go">make -C ./setup realclean</span>
+<span class="go">make[1]: Entering directory &#39;/opt/epics/pvxs/setup&#39;</span>
+<span class="go">rm -rf O.*</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/setup&#39;</span>
+<span class="go">make -C ./src realclean</span>
+<span class="go">make[1]: Entering directory &#39;/opt/epics/pvxs/src&#39;</span>
+<span class="go">rm -rf O.*</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/src&#39;</span>
+<span class="go">make -C ./tools realclean</span>
+<span class="go">make[1]: Entering directory &#39;/opt/epics/pvxs/tools&#39;</span>
+<span class="go">...</span>
+<span class="go">perl -CSD /opt/epics/epics-base/bin/linux-aarch64/makeTestfile.pl linux-aarch64 linux-aarch64 testtls.t testtls</span>
+<span class="go">/usr/bin/g++ -o testtlswithcmsandstapling  -L/opt/epics/epics-base/lib/linux-aarch64 -L/opt/epics/pvxs/lib/linux-aarch64 -Wl,-rpath,/opt/epics/epics-base/lib/linux-aarch64 -Wl,-rpath,/opt/epics/pvxs/lib/linux-aarch64     -Wl,--as-needed -Wl,--compress-debug-sections=zlib      -rdynamic         testtlswithcmsandstapling.o certstatusfactory.o certstatusmanager.o certstatus.o    -lpvxs -lCom  -levent_openssl -levent_core -levent_pthreads -lssl -lcrypto</span>
+<span class="go">perl -CSD /opt/epics/epics-base/bin/linux-aarch64/makeTestfile.pl linux-aarch64 linux-aarch64 testtlswithcmsandstapling.t testtlswithcmsandstapling</span>
+<span class="go">/usr/bin/g++ -o testtlswithcms  -L/opt/epics/epics-base/lib/linux-aarch64 -L/opt/epics/pvxs/lib/linux-aarch64 -Wl,-rpath,/opt/epics/epics-base/lib/linux-aarch64 -Wl,-rpath,/opt/epics/pvxs/lib/linux-aarch64     -Wl,--as-needed -Wl,--compress-debug-sections=zlib      -rdynamic         testtlswithcms.o certstatusfactory.o certstatusmanager.o certstatus.o    -lpvxs -lCom  -levent_openssl -levent_core -levent_pthreads -lssl -lcrypto</span>
+<span class="go">perl -CSD /opt/epics/epics-base/bin/linux-aarch64/makeTestfile.pl linux-aarch64 linux-aarch64 testtlswithcms.t testtlswithcms</span>
+<span class="go">make[2]: Leaving directory &#39;/opt/epics/pvxs/test/O.linux-aarch64&#39;</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/test&#39;</span>
+</pre></div>
+</div>
+</section>
+<section id="configure-ldap">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Configure LDAP<a class="headerlink" href="#configure-ldap" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Remove the default LDAP configuration and reconfigure slapd non-interactively</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>rm<span class="w"> </span>-rf<span class="w"> </span>/etc/ldap/slapd.d<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+dpkg-reconfigure<span class="w"> </span>-f<span class="w"> </span>noninteractive<span class="w"> </span>slapd
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">invoke-rc.d: could not determine current runlevel</span>
+<span class="go">invoke-rc.d: policy-rc.d denied execution of stop.</span>
+<span class="go">invoke-rc.d: could not determine current runlevel</span>
+<span class="go">invoke-rc.d: policy-rc.d denied execution of stop.</span>
+<span class="go">  Moving old database directory to /var/backups:</span>
+<span class="go">  - directory unknown... done.</span>
+<span class="go">  Creating initial configuration... done.</span>
+<span class="go">  Creating LDAP directory... done.</span>
+<span class="go">invoke-rc.d: could not determine current runlevel</span>
+<span class="go">invoke-rc.d: policy-rc.d denied execution of start.</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>create epics custom schema addition to enable LDAP Authenticator</p>
+<ul>
+<li><p>this schema addition will hold the public key for each LDAP user</p></li>
+<li><p>acl protects it so that only the user themselves can write to it but it is readable by anyone</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/tmp/epics-schema.ldif<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">dn: cn=epics,cn=schema,cn=config</span>
+<span class="s">objectClass: olcSchemaConfig</span>
+<span class="s">cn: epics</span>
+<span class="s">olcAttributeTypes: ( 1.3.6.1.4.1.99999.1</span>
+<span class="s">    NAME &#39;epicsPublicKey&#39;</span>
+<span class="s">    DESC &#39;Public key EPICS Agents&#39;</span>
+<span class="s">    EQUALITY caseExactMatch</span>
+<span class="s">    SUBSTR caseExactSubstringsMatch</span>
+<span class="s">    SYNTAX 1.3.6.1.4.1.1466.115.121.1.15</span>
+<span class="s">    SINGLE-VALUE )</span>
+<span class="s">olcObjectClasses: ( 1.3.6.1.4.1.99999.2</span>
+<span class="s">    NAME &#39;epicsAuxiliary&#39;</span>
+<span class="s">    DESC &#39;Auxiliary object class to allow storage of a public key&#39;</span>
+<span class="s">    SUP top</span>
+<span class="s">    AUXILIARY</span>
+<span class="s">    MAY ( epicsPublicKey ) )</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/tmp/epics-acl.ldif<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">dn: olcDatabase={1}mdb,cn=config</span>
+<span class="s">changetype: modify</span>
+<span class="s">add: olcAccess</span>
+<span class="s">olcAccess: {0}to attrs=epicsPublicKey by self write by users read by anonymous read</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>/usr/sbin/slapd<span class="w"> </span>-h<span class="w"> </span><span class="s2">&quot;ldap:/// ldapi:///&quot;</span><span class="w"> </span>-u<span class="w"> </span>openldap<span class="w"> </span><span class="p">&amp;</span><span class="w"> </span><span class="se">\</span>
+sleep<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+ldapadd<span class="w"> </span>-Y<span class="w"> </span>EXTERNAL<span class="w"> </span>-H<span class="w"> </span>ldapi:///<span class="w"> </span>-f<span class="w"> </span>/tmp/epics-schema.ldif<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+ldapmodify<span class="w"> </span>-Y<span class="w"> </span>EXTERNAL<span class="w"> </span>-H<span class="w"> </span>ldapi:///<span class="w"> </span>-f<span class="w"> </span>/tmp/epics-acl.ldif<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+pkill<span class="w"> </span>slapd<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+sleep<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+rm<span class="w"> </span>-f<span class="w"> </span>/tmp/epics-schema.ldif<span class="w"> </span>/tmp/epics-acl.ldif
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">[1] 2802</span>
+
+<span class="go">[1]+  Done                    /usr/sbin/slapd -h &quot;ldap:/// ldapi:///&quot; -u openldap</span>
+<span class="go">SASL/EXTERNAL authentication started</span>
+<span class="go">SASL username: gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth</span>
+<span class="go">SASL SSF: 0</span>
+<span class="go">adding new entry &quot;cn=epics,cn=schema,cn=config&quot;</span>
+
+<span class="go">SASL/EXTERNAL authentication started</span>
+<span class="go">SASL username: gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth</span>
+<span class="go">SASL SSF: 0</span>
+<span class="go">modifying entry &quot;olcDatabase={1}mdb,cn=config&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="configure-ldap-users">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Configure LDAP Users<a class="headerlink" href="#configure-ldap-users" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>create LDAP users</p>
+<ul>
+<li><p>base dn: <code class="docutils literal notranslate"><span class="pre">dc=epics</span></code>, <code class="docutils literal notranslate"><span class="pre">dc=org</span></code></p></li>
+<li><p>users: <code class="docutils literal notranslate"><span class="pre">admin</span></code>, <code class="docutils literal notranslate"><span class="pre">pvacms</span></code>, <code class="docutils literal notranslate"><span class="pre">softioc</span></code>, <code class="docutils literal notranslate"><span class="pre">client</span></code></p></li>
+<li><p>posix groups: <code class="docutils literal notranslate"><span class="pre">admin</span></code>, <code class="docutils literal notranslate"><span class="pre">pvacms</span></code>, <code class="docutils literal notranslate"><span class="pre">softioc</span></code>, <code class="docutils literal notranslate"><span class="pre">client</span></code></p></li>
+<li><p>groups: <code class="docutils literal notranslate"><span class="pre">users</span></code>, <code class="docutils literal notranslate"><span class="pre">servers</span></code>, <code class="docutils literal notranslate"><span class="pre">clients</span></code>, <code class="docutils literal notranslate"><span class="pre">services</span></code></p></li>
+<li><p>linux mappings: home directory, shell</p></li>
+<li><p>password: “secret”</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/tmp/ldap-data.ldif<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">dn: dc=epics,dc=org</span>
+<span class="s">objectClass: dcObject</span>
+<span class="s">objectClass: organization</span>
+<span class="s">dc: epics</span>
+<span class="s">o: EPICS</span>
+
+<span class="s"># Base organizational units</span>
+<span class="s">dn: ou=People,dc=epics,dc=org</span>
+<span class="s">objectClass: organizationalUnit</span>
+<span class="s">ou: People</span>
+
+<span class="s">dn: ou=Groups,dc=epics,dc=org</span>
+<span class="s">objectClass: organizationalUnit</span>
+<span class="s">ou: Groups</span>
+
+<span class="s"># Create users</span>
+<span class="s">dn: uid=admin,dc=epics,dc=org</span>
+<span class="s">objectClass: inetOrgPerson</span>
+<span class="s">objectClass: posixAccount</span>
+<span class="s">objectClass: shadowAccount</span>
+<span class="s">objectClass: epicsAuxiliary</span>
+<span class="s">cn: admin</span>
+<span class="s">sn: admin</span>
+<span class="s">uid: admin</span>
+<span class="s">uidNumber: 1001</span>
+<span class="s">gidNumber: 1001</span>
+<span class="s">homeDirectory: /home/admin</span>
+<span class="s">loginShell: /bin/bash</span>
+<span class="s">userPassword: {SSHA}rDsYFPnFI8zidqcImBer6BGBULvgxjo0</span>
+<span class="s"># epicsPublicKey: &lt;base64-encoded public key string&gt;</span>
+
+<span class="s">dn: uid=pvacms,ou=People,dc=epics,dc=org</span>
+<span class="s">objectClass: inetOrgPerson</span>
+<span class="s">objectClass: posixAccount</span>
+<span class="s">objectClass: shadowAccount</span>
+<span class="s">objectClass: epicsAuxiliary</span>
+<span class="s">cn: pvacms</span>
+<span class="s">sn: pvacms</span>
+<span class="s">uid: pvacms</span>
+<span class="s">uidNumber: 1002</span>
+<span class="s">gidNumber: 1002</span>
+<span class="s">homeDirectory: /home/pvacms</span>
+<span class="s">loginShell: /bin/bash</span>
+<span class="s">userPassword: {SSHA}rDsYFPnFI8zidqcImBer6BGBULvgxjo0</span>
+<span class="s"># epicsPublicKey: &lt;base64-encoded public key string&gt;</span>
+
+<span class="s">dn: uid=softioc,ou=People,dc=epics,dc=org</span>
+<span class="s">objectClass: inetOrgPerson</span>
+<span class="s">objectClass: posixAccount</span>
+<span class="s">objectClass: shadowAccount</span>
+<span class="s">objectClass: epicsAuxiliary</span>
+<span class="s">cn: softioc</span>
+<span class="s">sn: softioc</span>
+<span class="s">uid: softioc</span>
+<span class="s">uidNumber: 1003</span>
+<span class="s">gidNumber: 1003</span>
+<span class="s">homeDirectory: /home/softioc</span>
+<span class="s">loginShell: /bin/bash</span>
+<span class="s">userPassword: {SSHA}rDsYFPnFI8zidqcImBer6BGBULvgxjo0</span>
+<span class="s"># epicsPublicKey: &lt;base64-encoded public key string&gt;</span>
+
+<span class="s">dn: uid=client,ou=People,dc=epics,dc=org</span>
+<span class="s">objectClass: inetOrgPerson</span>
+<span class="s">objectClass: posixAccount</span>
+<span class="s">objectClass: shadowAccount</span>
+<span class="s">objectClass: epicsAuxiliary</span>
+<span class="s">cn: client</span>
+<span class="s">sn: client</span>
+<span class="s">uid: client</span>
+<span class="s">uidNumber: 1004</span>
+<span class="s">gidNumber: 1004</span>
+<span class="s">homeDirectory: /home/client</span>
+<span class="s">loginShell: /bin/bash</span>
+<span class="s">userPassword: {SSHA}rDsYFPnFI8zidqcImBer6BGBULvgxjo0</span>
+<span class="s"># epicsPublicKey: &lt;base64-encoded public key string&gt;</span>
+
+<span class="s"># Create groups and add members</span>
+<span class="s">dn: cn=admin,ou=Groups,dc=epics,dc=org</span>
+<span class="s">objectClass: posixGroup</span>
+<span class="s">cn: admin</span>
+<span class="s">gidNumber: 1001</span>
+<span class="s">memberUid: admin</span>
+
+<span class="s">dn: cn=pvacms,ou=Groups,dc=epics,dc=org</span>
+<span class="s">objectClass: posixGroup</span>
+<span class="s">cn: pvacms</span>
+<span class="s">gidNumber: 1002</span>
+<span class="s">memberUid: pvacms</span>
+
+<span class="s">dn: cn=softioc,ou=Groups,dc=epics,dc=org</span>
+<span class="s">objectClass: posixGroup</span>
+<span class="s">cn: softioc</span>
+<span class="s">gidNumber: 1003</span>
+<span class="s">memberUid: softioc</span>
+
+<span class="s">dn: cn=client,ou=Groups,dc=epics,dc=org</span>
+<span class="s">objectClass: posixGroup</span>
+<span class="s">cn: client</span>
+<span class="s">gidNumber: 1004</span>
+<span class="s">memberUid: client</span>
+
+<span class="s">dn: cn=users,ou=Groups,dc=epics,dc=org</span>
+<span class="s">objectClass: groupOfUniqueNames</span>
+<span class="s">cn: users</span>
+<span class="s">uniqueMember: uid=admin,ou=People,dc=epics,dc=org</span>
+<span class="s">uniqueMember: uid=client,ou=People,dc=epics,dc=org</span>
+
+<span class="s">dn: cn=servers,ou=Groups,dc=epics,dc=org</span>
+<span class="s">objectClass: groupOfUniqueNames</span>
+<span class="s">cn: servers</span>
+<span class="s">uniqueMember: uid=softioc,ou=People,dc=epics,dc=org</span>
+<span class="s">uniqueMember: uid=pvacms,ou=People,dc=epics,dc=org</span>
+
+<span class="s">dn: cn=clients,ou=Groups,dc=epics,dc=org</span>
+<span class="s">objectClass: groupOfUniqueNames</span>
+<span class="s">cn: clients</span>
+<span class="s">uniqueMember: uid=softioc,ou=People,dc=epics,dc=org</span>
+<span class="s">uniqueMember: uid=client,ou=People,dc=epics,dc=org</span>
+
+<span class="s">dn: cn=services,ou=Groups,dc=epics,dc=org</span>
+<span class="s">objectClass: groupOfUniqueNames</span>
+<span class="s">cn: services</span>
+<span class="s">uniqueMember: uid=pvacms,ou=People,dc=epics,dc=org</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>remove any existing LDAP database contents</p></li>
+<li><p>load the LDAP entries using slapadd</p></li>
+<li><p>fix ownership</p></li>
+<li><p>clean up</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>rm<span class="w"> </span>-rf<span class="w"> </span>/var/lib/ldap/*<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+slapadd<span class="w"> </span>-l<span class="w"> </span>/tmp/ldap-data.ldif<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+chown<span class="w"> </span>-R<span class="w"> </span>openldap:openldap<span class="w"> </span>/var/lib/ldap<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+rm<span class="w"> </span>-f<span class="w"> </span>/tmp/ldap-data.ldif
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Closing DB...</span>
+</pre></div>
+</div>
+</section>
+<section id="configure-sssd-optional">
+<span id="spva-qs-ldap-pvacms"></span><h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Configure SSSD (optional)<a class="headerlink" href="#configure-sssd-optional" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>sssd configuration</p>
+<ul>
+<li><p>LDAP set as identity provider</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/etc/sssd/sssd.conf<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">[sssd]</span>
+<span class="s">services = nss, pam</span>
+<span class="s">domains = epics</span>
+<span class="s">config_file_version = 2</span>
+
+<span class="s">[domain/epics]</span>
+<span class="s">id_provider = ldap</span>
+<span class="s">auth_provider = ldap</span>
+<span class="s">ldap_uri = ldap://localhost</span>
+<span class="s">ldap_search_base = dc=epics,dc=org</span>
+<span class="s"># leave these unset for anonymous access.</span>
+<span class="s">ldap_default_bind_dn =</span>
+<span class="s">ldap_default_authtok =</span>
+
+<span class="s"># Cache credentials so that user information is available even if LDAP temporarily becomes unavailable.</span>
+<span class="s">cache_credentials = True</span>
+
+<span class="s"># If a user entry does not specify a home directory, use this pattern.</span>
+<span class="s">fallback_homedir = /home/%u</span>
+
+<span class="s"># Use the RFC2307 schema for standard POSIX attributes.</span>
+<span class="s">ldap_schema = rfc2307</span>
+
+<span class="s"># enable enumeration (listing all users) for testing.</span>
+<span class="s">enumerate = True</span>
+
+<span class="s">debug_level = 0</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>secure the SSSD configuration</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>chmod<span class="w"> </span><span class="m">600</span><span class="w"> </span>/etc/sssd/sssd.conf<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+chown<span class="w"> </span>root:root<span class="w"> </span>/etc/sssd/sssd.conf
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>update /etc/nsswitch.conf to use SSSD for passwd, group, and shadow</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s/^passwd:.*/passwd:        files sss/&#39;</span><span class="w"> </span>/etc/nsswitch.conf<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s/^group:.*/group:          files sss/&#39;</span><span class="w"> </span>/etc/nsswitch.conf<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s/^shadow:.*/shadow:        files sss/&#39;</span><span class="w"> </span>/etc/nsswitch.conf
+</pre></div>
+</div>
+</section>
+<section id="configure-supervisor-to-run-ldap-and-sssd">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_6</i> Configure Supervisor to run LDAP and SSSD<a class="headerlink" href="#configure-supervisor-to-run-ldap-and-sssd" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>configure LDAP supervisord</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/etc/supervisor/conf.d/ldap.conf<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">[program:ldap]</span>
+<span class="s">command=/usr/sbin/slapd -h &quot;ldap:///&quot; -d 1</span>
+<span class="s">autostart=true</span>
+<span class="s">autorestart=true</span>
+<span class="s">stdout_logfile=/var/log/supervisor/ldap.out.log</span>
+<span class="s">stderr_logfile=/var/log/supervisor/ldap.err.log</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>configure SSSD supervisord</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/etc/supervisor/conf.d/sssd.conf<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">[program:sssd]</span>
+<span class="s">command=/usr/sbin/sssd -i</span>
+<span class="s">autostart=true</span>
+<span class="s">autorestart=true</span>
+<span class="s">stdout_logfile=/var/log/supervisor/sssd.out.log</span>
+<span class="s">stderr_logfile=/var/log/supervisor/sssd.err.log</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+</section>
+<section id="start-services">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_7</i> Start Services<a class="headerlink" href="#start-services" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>start LDAP, sssd, and pvacms with LDAP Authenticator support</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>/usr/bin/supervisord<span class="w"> </span>-c<span class="w"> </span>/etc/supervisor/supervisord.conf
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">2025-03-10 12:42:04,390 INFO Included extra file &quot;/etc/supervisor/conf.d/ldap.conf&quot; during parsing</span>
+<span class="go">2025-03-10 12:42:04,390 INFO Included extra file &quot;/etc/supervisor/conf.d/pvacms.conf&quot; during parsing</span>
+<span class="go">2025-03-10 12:42:04,390 INFO Included extra file &quot;/etc/supervisor/conf.d/sssd.conf&quot; during parsing</span>
+<span class="go">2025-03-10 12:42:04,390 INFO Set uid to user 0 succeeded</span>
+<span class="go">2025-03-10 12:42:04,391 INFO supervisord started with pid 2830</span>
+<span class="go">2025-03-10 12:42:05,403 INFO spawned: &#39;ldap&#39; with pid 2831</span>
+<span class="go">2025-03-10 12:42:05,412 INFO spawned: &#39;pvacms&#39; with pid 2832</span>
+<span class="go">2025-03-10 12:42:05,413 INFO spawned: &#39;sssd&#39; with pid 2833</span>
+<span class="go">2025-03-10 12:42:06,717 INFO success: ldap entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+<span class="go">2025-03-10 12:42:06,717 INFO success: pvacms entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+<span class="go">2025-03-10 12:42:06,717 INFO success: sssd entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-run-softioc">
+<span id="spva-qs-ldap-server"></span><h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run SoftIOC<a class="headerlink" href="#step-run-softioc" title="Link to this heading">¶</a></h3>
+<section id="login-as-softioc-in-a-new-shell">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Login as softioc in a new shell<a class="headerlink" href="#login-as-softioc-in-a-new-shell" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>²</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>softioc<span class="w"> </span>spva_ldap<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+<section id="verify-ldap-config">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Verify LDAP config<a class="headerlink" href="#verify-ldap-config" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>read out entry for softioc from LDAP directory</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>ldapsearch<span class="w"> </span>-x<span class="w"> </span>-LLL<span class="w"> </span>-b<span class="w"> </span><span class="s2">&quot;ou=People,dc=epics,dc=org&quot;</span><span class="w"> </span><span class="s2">&quot;(uid=softioc)&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">dn: uid=softioc,ou=People,dc=epics,dc=org</span>
+<span class="go">objectClass: inetOrgPerson</span>
+<span class="go">objectClass: posixAccount</span>
+<span class="go">objectClass: shadowAccount</span>
+<span class="go">objectClass: epicsAuxiliary</span>
+<span class="go">cn: softioc</span>
+<span class="go">sn: softioc</span>
+<span class="go">uid: softioc</span>
+<span class="go">uidNumber: 1003</span>
+<span class="go">gidNumber: 1003</span>
+<span class="go">homeDirectory: /home/softioc</span>
+<span class="go">loginShell: /bin/bash</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>ldapsearch<span class="w"> </span>-x<span class="w"> </span>-LLL<span class="w"> </span>-b<span class="w"> </span><span class="s2">&quot;ou=People,dc=epics,dc=org&quot;</span><span class="w"> </span><span class="s2">&quot;(uid=softioc)&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">dn: uid=softioc,ou=People,dc=epics,dc=org</span>
+<span class="go">objectClass: inetOrgPerson</span>
+<span class="go">objectClass: posixAccount</span>
+<span class="go">objectClass: shadowAccount</span>
+<span class="go">objectClass: epicsAuxiliary</span>
+<span class="go">cn: softioc</span>
+<span class="go">sn: softioc</span>
+<span class="go">uid: softioc</span>
+<span class="go">uidNumber: 1003</span>
+<span class="go">gidNumber: 1003</span>
+<span class="go">homeDirectory: /home/softioc</span>
+<span class="go">loginShell: /bin/bash</span>
+</pre></div>
+</div>
+</section>
+<section id="get-certificate">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Get Certificate<a class="headerlink" href="#get-certificate" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>create a softioc server certificate.  Enter “secret” when prompted for password</p>
+<ul>
+<li><p>creates softioc server certificate</p></li>
+<li><p>at location specified by <code class="docutils literal notranslate"><span class="pre">EPICS_PVAS_TLS_KEYCHAIN</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_CONFIG_HOME}/pva/1.3/server.p12</span></code> by default</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnldap<span class="w"> </span>-u<span class="w"> </span>server
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Enter password for softioc@c6e116778b71:</span>
+<span class="go">Keychain file created   : /home/softioc/.config/pva/1.3/server.p12</span>
+<span class="go">Certificate identifier  : b271f07a:13935791733272200197</span>
+</pre></div>
+</div>
+</section>
+<section id="check-the-certificate-status-is-valid">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Check the certificate status is VALID<a class="headerlink" href="#check-the-certificate-status-is-valid" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>check that the generated certificate is <code class="docutils literal notranslate"><span class="pre">VALID</span></code></p></li>
+<li><p>note that the <em>name</em> is <code class="docutils literal notranslate"><span class="pre">softioc</span></code> - verified against LDAP</p></li>
+<li><p>note that the <em>organization</em> is <code class="docutils literal notranslate"><span class="pre">epics.org</span></code> - picked up from LDAP</p></li>
+<li><p>note that the <em>expiration date</em> is one day in the future, picked up from default LDAP Authenticator config</p></li>
+<li><p>note that the <em>start date</em> is set to the date of certificate issuance</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-f<span class="w"> </span>~/.config/pva/1.3/server.p12
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Details:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID : b271f07a:13935791733272200197</span>
+<span class="go">Entity Subject : CN=softioc, O=epics.org</span>
+<span class="go">Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority</span>
+<span class="go">Valid From     : Mon Mar 10 12:48:26 2025 UTC</span>
+<span class="go">Expires On     : Tue Mar 10 12:48:26 2026 UTC</span>
+<span class="go">--------------------------------------------</span>
+
+<span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: b271f07a:13935791733272200197</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Mon Mar 10 12:49:37 2025 UTC</span>
+<span class="go">Status Expires: Mon Mar 10 13:19:37 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="run-secure-pvaccess-service">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Run Secure PVAccess Service<a class="headerlink" href="#run-secure-pvaccess-service" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>start the service</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>softIocPVX<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-m<span class="w"> </span><span class="nv">user</span><span class="o">=</span>test,N<span class="o">=</span>tst,P<span class="o">=</span>tst<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testiocg.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-G<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.json<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-a<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.acf
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">INFO: PVXS QSRV2 is loaded, permitted, and ENABLED.</span>
+<span class="go">2025-03-10T12:51:26.189013708 WARN pvxs.tcp.init Server unable to bind TCP port 5075, falling back to [::]:38601</span>
+<span class="go">2025-03-10T12:51:26.189087208 WARN pvxs.tcp.init Server unable to bind TLS port 5076, falling back to [::]:37623</span>
+<span class="go">Starting iocInit</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="gp">#</span><span class="c1"># EPICS R7.0.8.2-DEV</span>
+<span class="gp">#</span><span class="c1"># Rev. R7.0.8.1-123-g48607a42586b1a316cd6</span>
+<span class="gp">#</span><span class="c1"># Rev. Date Git: 2024-11-29 17:08:28 +0000</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="go">iocRun: All initialization complete</span>
+<span class="go">epics&gt;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-spva-client">
+<span id="spva-qs-ldap-client"></span><h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> SPVA Client<a class="headerlink" href="#step-spva-client" title="Link to this heading">¶</a></h3>
+<section id="login-as-client-in-a-new-shell">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Login as client in a new shell<a class="headerlink" href="#login-as-client-in-a-new-shell" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>client<span class="w"> </span>spva_ldap<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+<section id="id1">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Verify LDAP config<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>read out entry for client from LDAP directory</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>ldapsearch<span class="w"> </span>-x<span class="w"> </span>-LLL<span class="w"> </span>-b<span class="w"> </span><span class="s2">&quot;ou=People,dc=epics,dc=org&quot;</span><span class="w"> </span><span class="s2">&quot;(uid=client)&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">dn: uid=client,ou=People,dc=epics,dc=org</span>
+<span class="go">objectClass: inetOrgPerson</span>
+<span class="go">objectClass: posixAccount</span>
+<span class="go">objectClass: shadowAccount</span>
+<span class="go">objectClass: epicsAuxiliary</span>
+<span class="go">cn: client</span>
+<span class="go">sn: client</span>
+<span class="go">uid: client</span>
+<span class="go">uidNumber: 1004</span>
+<span class="go">gidNumber: 1004</span>
+<span class="go">homeDirectory: /home/client</span>
+<span class="go">loginShell: /bin/bash</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>ldapsearch<span class="w"> </span>-x<span class="w"> </span>-LLL<span class="w"> </span>-b<span class="w"> </span><span class="s2">&quot;ou=People,dc=epics,dc=org&quot;</span><span class="w"> </span><span class="s2">&quot;(uid=client)&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">dn: cn=client,ou=Groups,dc=epics,dc=org</span>
+<span class="go">objectClass: posixGroup</span>
+<span class="go">cn: client</span>
+<span class="go">gidNumber: 1004</span>
+<span class="go">memberUid: client</span>
+</pre></div>
+</div>
+</section>
+<section id="id2">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Get Certificate<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>create a client certificate.  Enter “secret” when prompted for a password</p>
+<ul>
+<li><p>creates a client certificate</p></li>
+<li><p>at location specified by <code class="docutils literal notranslate"><span class="pre">EPICS_PVA_TLS_KEYCHAIN</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_CONFIG_HOME}/pva/1.3/client.p12</span></code> by default</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnldap
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Enter password for client@epics.org:</span>
+<span class="go">Keychain file created   : /home/client/.config/pva/1.3/client.p12</span>
+<span class="go">Certificate identifier  : b271f07a:4841285184560088877</span>
+</pre></div>
+</div>
+</section>
+<section id="id3">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Check the certificate status is VALID<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>check that the generated certificate is <code class="docutils literal notranslate"><span class="pre">VALID</span></code></p></li>
+<li><p>note that the <em>name</em> is <code class="docutils literal notranslate"><span class="pre">client</span></code> - verified against LDAP</p></li>
+<li><p>note that the <em>organization</em> is <code class="docutils literal notranslate"><span class="pre">epics.org</span></code> - picked up from LDAP</p></li>
+<li><p>note that the <em>expiration date</em> is one day in the future, picked up from default LDAP Authenticator config</p></li>
+<li><p>note that the <em>start date</em> is set to the date of certificate issuance</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-f<span class="w"> </span>~/.config/pva/1.3/client.p12
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Details:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID : b271f07a:1204731550645534180</span>
+<span class="go">Entity Subject : CN=client, O=EPICS.ORG</span>
+<span class="go">Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority</span>
+<span class="go">Valid From     : Mon Mar 10 03:32:57 2025 UTC</span>
+<span class="go">Expires On     : Tue Mar 11 03:30:32 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+
+<span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: b271f07a:1204731550645534180</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Mon Mar 10 03:33:58 2025 UTC</span>
+<span class="go">Status Expires: Mon Mar 10 04:03:58 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="test-tls-client-operations">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Test TLS client operations<a class="headerlink" href="#test-tls-client-operations" title="Link to this heading">¶</a></h4>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxget<span class="w"> </span>-F<span class="w"> </span>tree<span class="w"> </span>test:structExample
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">test:structExample</span>
+<span class="go">...</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>show that TLS is being used</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxinfo<span class="w"> </span>-v<span class="w"> </span>test:enumExample
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Effective config</span>
+<span class="go">EPICS_PVA_AUTO_ADDR_LIST=YES</span>
+<span class="go">EPICS_PVA_BROADCAST_PORT=5076</span>
+<span class="go">EPICS_PVA_CONN_TMO=30</span>
+<span class="go">EPICS_PVA_SERVER_PORT=5075</span>
+<span class="go">EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.3/client.p12</span>
+<span class="go">EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp on_no_cms=fallback-to-tcp</span>
+<span class="go">EPICS_PVA_TLS_PORT=5076</span>
+<span class="go">XDG_CONFIG_HOME=/home/client/.config/pva/1.3</span>
+<span class="go">XDG_DATA_HOME=/home/client/.local/share/pva/1.3</span>
+<span class="gp"># </span>TLS<span class="w"> </span>x509:b271f07a:13935791733272200197:EPICS<span class="w"> </span>Root<span class="w"> </span>Certificate<span class="w"> </span>Authority/softioc@172.17.0.2:37623
+<span class="go">test:enumExample from 172.17.0.2:37623</span>
+<span class="go">struct &quot;epics:nt/NTEnum:1.0&quot; {</span>
+<span class="go">    struct &quot;enum_t&quot; {</span>
+<span class="go">        int32_t index</span>
+<span class="go">        string[] choices</span>
+<span class="go">    } value</span>
+<span class="go">    struct &quot;alarm_t&quot; {</span>
+<span class="go">        int32_t severity</span>
+<span class="go">        int32_t status</span>
+<span class="go">        string message</span>
+<span class="go">    } alarm</span>
+<span class="go">    struct &quot;time_t&quot; {</span>
+<span class="go">        int64_t secondsPastEpoch</span>
+<span class="go">        int32_t nanoseconds</span>
+<span class="go">        int32_t userTag</span>
+<span class="go">    } timeStamp</span>
+<span class="go">    struct {</span>
+<span class="go">        string description</span>
+<span class="go">    } display</span>
+<span class="go">}</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">TLS</span> <span class="pre">x509:b271f07a:13935791733272200197:EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority/softioc</span> <span class="pre">&#64;</span> <span class="pre">172.17.0.2</span></code> indicates that:</p>
+<ul>
+<li><p>The connection is <code class="docutils literal notranslate"><span class="pre">TLS</span></code>,</p></li>
+<li><p>The Server end of the channel has been authenticated by the Root Certificate Authority <code class="docutils literal notranslate"><span class="pre">EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority</span></code></p></li>
+<li><p>The Server end of the channel’s name has been authenticated as <code class="docutils literal notranslate"><span class="pre">softioc</span></code> and is connecting from host <code class="docutils literal notranslate"><span class="pre">172.17.0.2</span></code></p></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">PVXS</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="netconfig.html">PVA Network Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstart.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start PVXS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartstd.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start Std</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartkrb.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start KRB</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start LDAP</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#learn-you-will-learn"><i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i> You will learn:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pre-packagedprepackaged"><i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>Prepackaged</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#load-image"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Load image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#service"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Service</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#client"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#start-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Start SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#get-pv-value"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Get PV value</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#step-by-step-step-by-step"><i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i> Step-By-Step</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#step-docker-image"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Docker Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-ldap-service"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> LDAP Service</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-run-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-spva-client"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> SPVA Client</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spva.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Secure PVAccess</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaauth.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> AuthN &amp; AuthZ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvacerts.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Cert Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building from Source</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html#including-pvxs-in-your-application">Including PVXS in your application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cli.html">Command Line Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="value.html">Value Container API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="client.html">Client API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server.html">Server API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html">IOC Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html#qsrv-2">QSRV 2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Misc</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaglossary.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> SPVA Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releasenotes.html">Release Notes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="spvaqstartkrb.html" title="previous chapter"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start KRB</a></li>
+      <li>Next: <a href="spva.html" title="next chapter"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Secure PVAccess</a></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025 Michael Davidsaver, George McIntyre, Osprey DCS LLC, and SLAC.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/spvaqstartldap.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

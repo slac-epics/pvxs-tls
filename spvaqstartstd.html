@@ -1,0 +1,1110 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>developer_guide Quick Start Std &#8212; PVXS 1.3.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=bb516dca"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="icon" href="_static/favicon.png"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="developer_guide Quick Start KRB" href="spvaqstartkrb.html" />
+    <link rel="prev" title="developer_guide Quick Start PVXS" href="spvaqstart.html" />
+
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+<!-- Material Icons -->
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+
+<!-- Inject extra CSS for pages starting with 'spva' -->
+<link rel="stylesheet" type="text/css" href="_static/style.css" />
+
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="guide-quick-start-std">
+<span id="quick-start-std"></span><h1><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start Std<a class="headerlink" href="#guide-quick-start-std" title="Link to this heading">¶</a></h1>
+<p>This section contains a Quick Start <i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> for the Secure PVAccess <em>Standard Authenticator</em>.</p>
+<blockquote>
+<div><p>Standard Authenticator is the default form of authentication supported by Secure PVAccess.
+It takes the <code class="docutils literal notranslate"><span class="pre">username</span></code>, <code class="docutils literal notranslate"><span class="pre">organization</span></code>, <code class="docutils literal notranslate"><span class="pre">organizational</span> <span class="pre">unit</span></code>, and <code class="docutils literal notranslate"><span class="pre">country</span></code> and uses them,
+without verification, to create X.509 certificates.  These certificates are generated in the <code class="docutils literal notranslate"><span class="pre">PENDING_APPROVAL</span></code> state, so
+an SPVA network Administrator needs to <code class="docutils literal notranslate"><span class="pre">APPROVE</span></code> them before they will work.</p>
+</div></blockquote>
+<p>Our starting point for this Quick Start Guide is the end of the <a class="reference internal" href="spvaqstart.html#quick-start"><span class="std std-ref"> Quick Start PVXS</span></a> so if you haven’t gone through it yet
+do that now then come back here.  The main difference here is that we’ll create users for the different
+roles we’ll be testing.</p>
+<p>Other Quick Start Guides:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="spvaqstart.html#quick-start"><span class="std std-ref"> Quick Start PVXS</span></a></p></li>
+<li><p><a class="reference internal" href="spvaqstartkrb.html#quick-start-krb"><span class="std std-ref"> Quick Start KRB</span></a></p></li>
+<li><p><a class="reference internal" href="spvaqstartldap.html#quick-start-ldap"><span class="std std-ref"> Quick Start LDAP</span></a></p></li>
+</ul>
+<section id="learn-you-will-learn">
+<h2><i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i> You will learn<a class="headerlink" href="#learn-you-will-learn" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="#spva-qs-std-admin"><span class="std std-ref">Configuring a Secure PVAccess network administrator</span></a></p></li>
+<li><p>Configuration of EPICS agents: <a class="reference internal" href="#spva-qs-std-client"><span class="std std-ref">Client</span></a> and <a class="reference internal" href="#spva-qs-std-server"><span class="std std-ref">Server</span></a></p></li>
+<li><p><a class="reference internal" href="#spva-qs-std-create-cert"><span class="std std-ref">Creating Certificates using the Standard Authenticator</span></a></p></li>
+</ul>
+</section>
+<section id="pre-packagedprepackaged">
+<h2><i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>Prepackaged<a class="headerlink" href="#pre-packagedprepackaged" title="Link to this heading">¶</a></h2>
+<p>If you want a prepackaged environment, try the following.  You will need four terminal sessions.</p>
+<section id="load-image">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Load image<a class="headerlink" href="#load-image" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>¹</p></li>
+<li><p>start new container with Prepackaged Secure PVAccess and 4 Users</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--name<span class="w"> </span>spva_std<span class="w"> </span>georgeleveln/spva_std:latest
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">2025-03-04 20:41:23,799 INFO Included extra file &quot;/etc/supervisor/conf.d/pvacms.conf&quot; during parsing</span>
+<span class="go">2025-03-04 20:41:23,802 INFO supervisord started with pid 1</span>
+<span class="go">2025-03-04 20:41:24,820 INFO spawned: &#39;pvacms&#39; with pid 7</span>
+<span class="go">2025-03-04 20:41:25,957 INFO success: pvacms entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+</pre></div>
+</div>
+</section>
+<section id="administrator">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Administrator<a class="headerlink" href="#administrator" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>²</p></li>
+<li><p>log in as pre-configured Admin User, certificate is already configured</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>admin<span class="w"> </span>spva_std<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">To run a command as administrator (user &quot;root&quot;), use &quot;sudo &lt;command&gt;&quot;.</span>
+<span class="go">See &quot;man sudo_root&quot; for details.</span>
+</pre></div>
+</div>
+</section>
+<section id="service">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Service<a class="headerlink" href="#service" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+<li><p>log in as softioc service account</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>softioc<span class="w"> </span>spva_std<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>create a server certificate using the Standard Authenticator</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnstd<span class="w"> </span>-u<span class="w"> </span>server
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/softioc/.config/pva/1.3/server.p12</span>
+<span class="go">Certificate identifier  : 47530d89:15756710596521133410</span>
+</pre></div>
+</div>
+</section>
+<section id="client">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Client<a class="headerlink" href="#client" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>⁴</p></li>
+<li><p>log in as a Secure PVAccess client</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>client<span class="w"> </span>spva_std<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>create a client certificate using the Standard Authenticator</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnstd
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/client/.config/pva/1.3/client.p12</span>
+<span class="go">Certificate identifier  : 47530d89:7450074183745406049</span>
+</pre></div>
+</div>
+</section>
+<section id="approve-certs">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Approve Certs<a class="headerlink" href="#approve-certs" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>²</p></li>
+<li><p>approve the server certificate</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>--approve<span class="w"> </span>47530d89:15756710596521133410
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Approve ==&gt; CERT:STATUS:47530d89:15756710596521133410 ==&gt; Completed Successfully</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>approve the client certificate</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>--approve<span class="w"> </span>47530d89:7450074183745406049
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Approve ==&gt; CERT:STATUS:47530d89:7450074183745406049 ==&gt; Completed Successfully</span>
+</pre></div>
+</div>
+</section>
+<section id="start-softioc">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_6</i> Start SoftIOC<a class="headerlink" href="#start-softioc" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+<li><p>start SoftIOC</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>softIocPVX<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-m<span class="w"> </span><span class="nv">user</span><span class="o">=</span>test,N<span class="o">=</span>tst,P<span class="o">=</span>tst<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testiocg.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-G<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.json<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-a<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.acf
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">INFO: PVXS QSRV2 is loaded, permitted, and ENABLED.</span>
+<span class="go">2025-03-04T20:51:56.413890180 WARN pvxs.tcp.init Server unable to bind TCP port 5075, falling back to [::]:41807</span>
+<span class="go">2025-03-04T20:51:56.413970847 WARN pvxs.tcp.init Server unable to bind TLS port 5076, falling back to [::]:33809</span>
+<span class="go">Starting iocInit</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="gp">#</span><span class="c1"># EPICS R7.0.8.2-DEV</span>
+<span class="gp">#</span><span class="c1"># Rev. R7.0.8.1-123-g48607a42586b1a316cd6</span>
+<span class="gp">#</span><span class="c1"># Rev. Date Git: 2024-11-29 17:08:28 +0000</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="go">iocRun: All initialization complete</span>
+<span class="go">epics&gt;</span>
+</pre></div>
+</div>
+</section>
+<section id="get-pv-value">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_7</i> Get PV value<a class="headerlink" href="#get-pv-value" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>⁴</p></li>
+<li><p>get a PV <code class="docutils literal notranslate"><span class="pre">test:enumExample</span></code> value from the SoftIOC</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxinfo<span class="w"> </span>-v<span class="w"> </span>test:enumExample
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Effective config</span>
+<span class="go">EPICS_PVA_AUTO_ADDR_LIST=YES</span>
+<span class="go">EPICS_PVA_BROADCAST_PORT=5076</span>
+<span class="go">EPICS_PVA_CONN_TMO=30</span>
+<span class="go">EPICS_PVA_SERVER_PORT=5075</span>
+<span class="go">EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.3/client.p12</span>
+<span class="go">EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp on_no_cms=fallback-to-tcp</span>
+<span class="go">EPICS_PVA_TLS_PORT=5076</span>
+<span class="go">XDG_CONFIG_HOME=/home/client/.config/pva/1.3</span>
+<span class="go">XDG_DATA_HOME=/home/client/.local/share/pva/1.3</span>
+<span class="gp"># </span>TLS<span class="w"> </span>x509:47530d89:7450074183745406049:EPICS<span class="w"> </span>Root<span class="w"> </span>Certificate<span class="w"> </span>Authority/softioc@172.17.0.2:33809
+<span class="go">test:enumExample from 172.17.0.2:33809</span>
+<span class="go">struct &quot;epics:nt/NTEnum:1.0&quot; {</span>
+<span class="go">   struct &quot;enum_t&quot; {</span>
+<span class="go">       int32_t index</span>
+<span class="go">       string[] choices</span>
+<span class="go">   } value</span>
+<span class="go">   struct &quot;alarm_t&quot; {</span>
+<span class="go">       int32_t severity</span>
+<span class="go">       int32_t status</span>
+<span class="go">       string message</span>
+<span class="go">   } alarm</span>
+<span class="go">   struct &quot;time_t&quot; {</span>
+<span class="go">       int64_t secondsPastEpoch</span>
+<span class="go">       int32_t nanoseconds</span>
+<span class="go">       int32_t userTag</span>
+<span class="go">   } timeStamp</span>
+<span class="go">   struct {</span>
+<span class="go">       string description</span>
+<span class="go">   } display</span>
+<span class="go">}</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>verify that connection is TLS</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">TLS</span> <span class="pre">x509:47530d89:7450074183745406049:EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority/softioc</span> <span class="pre">&#64;</span> <span class="pre">172.17.0.2</span></code> indicates that:</p>
+<ul>
+<li><p>The connection is <code class="docutils literal notranslate"><span class="pre">TLS</span></code>,</p></li>
+<li><p>The Server end of the channel has been authenticated by the Root Certificate Authority <code class="docutils literal notranslate"><span class="pre">EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority</span></code></p></li>
+<li><p>The Server end of the channel’s name has been authenticated as <code class="docutils literal notranslate"><span class="pre">softioc</span></code> and is connecting from host <code class="docutils literal notranslate"><span class="pre">172.17.0.2</span></code></p></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</section>
+</section>
+<section id="step-by-step-step-by-step">
+<h2><i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i> Step-By-Step<a class="headerlink" href="#step-by-step-step-by-step" title="Link to this heading">¶</a></h2>
+<section id="step-docker-image">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Docker Image<a class="headerlink" href="#step-docker-image" title="Link to this heading">¶</a></h3>
+<section id="use-a-prepackaged-pvxs-image-compiled-with-tls-enabled">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Use a Prepackaged pvxs image compiled with TLS enabled<a class="headerlink" href="#use-a-prepackaged-pvxs-image-compiled-with-tls-enabled" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>¹</p></li>
+<li><p>open a terminal and load pre-built image</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--name<span class="w"> </span>spva_std<span class="w"> </span>georgeleveln/pvxs:latest
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-epics-agents">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> EPICS Agents<a class="headerlink" href="#step-epics-agents" title="Link to this heading">¶</a></h3>
+<p>This section shows you what basic configuration you’ll need for each type of EPICS agent.
+Look at the environment variable settings and the file locations referenced by
+this configuration to understand how to configure EPICS agents in
+your environment.</p>
+<section id="set-up-environment">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Set up environment<a class="headerlink" href="#set-up-environment" title="Link to this heading">¶</a></h4>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">XDG_DATA_HOME</span><span class="o">=</span><span class="si">${</span><span class="nv">XDG_DATA_HOME</span><span class="p">-~/.local/share</span><span class="si">}</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">XDG_CONFIG_HOME</span><span class="o">=</span><span class="si">${</span><span class="nv">XDG_CONFIG_HOME</span><span class="p">-~/.config</span><span class="si">}</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">PVXS_HOST_ARCH</span><span class="o">=</span><span class="k">$(</span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/epics-base/startup/EpicsHostArch<span class="k">)</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span><span class="s2">/pvxs/bin/</span><span class="si">${</span><span class="nv">PVXS_HOST_ARCH</span><span class="si">}</span><span class="s2">:</span><span class="nv">$PATH</span><span class="s2">&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="add-pvacms">
+<span id="spva-qs-std-admin"></span><h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Add PVACMS<a class="headerlink" href="#add-pvacms" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>add user and when prompted use “PVACMS” as Full Name</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>adduser<span class="w"> </span>pvacms
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">info: Adding user `pvacms&#39; ...</span>
+<span class="go">info: Selecting UID/GID from range 1000 to 59999 ...</span>
+<span class="go">info: Adding new group `pvacms&#39; (1001) ...</span>
+<span class="go">info: Adding new user `pvacms&#39; (1001) with group `pvacms (1001)&#39; ...</span>
+<span class="go">info: Creating home directory `/home/pvacms&#39; ...</span>
+<span class="go">info: Copying files from `/etc/skel&#39; ...</span>
+<span class="go">New password:</span>
+<span class="go">Retype new password:</span>
+<span class="go">passwd: password updated successfully</span>
+<span class="go">Changing the user information for pvacms</span>
+<span class="go">Enter the new value, or press ENTER for the default</span>
+<span class="go">    Full Name []: PVACMS</span>
+<span class="go">    Room Number []:</span>
+<span class="go">    Work Phone []:</span>
+<span class="go">    Home Phone []:</span>
+<span class="go">    Other []:</span>
+<span class="go">Is the information correct? [Y/n]</span>
+<span class="go">info: Adding new user `pvacms&#39; to supplemental / extra groups `users&#39; ...</span>
+<span class="go">info: Adding user `pvacms&#39; to group `users&#39; ...</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>set up environment for pvacms</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>su<span class="w"> </span>-<span class="w"> </span>pvacms
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;&gt;<span class="w"> </span>~/.bashrc<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">export XDG_DATA_HOME=\${XDG_DATA_HOME-~/.local/share}</span>
+<span class="s">export XDG_CONFIG_HOME=\${XDG_CONFIG_HOME-~/.config}</span>
+<span class="s">export PROJECT_HOME=/opt/epics</span>
+<span class="s">export PATH=&quot;\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH&quot;</span>
+<span class="s">cd ~</span>
+<span class="s">EOF</span>
+
+<span class="nb">exit</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">logout</span>
+</pre></div>
+</div>
+<p>log back in as pvacms with environment set by <code class="docutils literal notranslate"><span class="pre">.bashrc</span></code></p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>su<span class="w"> </span>-<span class="w"> </span>pvacms
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>create admin certificate:</p>
+<ul>
+<li><p>create PVACMS certificate database</p>
+<ul>
+<li><p>creates database if does not exist</p></li>
+<li><p>at location pointed to by <code class="docutils literal notranslate"><span class="pre">EPICS_PVACMS_DB</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_DATA_HOME}/pva/1.3/certs.db</span></code> by default</p></li>
+</ul>
+</li>
+<li><p>creates root Certificate Authority certificate if does not exist</p>
+<ul>
+<li><p>creates root Certificate Authority certificate if does not exist,</p></li>
+<li><p>at location specified by <code class="docutils literal notranslate"><span class="pre">EPICS_CERT_AUTH_TLS_KEYCHAIN</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12</span></code> by default</p></li>
+<li><p>with <code class="docutils literal notranslate"><span class="pre">CN</span></code> specified by <code class="docutils literal notranslate"><span class="pre">EPICS_CERT_AUTH_NAME</span></code></p></li>
+<li><p>with  <code class="docutils literal notranslate"><span class="pre">O</span></code> specified by <code class="docutils literal notranslate"><span class="pre">EPICS_CERT_AUTH_ORGANIZATION</span></code></p></li>
+<li><p>with <code class="docutils literal notranslate"><span class="pre">OU</span></code> specified by <code class="docutils literal notranslate"><span class="pre">EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT</span></code></p></li>
+<li><p>with  <code class="docutils literal notranslate"><span class="pre">C</span></code> specified by <code class="docutils literal notranslate"><span class="pre">EPICS_CERT_AUTH_COUNTRY</span></code></p></li>
+</ul>
+</li>
+<li><p>create the default ACF file that controls permissions for the PVACMS service</p>
+<ul>
+<li><p>creates default ACF (or yaml) file</p></li>
+<li><p>at location pointed to by <code class="docutils literal notranslate"><span class="pre">EPICS_PVACMS_ACF</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf</span></code> by default</p></li>
+</ul>
+</li>
+<li><p>create the default admin client certificate that can be used to access PVACMS admin functions like <code class="docutils literal notranslate"><span class="pre">REVOKE</span></code> and <code class="docutils literal notranslate"><span class="pre">APPROVE</span></code></p>
+<ul>
+<li><p>creates default admin client certificate</p></li>
+<li><p>at location specified by <code class="docutils literal notranslate"><span class="pre">EPICS_ADMIN_TLS_KEYCHAIN</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_CONFIG_HOME}/pva/1.3/admin.p12</span></code> by default</p></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvacms<span class="w"> </span>--admin-keychain-new<span class="w"> </span>admin
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate DB created  : /home/pvacms/.local/share/pva/1.3/certs.db</span>
+<span class="go">Keychain file created   : /home/pvacms/.config/pva/1.3/cert_auth.p12</span>
+<span class="go">Created Default ACF file: /home/pvacms/.config/pva/1.3/pvacms.acf</span>
+<span class="go">Keychain file created   : /home/pvacms/.config/pva/1.3/admin.p12</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">exit</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">logout</span>
+</pre></div>
+</div>
+</section>
+<section id="add-an-administrator">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Add an Administrator<a class="headerlink" href="#add-an-administrator" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>add user and when prompted use “ADMIN User” as Full Name</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>adduser<span class="w"> </span>admin
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">info: Adding user `admin&#39; ...</span>
+<span class="go">info: Selecting UID/GID from range 1000 to 59999 ...</span>
+<span class="go">info: Adding new group `admin&#39; (1002) ...</span>
+<span class="go">info: Adding new user `admin&#39; (1002) with group `admin (1002)&#39; ...</span>
+<span class="go">info: Creating home directory `/home/admin&#39; ...</span>
+<span class="go">info: Copying files from `/etc/skel&#39; ...</span>
+<span class="go">New password:</span>
+<span class="go">Retype new password:</span>
+<span class="go">passwd: password updated successfully</span>
+<span class="go">Changing the user information for admin</span>
+<span class="go">Enter the new value, or press ENTER for the default</span>
+<span class="go">    Full Name []: ADMIN User</span>
+<span class="go">    Room Number []:</span>
+<span class="go">    Work Phone []:</span>
+<span class="go">    Home Phone []:</span>
+<span class="go">    Other []:</span>
+<span class="go">Is the information correct? [Y/n]</span>
+<span class="go">info: Adding new user `admin&#39; to supplemental / extra groups `users&#39; ...</span>
+<span class="go">info: Adding user `admin&#39; to group `users&#39; ...</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>set up environment for administrator</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>su<span class="w"> </span>-<span class="w"> </span>admin
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;&gt;<span class="w"> </span>~/.bashrc<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">export XDG_DATA_HOME=\${XDG_DATA_HOME-~/.local/share}</span>
+<span class="s">export XDG_CONFIG_HOME=\${XDG_CONFIG_HOME-~/.config}</span>
+<span class="s">export PROJECT_HOME=/opt/epics</span>
+<span class="s">export PATH=&quot;\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH&quot;</span>
+<span class="s">cd ~</span>
+<span class="s">EOF</span>
+
+<span class="nb">exit</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">logout</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>copy admin certificate from pvacms</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>-p<span class="w"> </span>~admin/.config/pva/1.3
+cp<span class="w"> </span>-pr<span class="w"> </span>~pvacms/.config/pva/1.3/admin.p12<span class="w"> </span>~admin/.config/pva/1.3/client.p12
+chown<span class="w"> </span>admin<span class="w"> </span>~admin/.config/pva/1.3/client.p12
+chmod<span class="w"> </span><span class="m">400</span><span class="w"> </span>~admin/.config/pva/1.3/client.p12
+</pre></div>
+</div>
+</section>
+<section id="add-a-secure-pvaccess-server-softioc">
+<span id="spva-qs-std-server"></span><h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Add a Secure PVAccess Server - SoftIOC<a class="headerlink" href="#add-a-secure-pvaccess-server-softioc" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>add user and when prompted use “SOFTIOC Server” as Full Name</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>adduser<span class="w"> </span>softioc
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">info: Adding user `softioc&#39; ...</span>
+<span class="go">info: Selecting UID/GID from range 1000 to 59999 ...</span>
+<span class="go">info: Adding new group `softioc&#39; (1003) ...</span>
+<span class="go">info: Adding new user `softioc&#39; (1003) with group `softioc (1003)&#39; ...</span>
+<span class="go">info: Creating home directory `/home/softioc&#39; ...</span>
+<span class="go">info: Copying files from `/etc/skel&#39; ...</span>
+<span class="go">New password:</span>
+<span class="go">Retype new password:</span>
+<span class="go">passwd: password updated successfully</span>
+<span class="go">Changing the user information for softioc</span>
+<span class="go">Enter the new value, or press ENTER for the default</span>
+<span class="go">    Full Name []: SOFTIOC Server</span>
+<span class="go">    Room Number []:</span>
+<span class="go">    Work Phone []:</span>
+<span class="go">    Home Phone []:</span>
+<span class="go">    Other []:</span>
+<span class="go">Is the information correct? [Y/n]</span>
+<span class="go">info: Adding new user `softioc&#39; to supplemental / extra groups `users&#39; ...</span>
+<span class="go">info: Adding user `softioc&#39; to group `users&#39; ...</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>set up environment for softioc server</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>su<span class="w"> </span>-<span class="w"> </span>softioc
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;&gt;<span class="w"> </span>~/.bashrc<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">export XDG_DATA_HOME=\${XDG_DATA_HOME-~/.local/share}</span>
+<span class="s">export XDG_CONFIG_HOME=\${XDG_CONFIG_HOME-~/.config}</span>
+<span class="s">export PROJECT_HOME=/opt/epics</span>
+<span class="s">export PATH=&quot;\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH&quot;</span>
+<span class="s">cd ~</span>
+<span class="s">EOF</span>
+
+<span class="nb">exit</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">logout</span>
+</pre></div>
+</div>
+</section>
+<section id="add-a-secure-pvaccess-client">
+<span id="spva-qs-std-client"></span><h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Add a Secure PVAccess Client<a class="headerlink" href="#add-a-secure-pvaccess-client" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>add user and when prompted use “SPVA client” as Full Name</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>adduser<span class="w"> </span>client
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">info: Adding user `client&#39; ...</span>
+<span class="go">info: Selecting UID/GID from range 1000 to 59999 ...</span>
+<span class="go">info: Adding new group `client&#39; (1004) ...</span>
+<span class="go">info: Adding new user `client&#39; (1004) with group `client (1004)&#39; ...</span>
+<span class="go">info: Creating home directory `/home/client&#39; ...</span>
+<span class="go">info: Copying files from `/etc/skel&#39; ...</span>
+<span class="go">New password:</span>
+<span class="go">Retype new password:</span>
+<span class="go">passwd: password updated successfully</span>
+<span class="go">Changing the user information for client</span>
+<span class="go">Enter the new value, or press ENTER for the default</span>
+<span class="go">    Full Name []: SPVA client</span>
+<span class="go">    Room Number []:</span>
+<span class="go">    Work Phone []:</span>
+<span class="go">    Home Phone []:</span>
+<span class="go">    Other []:</span>
+<span class="go">Is the information correct? [Y/n]</span>
+<span class="go">info: Adding new user `client&#39; to supplemental / extra groups `users&#39; ...</span>
+<span class="go">info: Adding user `client&#39; to group `users&#39; ...</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>set up environment for client</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>su<span class="w"> </span>-<span class="w"> </span>client
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;&gt;<span class="w"> </span>~/.bashrc<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">export XDG_DATA_HOME=\${XDG_DATA_HOME-~/.local/share}</span>
+<span class="s">export XDG_CONFIG_HOME=\${XDG_CONFIG_HOME-~/.config}</span>
+<span class="s">export PROJECT_HOME=/opt/epics</span>
+<span class="s">export PATH=&quot;\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH&quot;</span>
+<span class="s">cd ~</span>
+<span class="s">EOF</span>
+
+<span class="nb">exit</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">logout</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-run-pvacms">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run PVACMS<a class="headerlink" href="#step-run-pvacms" title="Link to this heading">¶</a></h3>
+<section id="login-as-pvacms-in-a-new-shell">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Login as pvacms in a new shell<a class="headerlink" href="#login-as-pvacms-in-a-new-shell" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>²</p></li>
+<li><p>in a different terminal log in as the pvacms user in the same container:</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>pvacms<span class="w"> </span>spva_std<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+<section id="run-pvacms">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Run PVACMS<a class="headerlink" href="#run-pvacms" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>run pvacms:</p>
+<ul>
+<li><p>create the pvacms server certificate</p>
+<ul>
+<li><p>creates pvacms server certificate</p></li>
+<li><p>at location specified by <code class="docutils literal notranslate"><span class="pre">EPICS_PVACMS_TLS_KEYCHAIN</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12</span></code> by default</p></li>
+</ul>
+</li>
+<li><p>start pvacms with verbose logging off</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvacms
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/pvacms/.config/pva/1.3/pvacms.p12</span>
+<span class="go">PVACMS [46093d7c] Service Running</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">46093d7c</span></code> is the issuer ID which is comprised of the first 8 characters
+of the hex Subject Key Identifier of the certificate authority certificate.  You will see this
+preceding all certificate identifiers from this PVACMS</p>
+</div>
+<p>Leave this PVACMS service running while running SoftIOC and SPVA client below.</p>
+</section>
+</section>
+<section id="step-run-softioc">
+<span id="spva-qs-std-create-cert"></span><h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run SoftIOC<a class="headerlink" href="#step-run-softioc" title="Link to this heading">¶</a></h3>
+<section id="login-as-softioc-in-a-new-shell">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Login as softioc in a new shell<a class="headerlink" href="#login-as-softioc-in-a-new-shell" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>softioc<span class="w"> </span>spva_std<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+<section id="create-server-certificate">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Create Server Certificate<a class="headerlink" href="#create-server-certificate" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>create a softioc server certificate</p>
+<ul>
+<li><p>creates softioc server certificate</p></li>
+<li><p>at location specified by <code class="docutils literal notranslate"><span class="pre">EPICS_PVAS_TLS_KEYCHAIN</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_CONFIG_HOME}/pva/1.3/server.p12</span></code> by default</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnstd<span class="w"> </span>-u<span class="w"> </span>server<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-n<span class="w"> </span><span class="s2">&quot;IOC1&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-o<span class="w"> </span><span class="s2">&quot;KLI:LI01:10&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ou<span class="w"> </span><span class="s2">&quot;FACET&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/softioc/.config/pva/1.3/server.p12</span>
+<span class="go">Certificate identifier  : 46093d7c:13415272142438558829</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Write down the certificate ID <code class="docutils literal notranslate"><span class="pre">46093d7c:13415272142438558829</span></code> (&lt;issuer_id&gt;:&lt;serial_number&gt;).
+You will need this ID to carry out operations on this certificate including APPROVING it.</p>
+</div>
+</section>
+<section id="verify-that-certificate-is-created-pending-approval">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Verify that certificate is created pending approval<a class="headerlink" href="#verify-that-certificate-is-created-pending-approval" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>get the current status of a certificate</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>46093d7c:13415272142438558829
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: 46093d7c:13415272142438558829</span>
+<span class="go">Status        : PENDING_APPROVAL</span>
+<span class="go">Status Issued : Sat Mar 08 12:31:11 2025 UTC</span>
+<span class="go">Status Expires: Sat Mar 08 13:01:11 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="login-as-admin-in-a-new-shell">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Login as admin in a new shell<a class="headerlink" href="#login-as-admin-in-a-new-shell" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>⁴</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>admin<span class="w"> </span>spva_std<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+<section id="approve-certificate">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Approve certificate<a class="headerlink" href="#approve-certificate" title="Link to this heading">¶</a></h4>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>--approve<span class="w"> </span>46093d7c:13415272142438558829
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Approve ==&gt; CERT:STATUS:46093d7c:13415272142438558829 ==&gt; Completed Successfully</span>
+</pre></div>
+</div>
+</section>
+<section id="check-the-certificate-status-has-changed">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_6</i> Check the certificate status has changed<a class="headerlink" href="#check-the-certificate-status-has-changed" title="Link to this heading">¶</a></h4>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>46093d7c:13415272142438558829
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: 46093d7c:13415272142438558829</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Sat Mar 08 12:31:50 2025 UTC</span>
+<span class="go">Status Expires: Sat Mar 08 13:01:50 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="run-secure-pvaccess-service">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_7</i> Run Secure PVAccess Service<a class="headerlink" href="#run-secure-pvaccess-service" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+<li><p>back in the server shell start the service</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>softIocPVX<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-m<span class="w"> </span><span class="nv">user</span><span class="o">=</span>test,N<span class="o">=</span>tst,P<span class="o">=</span>tst<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testiocg.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-G<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.json<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-a<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.acf
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">INFO: PVXS QSRV2 is loaded, permitted, and ENABLED.</span>
+<span class="go">2025-03-08T12:32:06.263544555 WARN pvxs.tcp.init Server unable to bind TCP port 5075, falling back to [::]:37961</span>
+<span class="go">2025-03-08T12:32:06.263601805 WARN pvxs.tcp.init Server unable to bind TLS port 5076, falling back to [::]:35093</span>
+<span class="go">Starting iocInit</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="gp">#</span><span class="c1"># EPICS R7.0.8.2-DEV</span>
+<span class="gp">#</span><span class="c1"># Rev. R7.0.8.1-123-g48607a42586b1a316cd6</span>
+<span class="gp">#</span><span class="c1"># Rev. Date Git: 2024-11-29 17:08:28 +0000</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="go">iocRun: All initialization complete</span>
+<span class="go">epics&gt;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-spva-client">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> SPVA Client<a class="headerlink" href="#step-spva-client" title="Link to this heading">¶</a></h3>
+<section id="login-as-client-in-a-new-shell">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Login as client in a new shell<a class="headerlink" href="#login-as-client-in-a-new-shell" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>⁵</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>client<span class="w"> </span>spva_std<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+<section id="create-certificate">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Create Certificate<a class="headerlink" href="#create-certificate" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>create a client certificate</p>
+<ul>
+<li><p>creates a client certificate</p></li>
+<li><p>at location specified by <code class="docutils literal notranslate"><span class="pre">EPICS_PVA_TLS_KEYCHAIN</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_CONFIG_HOME}/pva/1.3/client.p12</span></code> by default</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnstd<span class="w"> </span>-u<span class="w"> </span>client<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-n<span class="w"> </span><span class="s2">&quot;greg&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-o<span class="w"> </span><span class="s2">&quot;SLAC.STANFORD.EDU&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ou<span class="w"> </span><span class="s2">&quot;Controls&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/client/.config/pva/1.3/client.p12</span>
+<span class="go">Certificate identifier  : 46093d7c:5283204721404445451</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Write down the certificate ID <code class="docutils literal notranslate"><span class="pre">46093d7c:5283204721404445451</span></code> (&lt;issuer_id&gt;:&lt;serial_number&gt;).
+You will need this ID to carry out operations on this certificate including APPROVING it.</p>
+</div>
+</section>
+<section id="id1">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Approve certificate<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>⁴</p></li>
+<li><p>in the admin shell again, approve the certificate</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>--approve<span class="w"> </span>46093d7c:5283204721404445451
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Approve ==&gt; CERT:STATUS:46093d7c:5283204721404445451 ==&gt; Completed Successfully</span>
+</pre></div>
+</div>
+</section>
+<section id="run-an-spva-client">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Run an SPVA client<a class="headerlink" href="#run-an-spva-client" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>⁵</p></li>
+<li><p>back to the client shell again to get a value</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxget<span class="w"> </span>-F<span class="w"> </span>tree<span class="w"> </span>test:structExample
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">test:structExample</span>
+<span class="go">    struct {</span>
+<span class="go">        struct {</span>
+<span class="go">            struct {</span>
+<span class="go">                int32_t queueSize = 0</span>
+<span class="go">                bool atomic = true</span>
+<span class="go">            } _options</span>
+<span class="go">        } record</span>
+<span class="go">        ...</span>
+<span class="go">        struct &quot;epics:nt/NTScalar:1.0&quot; {</span>
+<span class="go">            double value = 0</span>
+<span class="go">            struct &quot;alarm_t&quot; {</span>
+<span class="go">                int32_t severity = 2</span>
+<span class="go">                int32_t status = 1</span>
+<span class="go">                string message = &quot;LOLO&quot;</span>
+<span class="go">            } alarm</span>
+<span class="go">            struct &quot;time_t&quot; {</span>
+<span class="go">                int64_t secondsPastEpoch = 1741433438</span>
+<span class="go">                int32_t nanoseconds = 665740043</span>
+<span class="go">                int32_t userTag = 0</span>
+<span class="go">            } timeStamp</span>
+<span class="go">            struct {</span>
+<span class="go">                double limitLow = 0</span>
+<span class="go">                double limitHigh = 10</span>
+<span class="go">                string description = &quot;Counter&quot;</span>
+<span class="go">                string units = &quot;Counts&quot;</span>
+<span class="go">                int32_t precision = 0</span>
+<span class="go">                struct &quot;enum_t&quot; {</span>
+<span class="go">                    int32_t index = 0</span>
+<span class="go">                    string[] choices = {7}[&quot;Default&quot;, &quot;String&quot;, &quot;Binary&quot;, &quot;Decimal&quot;, &quot;Hex&quot;, &quot;Exponential&quot;, &quot;Engineering&quot;]</span>
+<span class="go">                } form</span>
+<span class="go">            } display</span>
+<span class="go">            struct {</span>
+<span class="go">                double limitLow = 0</span>
+<span class="go">                double limitHigh = 10</span>
+<span class="go">                double minStep = 0</span>
+<span class="go">            } control</span>
+<span class="go">            struct {</span>
+<span class="go">                bool active = false</span>
+<span class="go">                double lowAlarmLimit = 2</span>
+<span class="go">                double lowWarningLimit = 4</span>
+<span class="go">                double highWarningLimit = 6</span>
+<span class="go">                double highAlarmLimit = 8</span>
+<span class="go">                int32_t lowAlarmSeverity = 0</span>
+<span class="go">                int32_t lowWarningSeverity = 0</span>
+<span class="go">                int32_t highWarningSeverity = 0</span>
+<span class="go">                int32_t highAlarmSeverity = 0</span>
+<span class="go">                double hysteresis = 0</span>
+<span class="go">            } valueAlarm</span>
+<span class="go">        } calc</span>
+<span class="go">    }</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>show that TLS is being used</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxinfo<span class="w"> </span>-v<span class="w"> </span>test:enumExample
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Effective config</span>
+<span class="go">EPICS_PVA_AUTO_ADDR_LIST=YES</span>
+<span class="go">EPICS_PVA_BROADCAST_PORT=5076</span>
+<span class="go">EPICS_PVA_CONN_TMO=30</span>
+<span class="go">EPICS_PVA_SERVER_PORT=5075</span>
+<span class="go">EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.3/client.p12</span>
+<span class="go">EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp on_no_cms=fallback-to-tcp</span>
+<span class="go">EPICS_PVA_TLS_PORT=5076</span>
+<span class="go">XDG_CONFIG_HOME=/home/client/.config/pva/1.3</span>
+<span class="go">XDG_DATA_HOME=/home/client/.local/share/pva/1.3</span>
+<span class="gp"># </span>TLS<span class="w"> </span>x509:46093d7c:13415272142438558829:EPICS<span class="w"> </span>Root<span class="w"> </span>Certificate<span class="w"> </span>Authority/softioc@172.17.0.2:35093
+<span class="go">test:enumExample from 172.17.0.2:35093</span>
+<span class="go">struct &quot;epics:nt/NTEnum:1.0&quot; {</span>
+<span class="go">    struct &quot;enum_t&quot; {</span>
+<span class="go">        int32_t index</span>
+<span class="go">        string[] choices</span>
+<span class="go">    } value</span>
+<span class="go">    struct &quot;alarm_t&quot; {</span>
+<span class="go">        int32_t severity</span>
+<span class="go">        int32_t status</span>
+<span class="go">        string message</span>
+<span class="go">    } alarm</span>
+<span class="go">    struct &quot;time_t&quot; {</span>
+<span class="go">        int64_t secondsPastEpoch</span>
+<span class="go">        int32_t nanoseconds</span>
+<span class="go">        int32_t userTag</span>
+<span class="go">    } timeStamp</span>
+<span class="go">    struct {</span>
+<span class="go">        string description</span>
+<span class="go">    } display</span>
+<span class="go">}</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">TLS</span> <span class="pre">x509:46093d7c:13415272142438558829:EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority/softioc</span> <span class="pre">&#64;</span> <span class="pre">172.17.0.2</span></code> indicates that:</p>
+<ul>
+<li><p>The connection is <code class="docutils literal notranslate"><span class="pre">TLS</span></code>,</p></li>
+<li><p>The Server end of the channel has been authenticated by the Root Certificate Authority <code class="docutils literal notranslate"><span class="pre">EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority</span></code></p></li>
+<li><p>The Server end of the channel’s name has been authenticated as <code class="docutils literal notranslate"><span class="pre">softioc</span></code> and is connecting from host <code class="docutils literal notranslate"><span class="pre">172.17.0.2</span></code></p></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+</section>
+<section id="step-permissions">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Permissions<a class="headerlink" href="#step-permissions" title="Link to this heading">¶</a></h3>
+<section id="security-configuration">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Security Configuration<a class="headerlink" href="#security-configuration" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>field <code class="docutils literal notranslate"><span class="pre">test:spec</span></code> is defined in <code class="docutils literal notranslate"><span class="pre">testioc.db</span></code> and protected by the <code class="docutils literal notranslate"><span class="pre">SPECIAL</span></code> security group</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>...
+
+record<span class="o">(</span>ao,<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>user<span class="k">)</span><span class="s2">:spec&quot;</span><span class="o">)</span><span class="w"> </span><span class="o">{</span>
+<span class="w">   </span>field<span class="o">(</span>ASG,<span class="w"> </span><span class="s2">&quot;SPECIAL&quot;</span><span class="o">)</span>
+<span class="o">}</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>the <code class="docutils literal notranslate"><span class="pre">SPECIAL</span></code> security group protects <code class="docutils literal notranslate"><span class="pre">test:spec</span></code> in <code class="docutils literal notranslate"><span class="pre">testioc.acf</span></code></p>
+<ul>
+<li><p>it makes it writeable if, and only if</p>
+<ul>
+<li><p>user is “michael” and</p></li>
+<li><p>method is <code class="docutils literal notranslate"><span class="pre">x509</span></code> - client has been authenticated using an <em>X.509 certificate</em> and</p></li>
+<li><p>the certificate authority that signed the certificate was <em>EPICS Root Certificate Authority</em></p></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>AUTHORITY<span class="o">(</span>AUTH_EPICS_ROOT,<span class="w"> </span><span class="s2">&quot;EPICS Root Certificate Authority&quot;</span><span class="o">)</span>
+
+UAG<span class="o">(</span>OPERATORS<span class="o">)</span><span class="w"> </span><span class="o">{</span>
+<span class="w">    </span><span class="s2">&quot;michael&quot;</span>
+<span class="o">}</span>
+
+ASG<span class="o">(</span>SPECIAL<span class="o">)</span><span class="w"> </span><span class="o">{</span>
+<span class="w">    </span>RULE<span class="o">(</span><span class="m">1</span>,WRITE,TRAPWRITE<span class="o">)</span><span class="w"> </span><span class="o">{</span>
+<span class="w">        </span>UAG<span class="o">(</span>OPERATORS<span class="o">)</span>
+<span class="w">            </span>AUTHORITY<span class="o">(</span>AUTH_EPICS_ROOT<span class="o">)</span>
+<span class="w">            </span>METHOD<span class="o">(</span><span class="s2">&quot;x509&quot;</span><span class="o">)</span>
+<span class="w">    </span><span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+</div>
+</section>
+<section id="security-enforcement">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Security Enforcement<a class="headerlink" href="#security-enforcement" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>show that we can GET the value with or without TLS</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxget<span class="w"> </span>test:spec<span class="w"> </span>-r<span class="w"> </span>value
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">test:spec</span>
+<span class="go">    value double = 0</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>env<span class="w"> </span><span class="nv">EPICS_PVA_TLS_KEYCHAIN</span><span class="o">=</span><span class="w"> </span>pvxget<span class="w"> </span>test:spec<span class="w"> </span>-r<span class="w"> </span>value
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">test:spec</span>
+<span class="go">    value double = 0</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>show that we cannot set (<code class="docutils literal notranslate"><span class="pre">PUT</span></code>) the value with, or without TLS if we are not identified as “michael”</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxput<span class="w"> </span>test:spec<span class="w"> </span><span class="m">10</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Error N4pvxs6client11RemoteErrorE : Put not permitted</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>env<span class="w"> </span><span class="nv">EPICS_PVA_TLS_KEYCHAIN</span><span class="o">=</span><span class="w"> </span>pvxput<span class="w"> </span>test:spec<span class="w"> </span><span class="m">10</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Error N4pvxs6client11RemoteErrorE : Put not permitted</span>
+</pre></div>
+</div>
+</section>
+<section id="client-authorization">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Client Authorization<a class="headerlink" href="#client-authorization" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>So we need to create a new certificate that will identify us as “michael”</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">EPICS_PVA_TLS_KEYCHAIN</span><span class="o">=</span>~/.config/pva/1.3/michael.p12
+authnstd<span class="w"> </span>-n<span class="w"> </span>michael
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/client/.config/pva/1.3/michael.p12</span>
+<span class="go">Certificate identifier  : b271f07a:4803259031245539247</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>⁴</p></li>
+<li><p>and ask our administrator to approve it</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>--approve<span class="w"> </span>b271f07a:4803259031245539247
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Approve ==&gt; CERT:STATUS:b271f07a:4803259031245539247 ==&gt; Completed Successfully</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>⁵</p></li>
+<li><p>show that we can set the value if</p>
+<ul>
+<li><p>we are identified as “michael”</p></li>
+<li><p>using an <code class="docutils literal notranslate"><span class="pre">X.509</span></code> certificate</p></li>
+<li><p>created by the <em>EPICS Root Certificate Authority</em></p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="w">   </span>pvxput<span class="w"> </span>test:spec<span class="w"> </span><span class="m">10</span>
+<span class="w">   </span>pvxget<span class="w"> </span>test:spec<span class="w"> </span>-r<span class="w"> </span>value
+
+..<span class="w"> </span>code-block::<span class="w"> </span>console
+
+<span class="w">    </span>test:spec
+<span class="w">        </span>value<span class="w"> </span><span class="nv">double</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="m">10</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">PVXS</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="netconfig.html">PVA Network Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstart.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start PVXS</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start Std</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#learn-you-will-learn"><i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i> You will learn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pre-packagedprepackaged"><i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>Prepackaged</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#load-image"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Load image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#administrator"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Administrator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#service"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Service</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#client"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#approve-certs"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Approve Certs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#start-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_6</i> Start SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#get-pv-value"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_7</i> Get PV value</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#step-by-step-step-by-step"><i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i> Step-By-Step</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#step-docker-image"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Docker Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-epics-agents"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> EPICS Agents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-run-pvacms"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run PVACMS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-run-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-spva-client"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> SPVA Client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-permissions"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Permissions</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartkrb.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start KRB</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartldap.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start LDAP</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spva.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Secure PVAccess</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaauth.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> AuthN &amp; AuthZ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvacerts.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Cert Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building from Source</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html#including-pvxs-in-your-application">Including PVXS in your application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cli.html">Command Line Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="value.html">Value Container API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="client.html">Client API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server.html">Server API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html">IOC Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html#qsrv-2">QSRV 2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Misc</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaglossary.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> SPVA Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releasenotes.html">Release Notes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="spvaqstart.html" title="previous chapter"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start PVXS</a></li>
+      <li>Next: <a href="spvaqstartkrb.html" title="next chapter"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start KRB</a></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025 Michael Davidsaver, George McIntyre, Osprey DCS LLC, and SLAC.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/spvaqstartstd.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

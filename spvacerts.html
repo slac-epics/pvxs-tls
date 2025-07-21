@@ -1,0 +1,1063 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>security Cert Management &#8212; PVXS 1.3.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=bb516dca"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="icon" href="_static/favicon.png"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Examples" href="example.html" />
+    <link rel="prev" title="security AuthN &amp; AuthZ" href="spvaauth.html" />
+
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+<!-- Material Icons -->
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+
+<!-- Inject extra CSS for pages starting with 'spva' -->
+<link rel="stylesheet" type="text/css" href="_static/style.css" />
+
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="security-cert-management">
+<span id="certificate-management"></span><h1><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Cert Management<a class="headerlink" href="#security-cert-management" title="Link to this heading">¶</a></h1>
+<section id="public-and-private-keys">
+<span id="certificates-and-private-keys"></span><h2>Public and Private Keys<a class="headerlink" href="#public-and-private-keys" title="Link to this heading">¶</a></h2>
+<p>EPICS Agents maintain public/private key pairs for identification:</p>
+<ul class="simple">
+<li><p>Public key identifies agent to peers (shorthand representation: 8-character SKID)</p></li>
+<li><p>Private key must be protected like a password</p></li>
+<li><p>The Key pair are stored in the keychain file.</p></li>
+<li><p>If the referenced keychain file does not contain a key pair then any of the authnxxx tools will automatically generate a new key pair and store it in the keychain file.</p></li>
+<li><p>Once a key pair has been established, it will be reused for each certificate request.</p></li>
+</ul>
+<p>Identity Assertion Process:</p>
+<ol class="arabic simple">
+<li><p>Each peer presents a certificate</p></li>
+<li><p>Each peer signs some data with his private key</p></li>
+<li><p>Peer verifies signature using the public key in the certificate</p></li>
+<li><p>Peer validates certificate by checking the signature and the certificate chain of trust.</p></li>
+<li><p>The chain of trust is validated back to the Peer’s own Trust Anchor (Root Certificate Authority).</p></li>
+<li><p>The peer’s identity is confirmed through successful verification</p></li>
+</ol>
+<p>Key Security:</p>
+<ul class="simple">
+<li><p>Keeping a private key secure is critical</p></li>
+<li><p>Store it in a keychain file that is not accessible by other users or programs</p></li>
+<li><p>Use separate keychain files for each certificate</p></li>
+</ul>
+</section>
+<section id="trust-establishment">
+<h2>Trust Establishment<a class="headerlink" href="#trust-establishment" title="Link to this heading">¶</a></h2>
+<p>Secure PVAccess relies on each EPICS agent having a copy of the Root Certificate Authority certificate in
+a referenced keychain file so that it can verify certificates presented to it by other agents.</p>
+<p>If a peer presents a certificate that is not signed by a certificate authority that is trusted by the
+agent, the agent will reject the certificate.</p>
+<p>Even if the EPICS client does not want its own certificate it must still have a copy of the Root Certificate Authority.
+This copy is referred to in this document as the <code class="docutils literal notranslate"><span class="pre">Trust</span> <span class="pre">Anchor</span></code>.</p>
+<ol class="arabic simple">
+<li><p>Trust Anchor Distribution:</p>
+<ul class="simple">
+<li><p>Administrators must distribute PKCS#12 files containing the Root certificate to all clients</p></li>
+<li><p>These files must be stored at the location pointed to by EPICS_PVA_TLS_KEYCHAIN or equivalent</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="certificates">
+<h2>Certificates<a class="headerlink" href="#certificates" title="Link to this heading">¶</a></h2>
+<p>A certificate is the document that is exchanged with a peer that identifies an agent.  It contains the name of the agent (subject) and the public key of the agent so that the peer can verify the agent’s identity.</p>
+<ul class="simple">
+<li><p>A certificate is not private.  It can safely be shared with any peer.</p>
+<ul>
+<li><p>Care must be taken when sharing a certificate as it is stored in the same file as the private key. Do not share the keychain file with others.</p></li>
+</ul>
+</li>
+<li><p>A certificate is valid for a specific period of time.</p></li>
+<li><p>A certificate can be revoked by an administrator (if the status monitoring extension is addded to the certificate - by default it is)</p></li>
+</ul>
+</section>
+<section id="certificate-attributes">
+<h2>Certificate Attributes<a class="headerlink" href="#certificate-attributes" title="Link to this heading">¶</a></h2>
+<p>The following attributes are used to describe a certificate:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">subject</span></code>: The entity to which the certificate was issued</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">name</span></code>: The common name of the entity to which the certificate was issued. Username, application name, or other identifier.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">organization</span></code>: The organization of the entity to which the certificate was issued.  Hostname, institution, domain, realm, etc.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">organizational</span> <span class="pre">unit</span></code>: The organizational unit of the entity to which the certificate was issued.  Optional.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">country</span></code>: The country of the entity to which the certificate was issued.  Two letter country code. Default <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">US</span></code>.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">issuer</span></code>: The certificate authority that issued the certificate</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">serial</span> <span class="pre">number</span></code>: A unique serial number for the certificate</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">validity</span> <span class="pre">period</span></code>: The period of time for which the certificate is valid</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">notBefore</span></code>: The date and time before which the certificate is not valid.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">notAfter</span></code>: The date and time after which the certificate is not valid.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">public</span> <span class="pre">key</span></code>: The public key of the entity to which the certificate was issued</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">private</span> <span class="pre">key</span></code>: The private key of the entity to which the certificate was issued.  This is not stored in the certificate but it is stored in the keychain file.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SPVA</span> <span class="pre">certificate</span> <span class="pre">status</span> <span class="pre">extension</span></code>: A string representing the PV name where the certificate status can be monitored.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SPVA</span> <span class="pre">config</span> <span class="pre">uri</span> <span class="pre">extension</span></code>: A string representing the PV name where the certificate configuration can be monitored.</p></li>
+</ul>
+</section>
+<section id="certificate-states">
+<h2>Certificate States<a class="headerlink" href="#certificate-states" title="Link to this heading">¶</a></h2>
+<figure class="align-left" id="id1">
+<a class="reference internal image-reference" href="_images/certificate_states.png"><img alt="Certificate States" src="_images/certificate_states.png" style="width: 75%;" />
+</a>
+</figure>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">PENDING_APPROVAL</span></code>: Certificate awaiting administrative approval</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PENDING</span></code>: Certificate not yet valid (before notBefore date)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">VALID</span></code>: Certificate currently valid and usable</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">EXPIRED</span></code>: Certificate expired (after notAfter date)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">REVOKED</span></code>: Certificate permanently revoked by administrator</p></li>
+</ul>
+</section>
+<section id="certificate-status-message">
+<span id="id2"></span><h2>Certificate Status Message<a class="headerlink" href="#certificate-status-message" title="Link to this heading">¶</a></h2>
+<p>Status response structure:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Structure</span>
+<span class="go">    enum_t     status               # PENDING_APPROVAL, PENDING, VALID, EXPIRED, REVOKED</span>
+<span class="go">    UInt64     serial               # Certificate serial number</span>
+<span class="go">    string     state                # String representation of status</span>
+<span class="go">    enum_t     ocsp_status          # GOOD, REVOKED, UNKNOWN</span>
+<span class="go">    string     ocsp_state           # OCSP state string</span>
+<span class="go">    string     ocsp_status_date     # Status timestamp</span>
+<span class="go">    string     ocsp_certified_until # Validity period end</span>
+<span class="go">    string     ocsp_revocation_date # Revocation date if applicable</span>
+<span class="go">    UInt8A     ocsp_response        # Signed PKCS#7 encoded OCSP response</span>
+</pre></div>
+</div>
+</section>
+<section id="certificate-creation-request-ccr">
+<span id="id3"></span><h2>Certificate Creation Request (CCR)<a class="headerlink" href="#certificate-creation-request-ccr" title="Link to this heading">¶</a></h2>
+<p>This message is sent to <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> to create a new certificate. It is a PVStructure with the following fields:</p>
+<p>Request structure:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Structure</span>
+<span class="go">    string     type               # std, krb, ldap, jwt</span>
+<span class="go">    string     name               # Certificate subject name</span>
+<span class="go">    string     country            # Optional: Country code</span>
+<span class="go">    string     organization       # Optional: Organization name</span>
+<span class="go">    string     organization_unit  # Optional: Unit name</span>
+<span class="go">    UInt16     usage              # Certificate usage flags:</span>
+<span class="gp">                                    #   </span>0x01:<span class="w"> </span>Client
+<span class="gp">                                    #   </span>0x02:<span class="w"> </span>Server
+<span class="gp">                                    #   </span>0x03:<span class="w"> </span>Client<span class="w"> </span>and<span class="w"> </span>Server
+<span class="gp">                                    #   </span>0x04:<span class="w"> </span>Intermediate<span class="w"> </span>Certificate<span class="w"> </span>Authority
+<span class="gp">                                    #   </span>0x08:<span class="w"> </span>CMS
+<span class="gp">                                    #   </span>0x0A:<span class="w"> </span>Any<span class="w"> </span>Server
+<span class="gp">                                    #   </span>0x10:<span class="w"> </span>Certificate<span class="w"> </span>Authority
+<span class="go">    UInt32     not_before         # Validity start time (epoch seconds)</span>
+<span class="go">    UInt32     not_after          # Validity end time (epoch seconds)</span>
+<span class="go">    string     pub_key            # Public key data</span>
+<span class="go">    enum_t     status_monitoring_extension  # Include status monitoring</span>
+<span class="go">    structure  verifier           # Optional: Authenticator specific data</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt>The <code class="docutils literal notranslate"><span class="pre">verifier</span></code> sub-structure is only present if the <code class="docutils literal notranslate"><span class="pre">type</span></code> field references a</dt><dd><p><a class="reference internal" href="spvaauth.html#pvacms-type-1-auth-methods"><span class="std std-ref">TYPE 1 - Independently Verifiable Tokens</span></a>, or <a class="reference internal" href="spvaauth.html#pvacms-type-2-auth-methods"><span class="std std-ref">TYPE 2 - Source Verifiable Tokens</span></a> Authenticator.</p>
+</dd>
+</dl>
+</section>
+<section id="certificate-management-operations">
+<h2>Certificate Management Operations<a class="headerlink" href="#certificate-management-operations" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">pvacert</span></code> can be used to <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">APPROVE</span></code>, <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">DENY</span></code>, and <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">REVOKE</span></code> certificates as follows.</p>
+<p>Approval:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-A<span class="w"> </span>&lt;certid&gt;<span class="w">    </span><span class="c1"># Approve certificate</span>
+</pre></div>
+</div>
+<p>Denial:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-D<span class="w"> </span>&lt;certid&gt;<span class="w">    </span><span class="c1"># Deny certificate (sets REVOKED)</span>
+</pre></div>
+</div>
+<p>Revocation:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-R<span class="w"> </span>&lt;certid&gt;<span class="w">    </span><span class="c1"># Permanently revoke certificate</span>
+</pre></div>
+</div>
+<p>It achieves this by using <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">PUT</span></code> to send a PVStructure with the following fields, to <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a>
+on the PV associated with the certificate:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Structure</span>
+<span class="go">    string     state    # APPROVE, DENY, REVOKE</span>
+</pre></div>
+</div>
+</section>
+<section id="certificate-management-tools">
+<h2>Certificate Management Tools<a class="headerlink" href="#certificate-management-tools" title="Link to this heading">¶</a></h2>
+</section>
+<section id="pvxcert">
+<h2>pvxcert<a class="headerlink" href="#pvxcert" title="Link to this heading">¶</a></h2>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate management utility for PVXS</span>
+
+<span class="go">Gets the STATUS of a certificate, REVOKES a certificate, or APPROVES or DENIES a pending certificate approval.</span>
+
+<span class="go">  Get certificate status from serial number: The certificate ID is specified as &lt;issuer&gt;:&lt;serial&gt;,</span>
+<span class="go">  where &lt;issuer&gt; is the first 8 hex digits of the subject key identifier of the issuer and &lt;serial&gt;</span>
+<span class="go">  is the serial number of the certificate. e.g. 27975e6b:7246297371190731775.</span>
+
+<span class="go">  Get certificate status from keychain file: The keychain file must be a PKCS#12 file.</span>
+
+<span class="go">  APPROVAL and DENIAL of pending certificate approval requests: Can only be made by administrators.</span>
+
+<span class="go">  REVOCATION of a certificate: Can only be made by an administrator.</span>
+
+<span class="go">usage:</span>
+<span class="go">  pvxcert [options] &lt;cert_id&gt; Get certificate status</span>
+<span class="go">  pvxcert [file_options] [options] (-f | --file) &lt;cert_file&gt;</span>
+<span class="go">                                             Get certificate information from the specified cert file</span>
+<span class="go">  pvxcert [options] (-A | --approve) &lt;cert_id&gt;</span>
+<span class="go">                                             APPROVE pending certificate approval request (ADMIN ONLY)</span>
+<span class="go">  pvxcert [options] (-D | --deny) &lt;cert_id&gt;  DENY pending certificate approval request (ADMIN ONLY)</span>
+<span class="go">  pvxcert [options] (-R | --revoke) &lt;cert_id&gt;</span>
+<span class="go">                                             REVOKE certificate (ADMIN ONLY)</span>
+<span class="go">  pvxcert (-h | --help)                      Show this help message and exit</span>
+<span class="go">  pvxcert (-V | --version)                   Print version and exit</span>
+
+<span class="go">file_options:</span>
+<span class="go">  (-p | --password)                          Prompt for password</span>
+
+<span class="go">options:</span>
+<span class="go">  (-w | --timeout) &lt;timout_secs&gt;             Operation timeout in seconds.  Default 5.0s</span>
+<span class="go">  (-d | --debug)                             Debug mode: Shorthand for $PVXS_LOG=&quot;pvxs.*=DEBUG&quot;</span>
+<span class="go">  (-v | --verbose)                           Verbose mode</span>
+</pre></div>
+</div>
+<p>Key Operations:</p>
+<ul class="simple">
+<li><p>Check certificate status</p></li>
+<li><p>Approve/deny <code class="docutils literal notranslate"><span class="pre">PENDING_APPROVAL</span></code> certificates (admin)</p></li>
+<li><p>Revoke certificates in any state (admin/self)</p></li>
+</ul>
+</section>
+<section id="certificate-usage">
+<h2>Certificate Usage<a class="headerlink" href="#certificate-usage" title="Link to this heading">¶</a></h2>
+<p>Network clients can request new certificates from <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> using their public key. The process:</p>
+<ol class="arabic simple">
+<li><p>Generate key pair</p></li>
+<li><p>Submit certificate request</p></li>
+<li><p>Receive signed certificate</p></li>
+<li><p>Install in configured location</p></li>
+</ol>
+</section>
+<section id="pvacms">
+<span id="id4"></span><h2>PVACMS<a class="headerlink" href="#pvacms" title="Link to this heading">¶</a></h2>
+<p>The <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> is the Certificate Authority Service for the EPICS Secure PVAccess Network.</p>
+<section id="pvacms-usage">
+<span id="id5"></span><h3>PVACMS Usage<a class="headerlink" href="#pvacms-usage" title="Link to this heading">¶</a></h3>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">PVACMS: PVAccess Certificate Management Service</span>
+
+<span class="go">Manages Certificates for a Secure PVAccess network.  The Certificate Authority.  Handles Create</span>
+<span class="go">and Revoke requests.  Manages Certificate lifecycles and provides live OCSP certificate status.</span>
+
+<span class="go">Also can be used to re-generate the admin certificate that is required to administer the certificates.</span>
+
+<span class="go">usage:</span>
+<span class="go">  pvacms [admin options] [options]           Run PVACMS.  Interrupt to quit</span>
+<span class="go">  pvacms (-h | --help)                       Show this help message and exit</span>
+<span class="go">  pvacms (-V | --version)                    Print version and exit</span>
+<span class="go">  pvacms [admin options] --admin-keychain-new &lt;new_name&gt;</span>
+<span class="go">                                             Generate a new Admin User&#39;s keychain file, update the ACF file, and exit</span>
+
+<span class="go">options:</span>
+<span class="go">  (-c | --cert-auth-keychain) &lt;cert_auth_keychain&gt;</span>
+<span class="go">                                              Specify Certificate Authority keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12</span>
+<span class="go">        --cert-auth-keychain-pwd &lt;file&gt;       Specify location of file containing Certificate Authority keychain file&#39;s password</span>
+<span class="go">        --cert-auth-name &lt;name&gt;              Specify name (CN) to be used for certificate authority certificate. Default ``EPICS Root Certificate Authority``</span>
+<span class="go">        --cert-auth-org &lt;name&gt;               Specify organisation (O) to be used for certificate authority certificate. Default ``certs.epics.org``</span>
+<span class="go">        --cert-auth-org-unit &lt;name&gt;          Specify organisational unit (OU) to be used for certificate authority certificate. Default ``EPICS Certificate Authority``</span>
+<span class="go">        --cert-auth-country &lt;name&gt;           Specify country (C) to be used for certificate authority certificate. Default `US`</span>
+<span class="go">  (-d | --cert-db) &lt;db_name&gt;                 Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.3/certs.db</span>
+<span class="go">  (-p | --pvacms-keychain) &lt;pvacms_keychain&gt; Specify PVACMS keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12</span>
+<span class="go">        --pvacms-keychain-pwd &lt;file&gt;         Specify location of file containing PVACMS keychain file&#39;s password</span>
+<span class="go">        --pvacms-name &lt;name&gt;                  Specify name (CN) to be used for PVACMS certificate. Default `PVACMS Service`</span>
+<span class="go">        --pvacms-org &lt;name&gt;                   Specify organisation (O) to be used for PVACMS certificate. Default ``certs.epics.org``</span>
+<span class="go">        --pvacms-org-unit &lt;name&gt;              Specify organisational unit (OU) to be used for PVACMS certificate. Default ``EPICS PVA Certificate Management Service``</span>
+<span class="go">        --pvacms-country &lt;name&gt;               Specify country (C) to be used for PVACMS certificate. Default US</span>
+<span class="go">        --client-dont-require-approval        Generate Client Certificates in VALID state</span>
+<span class="go">        --ioc-dont-require-approval           Generate IOC Certificates in VALID state</span>
+<span class="go">        --server-dont-require-approval        Generate Server Certificates in VALID state</span>
+<span class="go">        --certs-dont-require-approval         Generate All Certificates in VALID state</span>
+<span class="go">        --cert_validity-client &lt;duration&gt;     Default duration for client certificates</span>
+<span class="go">        --cert_validity-server &lt;duration&gt;     Default duration for server certificates</span>
+<span class="go">        --cert_validity-ioc &lt;duration&gt;        Default duration for IOC certificates</span>
+<span class="go">        --cert_validity &lt;duration&gt;            Default duration for all certificates</span>
+<span class="go">        --disallow-custom-durations-client    Disallow custom durations for client certificates</span>
+<span class="go">        --disallow-custom-durations-server    Disallow custom durations for server certificates</span>
+<span class="go">        --disallow-custom-durations-ioc       Disallow custom durations for IOC certificates</span>
+<span class="go">        --disallow-custom-durations           Disallow custom durations</span>
+<span class="go">        --status-monitoring-enabled &lt;YES|NO&gt;  Require Peers to monitor Status of Certificates Generated by this</span>
+<span class="go">                                              server by default. Can be overridden in each CCR</span>
+<span class="go">        --status-validity-mins                Set Status Validity Time in Minutes</span>
+<span class="go">  (-v | --verbose)                            Verbose mode</span>
+
+<span class="go">admin options:</span>
+<span class="go">        --acf &lt;acf_file&gt;                      Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf</span>
+<span class="go">  (-a | --admin-keychain) &lt;admin_keychain&gt;    Specify Admin User&#39;s keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/admin.p12</span>
+<span class="go">        --admin-keychain-pwd &lt;file&gt;          Specify location of file containing Admin User&#39;s keychain file password</span>
+</pre></div>
+</div>
+</section>
+<section id="pvacms-configuration">
+<span id="id6"></span><h3>PVACMS Configuration<a class="headerlink" href="#pvacms-configuration" title="Link to this heading">¶</a></h3>
+<p>The environment variables in the following table configure the <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> at runtime.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>There is also an implied hierarchy to their applicability such that <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a>
+supersedes the PVAS version which in turn, supersedes the PVA version.
+So, if a <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> wants to specify its keychain file location it can simply
+provide the <code class="docutils literal notranslate"><span class="pre">EPICS_PVA_TLS_KEYCHAIN</span></code> environment variable as long as neither
+<code class="docutils literal notranslate"><span class="pre">EPICS_PVACMS_TLS_KEYCHAIN</span></code> nor <code class="docutils literal notranslate"><span class="pre">EPICS_PVAS_TLS_KEYCHAIN</span></code> are configured.</p>
+</div>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Keys and Values</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_ADMIN_TLS</div>
+<div class="line">_KEYCHAIN</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;path to ADMIN user keychain file&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">~/.config/pva/1.3/admin.p12</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">The location of the <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> ADMIN user keychain file.</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_ADMIN_TLS</div>
+<div class="line">_KEYCHAIN_PWD_FILE</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;path to ADMIN user password text file&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">~/.config/pva/1.3/admin.pass</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">Location of a password file for <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> ADMIN user keychain file.</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_CERT_AUTH_NAME</div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;name of the certificate authority&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">Epics</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority</span></code></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">To provide the name (CN) to be used in the subject of the</div>
+<div class="line">certificate authority’s Certificate if <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> creates it.</div>
+<div class="line">default: “EPICS Root Certificate Authority”</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_CERT_AUTH</div>
+<div class="line">_ORGANIZATION</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;certificate authority organisation name&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">certs.epics.org</span></code></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">To provide the name (O) to be used in the subject of the certificate</div>
+<div class="line">authority’s certificate if <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> creates it.</div>
+<div class="line">default: “cert.authority.epics.org”</div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_CERT_AUTH</div>
+<div class="line">_ORGANIZATIONAL_UNIT</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;certificate authority org unit name&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">EPICS</span> <span class="pre">Certificate</span> <span class="pre">Authority</span></code></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">To provide the name (OU) to be used in the subject of the Certificate</div>
+<div class="line">Authority’s certificate if <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> creates it.</div>
+<div class="line">default: “EPICS Certificate Authority”</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_CERT_AUTH</div>
+<div class="line">_TLS_KEYCHAIN</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;certificate authority keychain file&gt;</div>
+<div class="line">e.g.</div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">~/.config/pva/1.3/cert_auth.p12</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">fully qualified path to a file that will be used as the</div>
+<div class="line">certificate authority keychain file.</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line"><a href="#id7"><span class="problematic" id="id8">EPICS_CERT_AUTH_</span></a></div>
+<div class="line">TLS_KEYCHAIN_PWD_FILE</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;certificate authority password file&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">~/.config/pva/1.3/cert_auth.pass</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">fully qualified path to a file that will be used as the</div>
+<div class="line">certificate authority keychain password file.</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_ACF</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;path to ACF file&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">~/.config/pva/1.3/pvacms.acf</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">fully qualified path to a file that will be used as the</div>
+<div class="line">ACF file that configures the permissions of <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> peers.</div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_CERT</div>
+<div class="line">_STATUS_VALIDITY_MINS</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;number of minutes&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">30</span></code> or <code class="docutils literal notranslate"><span class="pre">1d</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">Minutes that the ocsp status response will</div>
+<div class="line">be valid before a client must re-request an update</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_CERTS</div>
+<div class="line">_REQUIRE_SUBSCRIPTION</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{<code class="docutils literal notranslate"><span class="pre">true</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">false</span></code>}</div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">true</span></code> if we require peers to</div>
+<div class="line">subscribe to certificate status for certificates to</div>
+<div class="line">be deemed VALID. Adds extension to new certificates</div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_DB</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;path to DB file&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">~/.local/share/pva/1.3/certs.db</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">fully qualified path to a file that will be used as the</div>
+<div class="line">Certificate database file.</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_REQUIRE</div>
+<div class="line">_APPROVAL</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{<code class="docutils literal notranslate"><span class="pre">true</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">false</span></code> }</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">true</span></code> if server should generate all new certificates in the</div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">PENDING_APPROVAL</span></code> state <code class="docutils literal notranslate"><span class="pre">false</span></code> to generate in the <code class="docutils literal notranslate"><span class="pre">VALID</span></code> state</div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_REQUIRE</div>
+<div class="line">_CLIENT_APPROVAL</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{<code class="docutils literal notranslate"><span class="pre">true</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">false</span></code> }</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">true</span></code> if server should generate new client certificates in the</div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">PENDING_APPROVAL</span></code> state <code class="docutils literal notranslate"><span class="pre">false</span></code> to generate in the <code class="docutils literal notranslate"><span class="pre">VALID</span></code> state</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_REQUIRE</div>
+<div class="line">_IOC_APPROVAL</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{<code class="docutils literal notranslate"><span class="pre">true</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">false</span></code> }</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">true</span></code> if server should generate new IOC certificates in the</div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">PENDING_APPROVAL</span></code> state <code class="docutils literal notranslate"><span class="pre">false</span></code> to generate in the <code class="docutils literal notranslate"><span class="pre">VALID</span></code> state</div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_REQUIRE</div>
+<div class="line">_SERVER_APPROVAL</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{<code class="docutils literal notranslate"><span class="pre">true</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">false</span></code> }</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">true</span></code> if server should generate new server certificates in the</div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">PENDING_APPROVAL</span></code> state <code class="docutils literal notranslate"><span class="pre">false</span></code> to generate in the <code class="docutils literal notranslate"><span class="pre">VALID</span></code> state</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_DISALLOW</div>
+<div class="line">_CUSTOM_DURATION</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{<code class="docutils literal notranslate"><span class="pre">true</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">false</span></code> }</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">true</span></code> if client provided certificate durations should be ignored</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_DISALLOW</div>
+<div class="line">_CLIENT_CUSTOM_DURATION</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{<code class="docutils literal notranslate"><span class="pre">true</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">false</span></code> }</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">true</span></code> if client provided certificate durations should be ignored</div>
+<div class="line">for Client certificate requests</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_DISALLOW</div>
+<div class="line">_IOC_CUSTOM_DURATION</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{<code class="docutils literal notranslate"><span class="pre">true</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">false</span></code> }</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">true</span></code> if client provided certificate durations should be ignored</div>
+<div class="line">for IOC certificate requests</div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_DISALLOW</div>
+<div class="line">_SERVER_CUSTOM_DURATION</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{<code class="docutils literal notranslate"><span class="pre">true</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">false</span></code> }</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">true</span></code> if client provided certificate durations should be ignored</div>
+<div class="line">for Server certificate requests</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_CERT</div>
+<div class="line">_VALIDITY</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;duration of the certificate&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">30</span></code> or <code class="docutils literal notranslate"><span class="pre">1d</span></code>  or <code class="docutils literal notranslate"><span class="pre">1y6M</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">The duration of the certificate.  All certificates will be</div>
+<div class="line">generated with this amount of time unless overridden</div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_CERT</div>
+<div class="line">_VALIDITY_CLIENT</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;duration of the certificate&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">30</span></code> or <code class="docutils literal notranslate"><span class="pre">1d</span></code>  or <code class="docutils literal notranslate"><span class="pre">1y6M</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">The duration of the certificate.  All Client certificates will be</div>
+<div class="line">generated with this amount of time unless overridden</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_CERT</div>
+<div class="line">_VALIDITY_IOC</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;duration of the certificate&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">30</span></code> or <code class="docutils literal notranslate"><span class="pre">1d</span></code>  or <code class="docutils literal notranslate"><span class="pre">1y6M</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">The duration of the certificate.  All IOC certificates will be</div>
+<div class="line">generated with this amount of time unless overridden</div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_CERT</div>
+<div class="line">VALIDITY_SERVER</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;duration of the certificate&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">30</span></code> or <code class="docutils literal notranslate"><span class="pre">1d</span></code>  or <code class="docutils literal notranslate"><span class="pre">1y6M</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">The duration of the certificate.  All Server certificates will be</div>
+<div class="line">generated with this amount of time unless overridden</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_TLS</div>
+<div class="line">_KEYCHAIN</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;path to keychain file&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">~/.config/pva/1.3/pvacms.p12</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">The location of the <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> keychain file.</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_TLS</div>
+<div class="line">_KEYCHAIN_PWD_FILE</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;path to password text file&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">~/.config/pva/1.3/pvacms.pass</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">Location of a password file for <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> keychain file.</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVACMS_TLS</div>
+<div class="line">_STOP_IF_NO_CERT</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{<code class="docutils literal notranslate"><span class="pre">true</span></code> or <code class="docutils literal notranslate"><span class="pre">false</span></code> (default) }</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">true</span></code> if server should stop if no cert is available or can be</div>
+<div class="line">verified if status check is enabled</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="extensions-to-config-for-pvacms">
+<h3>Extensions to Config for PVACMS<a class="headerlink" href="#extensions-to-config-for-pvacms" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><dl class="simple">
+<dt><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">cert_status_validity_mins</span></code></dt><dd><ul>
+<li><p>The number of minutes that the certificate status is valid for.</p></li>
+<li><p>Default: 30</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">cert_client_require_approval</span></code></dt><dd><ul>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">true</span></code> then authstd (Standard Authenticator) generated client certificates must be approved before they can be used.</p></li>
+<li><p>Default: <code class="docutils literal notranslate"><span class="pre">true</span></code></p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">cert_server_require_approval</span></code></dt><dd><ul>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">true</span></code> then authstd (Standard Authenticator) generated server certificates must be approved before they can be used.</p></li>
+<li><p>Default: <code class="docutils literal notranslate"><span class="pre">true</span></code></p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">cert_status_subscription</span></code></dt><dd><ul>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">Yes</span></code> then the <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> will embed the certificate status monitoring extension in all certificates it issues by default.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">Always</span></code> then force <code class="docutils literal notranslate"><span class="pre">Yes</span></code> irrespective of the <a class="reference internal" href="#certificate-creation-request-ccr"><span class="std std-ref">Certificate Creation Request (CCR)</span></a> <code class="docutils literal notranslate"><span class="pre">status_monitoring_extension</span></code> field.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">No</span></code> then do not embed the certificate status monitoring extension in certificates it issues by default.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">Never</span></code> then force <code class="docutils literal notranslate"><span class="pre">No</span></code> irrespective of the <a class="reference internal" href="#certificate-creation-request-ccr"><span class="std std-ref">Certificate Creation Request (CCR)</span></a> <code class="docutils literal notranslate"><span class="pre">status_monitoring_extension</span></code> field.</p></li>
+<li><p>Default: <code class="docutils literal notranslate"><span class="pre">Yes</span></code> - overrides <code class="docutils literal notranslate"><span class="pre">EPICS_PVACMS_STATUS_SUBSCRIPTION</span></code> environment variable.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">certs_db_filename</span></code></dt><dd><ul>
+<li><p>The certificate database file location.</p></li>
+<li><p>Default: <code class="docutils literal notranslate"><span class="pre">certs.db</span></code></p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">cert_auth_keychain_file</span></code></dt><dd><ul>
+<li><p>The certificate authority keychain file location.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">cert_auth_keychain_pwd</span></code></dt><dd><ul>
+<li><p>The certificate authority keychain file password.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">pvacms_acf_filename</span></code></dt><dd><ul>
+<li><p>The PVACMS access control file location.  This file protects the <a class="reference internal" href="#pvacms"><span class="std std-ref">PVACMS</span></a> administrator access.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">cert_auth_name</span></code></dt><dd><ul>
+<li><p>The certificate authority name - used to create the certificate authority certificate if it does not already exist.</p></li>
+<li><p>Default: <code class="docutils literal notranslate"><span class="pre">&quot;EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority</span></code></p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">cert_auth_organization</span></code></dt><dd><ul>
+<li><p>The certificate authority organization - used to create the certificate authority certificate if it does not already exist</p></li>
+<li><p>Default: <code class="docutils literal notranslate"><span class="pre">certs.epics.org</span></code></p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">cert_auth_organizational_unit</span></code></dt><dd><ul>
+<li><p>The certificate authority organizational unit - used to create the certificate authority certificate if it does not already exist</p></li>
+<li><p>Default: <code class="docutils literal notranslate"><span class="pre">EPICS</span> <span class="pre">Certificate</span> <span class="pre">Authority</span></code></p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="pvacms-authorization">
+<h3>PVACMS Authorization<a class="headerlink" href="#pvacms-authorization" title="Link to this heading">¶</a></h3>
+<p>A default ACF file is generated when PVACMS starts up for the first time.
+It contains a user group named <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">CMS_ADMIN</span></code>.  It has one single user called <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">admin</span></code>.
+It defines an access rule that allows users in this group <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">WRITE</span></code> access
+to the Certificate Status PVs. Only users from this group that have been authenticated using
+an X.509 certificate issued by the certificate authority that the PVACMS manages, are authorized.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>AUTHORITY(AUTH_EPICS_ROOT, &quot;EPICS Root Certificate Authority&quot;)
+
+UAG(CMS_ADMIN) {admin}
+
+ASG(DEFAULT) {
+    RULE(0,READ)
+    RULE(1,WRITE) {
+        UAG(CMS_ADMIN)
+        METHOD(&quot;x509&quot;)
+        AUTHORITY(AUTH_EPICS_ROOT)
+    }
+}
+</pre></div>
+</div>
+<p>Equivalent YAML format:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># EPICS YAML</span>
+<span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+
+<span class="nt">authorities</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AUTH_EPICS_ROOT</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EPICS Root Certificate Authority</span>
+
+<span class="nt">uags</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CMS_ADMIN</span>
+<span class="w">  </span><span class="nt">users</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">admin</span>
+
+<span class="nt">asgs</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DEFAULT</span>
+<span class="w">    </span><span class="nt">rules</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">        </span><span class="nt">access</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">READ</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">        </span><span class="nt">access</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WRITE</span>
+<span class="w">        </span><span class="nt">uags</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CMS_ADMIN</span>
+<span class="w">        </span><span class="nt">methods</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">x509</span>
+<span class="w">        </span><span class="nt">authorities</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AUTH_EPICS_ROOT</span>
+</pre></div>
+</div>
+<p>A default client certificate is generated that matches this security privilege.
+This certificate has the subject CN name <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">admin</span></code> and is generated by the certificate authority
+associated with this PVACMS.  By default the certificate and key are stored in the file admmin.p12
+in the current working directory.</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">2025-06-08T18:00:49.487647000 INFO pvxs.certs.cms X.509 certificate authority certificate</span>
+<span class="go">2025-06-08T18:00:49.487665000 INFO pvxs.certs.cms    CERT ID: fedcba98:13822586378443716801</span>
+<span class="go">2025-06-08T18:00:49.487693000 INFO pvxs.certs.cms SUBJECT  C: admin</span>
+<span class="go">2025-06-08T18:00:49.487746000 INFO pvxs.certs.cms     STATUS: VALID</span>
+<span class="go">2025-06-08T18:00:49.487758000 INFO pvxs.certs.cms VALID FROM: Sun Jun  8 18:00:49 2025</span>
+<span class="go">2025-06-08T18:00:49.487758000 INFO pvxs.certs.cms EXPIRES ON: Fri Jun  8 18:00:49 2029</span>
+
+<span class="go">admin.p12</span>
+</pre></div>
+</div>
+<p>Using this certificate an administrator can <code class="docutils literal notranslate"><span class="pre">Approve</span></code> or <code class="docutils literal notranslate"><span class="pre">Deny</span></code>
+certificates in the <code class="docutils literal notranslate"><span class="pre">PENDING_APPROVAL</span></code> state and <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">Revoke</span></code> <code class="docutils literal notranslate"><span class="pre">VALID</span></code> ones.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># Approve PENDING_APPROVAL certificate 3519231305961542464</span>
+pvxcert<span class="w"> </span>fedcba98:3519231305961542464<span class="w"> </span>-A
+
+<span class="c1"># Deny PENDING_APPROVAL certificate 3519231305961542464</span>
+pvxcert<span class="w"> </span>fedcba98:3519231305961542464<span class="w"> </span>-D
+
+<span class="c1"># Revoke VALID certificate 3519231305961542464</span>
+pvxcert<span class="w"> </span>fedcba98:3519231305961542464<span class="w"> </span>-R
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">PVXS</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="netconfig.html">PVA Network Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstart.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start PVXS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartstd.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start Std</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartkrb.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start KRB</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartldap.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start LDAP</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spva.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Secure PVAccess</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaauth.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> AuthN &amp; AuthZ</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Cert Management</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#public-and-private-keys">Public and Private Keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#trust-establishment">Trust Establishment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#certificates">Certificates</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#certificate-attributes">Certificate Attributes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#certificate-states">Certificate States</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#certificate-status-message">Certificate Status Message</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#certificate-creation-request-ccr">Certificate Creation Request (CCR)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#certificate-management-operations">Certificate Management Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#certificate-management-tools">Certificate Management Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pvxcert">pvxcert</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#certificate-usage">Certificate Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pvacms">PVACMS</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#pvacms-usage">PVACMS Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pvacms-configuration">PVACMS Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#extensions-to-config-for-pvacms">Extensions to Config for PVACMS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pvacms-authorization">PVACMS Authorization</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="example.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building from Source</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html#including-pvxs-in-your-application">Including PVXS in your application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cli.html">Command Line Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="value.html">Value Container API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="client.html">Client API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server.html">Server API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html">IOC Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html#qsrv-2">QSRV 2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Misc</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaglossary.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> SPVA Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releasenotes.html">Release Notes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="spvaauth.html" title="previous chapter"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> AuthN &amp; AuthZ</a></li>
+      <li>Next: <a href="example.html" title="next chapter">Examples</a></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025 Michael Davidsaver, George McIntyre, Osprey DCS LLC, and SLAC.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/spvacerts.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

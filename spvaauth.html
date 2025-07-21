@@ -1,0 +1,1713 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>security AuthN &amp; AuthZ &#8212; PVXS 1.3.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=bb516dca"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="icon" href="_static/favicon.png"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="security Cert Management" href="spvacerts.html" />
+    <link rel="prev" title="security Secure PVAccess" href="spva.html" />
+
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+<!-- Material Icons -->
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+
+<!-- Inject extra CSS for pages starting with 'spva' -->
+<link rel="stylesheet" type="text/css" href="_static/style.css" />
+
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="security-authn-authz">
+<span id="authn-and-authz"></span><h1><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> AuthN &amp; AuthZ<a class="headerlink" href="#security-authn-authz" title="Link to this heading">¶</a></h1>
+<p><a class="reference internal" href="spvaglossary.html#glossary-auth-vs-authz"><span class="std std-ref">Authentication and Authorization</span></a> with Secure PVAccess</p>
+<ul class="simple">
+<li><p><strong>Authentication</strong> (AuthN) determines and verifies the identity of a client or server.</p></li>
+<li><p><strong>Authorization</strong> (AuthZ) defines and enforces access rights to PV resources.</p></li>
+</ul>
+<p>Secure PVAccess enhances <a class="reference internal" href="#epics-security"><span class="std std-ref">Long Running Certificates</span></a> with fine-grained control based on:</p>
+<ul class="simple">
+<li><p>Authentication Mode</p></li>
+<li><p>Authentication Method</p></li>
+<li><p>Certifying Authority</p></li>
+<li><p>Protocol</p></li>
+</ul>
+<section id="authentication-modes">
+<span id="id1"></span><h2>Authentication Modes<a class="headerlink" href="#authentication-modes" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Mutual</span></code>: Both client and server are authenticated via certificates (spva: <code class="docutils literal notranslate"><span class="pre">METHOD</span></code> is <code class="docutils literal notranslate"><span class="pre">x509</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Server-only</span></code>: Only server is authenticated via certificate (spva: <code class="docutils literal notranslate"><span class="pre">METHOD</span></code> is <code class="docutils literal notranslate"><span class="pre">ca</span></code> or <code class="docutils literal notranslate"><span class="pre">anonymous</span></code>, but <code class="docutils literal notranslate"><span class="pre">PROTOCOL</span></code> is <code class="docutils literal notranslate"><span class="pre">tls</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Un-authenticated</span></code>: Credentials supplied in <code class="docutils literal notranslate"><span class="pre">AUTHZ</span></code> message (legacy: <code class="docutils literal notranslate"><span class="pre">METHOD</span></code> is <code class="docutils literal notranslate"><span class="pre">ca</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Unknown</span></code>: No credentials (legacy: <code class="docutils literal notranslate"><span class="pre">METHOD</span></code> is <code class="docutils literal notranslate"><span class="pre">anonymous</span></code>)</p></li>
+</ul>
+<section id="legacy-authentication-mode">
+<span id="determining-identity"></span><h3>Legacy Authentication Mode<a class="headerlink" href="#legacy-authentication-mode" title="Link to this heading">¶</a></h3>
+<p>Methods:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">anonymous</span></code> - <code class="docutils literal notranslate"><span class="pre">Unknown</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ca</span></code> - <code class="docutils literal notranslate"><span class="pre">Un-authenticated</span></code></p></li>
+</ul>
+<img alt="Identity in PVAccess" class="align-center" src="_images/pvaident.png" />
+<ol class="arabic simple">
+<li><p>Optional <code class="docutils literal notranslate"><span class="pre">AUTHZ</span></code> message from client:</p></li>
+</ol>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>AUTHZ<span class="w"> </span>method:<span class="w"> </span>ca
+AUTHZ<span class="w"> </span>user:<span class="w"> </span>george
+AUTHZ<span class="w"> </span>host:<span class="w"> </span>McInPro.level-n.com
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>Server uses PeerInfo structure:</p></li>
+</ol>
+<ul class="simple">
+<li><p><a class="reference internal" href="#peer-info"><span class="std std-ref">Legacy PeerInfo Structure</span></a></p></li>
+</ul>
+<ol class="arabic simple" start="3">
+<li><p>PeerInfo fields map to <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">asAddClient</span></code> parameters …</p></li>
+<li><p>for authorization through the <code class="docutils literal notranslate"><span class="pre">ACF</span></code> definitions of <code class="docutils literal notranslate"><span class="pre">UAG</span></code> and <code class="docutils literal notranslate"><span class="pre">ASG</span></code> …</p></li>
+<li><p>to control access to PVs</p></li>
+</ol>
+</section>
+<section id="secure-pvaccess-authentication-mode">
+<h3>Secure PVAccess Authentication Mode<a class="headerlink" href="#secure-pvaccess-authentication-mode" title="Link to this heading">¶</a></h3>
+<p>Methods:</p>
+<ul class="simple">
+<li><p>server: <code class="docutils literal notranslate"><span class="pre">x509</span></code> / client: <code class="docutils literal notranslate"><span class="pre">x509</span></code> - <code class="docutils literal notranslate"><span class="pre">Mutual</span></code></p></li>
+<li><p>server: <code class="docutils literal notranslate"><span class="pre">x509</span></code> - <code class="docutils literal notranslate"><span class="pre">Server-Only</span></code></p></li>
+</ul>
+<img alt="Identity in Secure PVAccess" class="align-center" src="_images/spvaident.png" />
+<ol class="arabic simple">
+<li><p>Client Identity optionally established via X.509 certificate during TLS handshake:</p></li>
+</ol>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>CN:<span class="w"> </span>greg
+O:<span class="w"> </span>SLAC.stanford.edu
+OU:<span class="w"> </span>SLAC<span class="w"> </span>National<span class="w"> </span>Accelerator<span class="w"> </span>Laboratory
+C:<span class="w"> </span>US
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>EPICS agent optionally verifies certificate via trust chain</p></li>
+<li><p>PeerCredentials structure provides peer information:</p></li>
+</ol>
+<ul class="simple">
+<li><p><a class="reference internal" href="#peer-credentials"><span class="std std-ref">New PeerCredentials Structure</span></a></p></li>
+</ul>
+<ol class="arabic simple" start="4">
+<li><p>Extended <code class="docutils literal notranslate"><span class="pre">asAddClientIdentity()</span></code> function provides</p></li>
+</ol>
+<ul class="simple">
+<li><p><a class="reference internal" href="#identity-structure"><span class="std std-ref">Identity Structure for APIs</span></a></p></li>
+</ul>
+<ol class="arabic simple" start="5">
+<li><p>Secure authorization control enhanced with:</p></li>
+</ol>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">METHOD</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AUTHORITY</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PROTOCOL</span></code></p></li>
+</ul>
+<p>through the ACF definitions of ASGs …</p>
+<ol class="arabic simple" start="6">
+<li><p>to control access to PVs</p></li>
+</ol>
+</section>
+</section>
+<section id="authentication-method">
+<span id="site-authentication-methods"></span><h2>Authentication Method<a class="headerlink" href="#authentication-method" title="Link to this heading">¶</a></h2>
+<section id="anonymous-method">
+<h3>anonymous Method<a class="headerlink" href="#anonymous-method" title="Link to this heading">¶</a></h3>
+<p>No credentials are supplied.</p>
+</section>
+<section id="ca-method">
+<h3>ca Method<a class="headerlink" href="#ca-method" title="Link to this heading">¶</a></h3>
+<p>Unauthenticated credentials are supplied in <code class="docutils literal notranslate"><span class="pre">AUTHZ</span></code> message.</p>
+</section>
+<section id="x509-method">
+<h3>x509 Method<a class="headerlink" href="#x509-method" title="Link to this heading">¶</a></h3>
+<p>A new Authentication Method is added with Secure PVAccess - <code class="docutils literal notranslate"><span class="pre">x509</span></code>.
+With <code class="docutils literal notranslate"><span class="pre">x509</span></code> EPICS clients provde authenticated credentials in the form of an X.509 certificate.</p>
+<p>Optionally EPICS clients can use a variety of Site Authenticators that can create an X.509 certificate from a variety of sources including</p>
+<ul class="simple">
+<li><p>Kerberos</p></li>
+<li><p>LDAP</p></li>
+<li><p>Standard Authenticator (Just provide a username and optional organization)</p></li>
+</ul>
+<p>The x509 authentication method integrates with Secure PVAccess via a PKCS#12 keychain file
+using the certificates and keys that it contains.</p>
+</section>
+</section>
+<section id="certifying-authority">
+<h2>Certifying Authority<a class="headerlink" href="#certifying-authority" title="Link to this heading">¶</a></h2>
+<p>The Certifying Authority is the entity that vouches for the identity of the EPICS agent.</p>
+<p>The identity of Secure PVAccess servers and clients are attested to by a Certifying Authority.
+This is known as the Certificate Authority or Trust Anchor.</p>
+<p>A client and server must agree on the Certifying Authority that vouches for the identity of their peer.
+Certificates that are delivered by the PVACMS service are signed by a common Certificate Authority so
+clients and servers implicitly agree.  If you provide your own certificates then you must share the trust anchor certificate
+between all clients and servers that need to communicate.</p>
+</section>
+<section id="protocol">
+<h2>Protocol<a class="headerlink" href="#protocol" title="Link to this heading">¶</a></h2>
+<p>The Protocol is the method used to transport the identity of an EPICS agent to its peer.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">TLS</span></code> - Transport Layer Security (Secure PVAccess)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">TCP</span></code> - Transmission Control Protocol (Legacy)</p></li>
+</ul>
+<p>The TLS protocol is negotiated during the TLS handshake using the X.509 certificate provided by
+the server and optionally by the client.</p>
+</section>
+<section id="site-authenticators">
+<span id="id2"></span><h2>Site Authenticators<a class="headerlink" href="#site-authenticators" title="Link to this heading">¶</a></h2>
+<p>Authenticators are ways of generating the certificate and placing it in the PKCS#12 keychain file,
+using credentials (tickets, tokens, or other identity-affirming methods) from existing authentication methods
+that may be in use at a particular site.  The simplest is called “Standard Authenticator” (<code class="docutils literal notranslate"><span class="pre">std</span></code>) and it
+allows a user to create an arbitrary x509 certificate that has to be <code class="docutils literal notranslate"><span class="pre">APPROVED</span></code> by a network administrator before
+it is allowed on the network.</p>
+<p>Tools that start with <code class="docutils literal notranslate"><span class="pre">authn</span></code> e.g. <code class="docutils literal notranslate"><span class="pre">authnstd</span></code> are the commandline interfaces to these Authenticators.</p>
+<section id="reference-authenticators">
+<h3>Reference Authenticators<a class="headerlink" href="#reference-authenticators" title="Link to this heading">¶</a></h3>
+<section id="type-0-basic-credentials">
+<span id="pvacms-type-0-auth-methods"></span><h4>TYPE <code class="docutils literal notranslate"><span class="pre">0</span></code> - Basic Credentials<a class="headerlink" href="#type-0-basic-credentials" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Uses basic information:</p>
+<ul>
+<li><p>CN: Common name</p>
+<ul>
+<li><p>Commandline flag: <code class="docutils literal notranslate"><span class="pre">-n</span></code> <code class="docutils literal notranslate"><span class="pre">--name</span></code></p></li>
+<li><p>Username</p></li>
+</ul>
+</li>
+<li><p>O: Organisation</p>
+<ul>
+<li><p>Commandline flag: <code class="docutils literal notranslate"><span class="pre">-o</span></code> <code class="docutils literal notranslate"><span class="pre">--organization</span></code></p></li>
+<li><p>Hostname</p></li>
+<li><p>IP address</p></li>
+</ul>
+</li>
+<li><p>OU: Organisational Unit</p>
+<ul>
+<li><p>Commandline flag: <code class="docutils literal notranslate"><span class="pre">--ou</span></code></p></li>
+</ul>
+</li>
+<li><p>C: Country</p>
+<ul>
+<li><p>Commandline flag: <code class="docutils literal notranslate"><span class="pre">-c</span></code> <code class="docutils literal notranslate"><span class="pre">--country</span></code></p></li>
+<li><p>Locale (not reliable)</p></li>
+<li><p>Default = “US”</p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>No verification performed</p></li>
+<li><p>Certificates start in <code class="docutils literal notranslate"><span class="pre">PENDING_APPROVAL</span></code> state</p></li>
+<li><p>Requires administrator approval</p></li>
+</ul>
+</section>
+<section id="type-1-independently-verifiable-tokens">
+<span id="pvacms-type-1-auth-methods"></span><h4>TYPE <code class="docutils literal notranslate"><span class="pre">1</span></code> - Independently Verifiable Tokens<a class="headerlink" href="#type-1-independently-verifiable-tokens" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Tokens verified independently or via endpoint (e.g., JWT)</p></li>
+<li><p>Verification methods:</p>
+<ul>
+<li><p>Token signature verification</p></li>
+<li><p>Token payload validation</p></li>
+<li><p>Verification endpoint calls</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="type-2-source-verifiable-tokens">
+<span id="pvacms-type-2-auth-methods"></span><h4>TYPE <code class="docutils literal notranslate"><span class="pre">2</span></code> - Source Verifiable Tokens<a class="headerlink" href="#type-2-source-verifiable-tokens" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Requires programmatic API integration (e.g., Kerberos)</p></li>
+<li><p>Adds verifiable data to <a class="reference internal" href="spvacerts.html#certificate-creation-request-ccr"><span class="std std-ref">Certificate Creation Request (CCR)</span></a> message</p></li>
+<li><p><a class="reference internal" href="spvacerts.html#pvacms"><span class="std std-ref">PVACMS</span></a> uses method-specific libraries for verification</p></li>
+</ul>
+</section>
+</section>
+<section id="common-environment-variables-for-all-authenticators">
+<h3>Common Environment Variables for all Authenticators<a class="headerlink" href="#common-environment-variables-for-all-authenticators" title="Link to this heading">¶</a></h3>
+<p><strong>Configuration options for Standard Authenticator</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Keys and Values</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><div class="line-block">
+<div class="line"><a href="#id4"><span class="problematic" id="id5">EPICS_PVA_AUTH_</span></a></div>
+<div class="line">_CERT_VALIDITY_MINS</div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;number of minutes&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">1y</span></code> for 1 year</div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">Amount of minutes before the certificate expires.</div>
+<div class="line">e.g. 1d or 1y 2w 1d or 24h</div>
+<div class="line">Where:</div>
+<div class="line-block">
+<div class="line">1y = 365 days</div>
+<div class="line">1M = 30 days</div>
+<div class="line">1w = 7 days</div>
+</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVA_AUTH</div>
+<div class="line">_NAME</div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">{name to use}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">archiver</span></code>
+e.g. <code class="docutils literal notranslate"><span class="pre">IOC1</span></code></div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">greg</span></code></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">Name to use in new certificates</div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVAS_AUTH</div>
+<div class="line">_NAME</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVA_AUTH</div>
+<div class="line">_ORGANIZATION</div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">{organization to use}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">site.epics.org</span></code>
+e.g. <code class="docutils literal notranslate"><span class="pre">SLAC.STANFORD.EDU</span></code></div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">KLYS:LI01:101</span></code></div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">centos07</span></code></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">Organization to use in new certificates</div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVAS_AUTH</div>
+<div class="line">_ORGANIZATION</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line"><a href="#id6"><span class="problematic" id="id7">EPICS_PVA_AUTH_</span></a></div>
+<div class="line">ORGANIZATIONAL_UNIT</div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">{organization unit to use}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">data</span> <span class="pre">center</span></code>
+e.g. <code class="docutils literal notranslate"><span class="pre">ops</span></code></div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">prod</span></code></div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">remote</span></code></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">Organization Unit to use in new certificates</div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line"><a href="#id8"><span class="problematic" id="id9">EPICS_PVAS_AUTH_</span></a></div>
+<div class="line">ORGANIZATIONAL_UNIT</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVA_AUTH</div>
+<div class="line">_COUNTRY</div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">{country to use}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">US</span></code>
+e.g. <code class="docutils literal notranslate"><span class="pre">CA</span></code></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">Country to use in new certificates.</div>
+<div class="line">Must be a two digit country code</div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVAS_AUTH</div>
+<div class="line">_COUNTRY</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVA_AUTH</div>
+<div class="line">_ISSUER</div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">{issuer of cert. mgmt. service}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">f0a9e1b8</span></code></div>
+</div>
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">The issuer ID to contact for any certificate operation.</div>
+<div class="line">Must be am 8 character SKID</div>
+<div class="line"><br /></div>
+<div class="line">If there are PVACMS’s from different certificate authorities</div>
+<div class="line">on the network, this allows you to specify the one you want</div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVAS_AUTH</div>
+<div class="line">_ISSUER</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">EPICS_PVA_CERT</div>
+<div class="line">_PV_PREFIX</div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">{certificate mgnt. prefix}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">SLAC_CERTS</span></code></div>
+</div>
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">Specify the prefix for the PVACMS PV to contact for new certificates</div>
+<div class="line">default <code class="docutils literal notranslate"><span class="pre">CERT</span></code></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_PVAS_CERT</div>
+<div class="line">_PV_PREFIX</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="included-reference-authenticators">
+<h3>Included Reference Authenticators<a class="headerlink" href="#included-reference-authenticators" title="Link to this heading">¶</a></h3>
+<p>Though it is recommended that you create your own site-specific Authenticators PVXS provides four reference implementations:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">authnstd</span></code> : Standard Authenticator - Uses explicitly specified and unverified credentials</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">authnkrb</span></code> : Kerberos Authenticator - Kerberos credentials verified by the KDC</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">authnldap</span></code>: LDAP Authenticator     - Login to LDAP directory to establish identity</p></li>
+</ul>
+<section id="authstd-configuration-and-usage">
+<h4>authstd Configuration and Usage<a class="headerlink" href="#authstd-configuration-and-usage" title="Link to this heading">¶</a></h4>
+<p>This Authenticator is used for explicitly specified and unverified credentials.
+It can be used to create a certificate with a username and hostname.</p>
+<ul class="simple">
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">CN</span></code> field in the certificate will be the logged in username</p>
+<ul>
+<li><p>unless the <code class="docutils literal notranslate"><span class="pre">-n</span></code> <code class="docutils literal notranslate"><span class="pre">--name</span></code> commandline option is set</p></li>
+<li><p>unless the <code class="docutils literal notranslate"><span class="pre">EPICS_PVA_AUTH_NAME</span></code>, <code class="docutils literal notranslate"><span class="pre">EPICS_PVAS_AUTH_NAME</span></code> environment variable is set</p></li>
+</ul>
+</li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">O</span></code> field in the certificate will be the hostname or ip address</p>
+<ul>
+<li><p>unless the <code class="docutils literal notranslate"><span class="pre">-o</span></code> <code class="docutils literal notranslate"><span class="pre">--organization</span></code>  commandline option is set</p></li>
+<li><p>unless the <code class="docutils literal notranslate"><span class="pre">EPICS_PVA_AUTH_ORGANIZATION</span></code>, <code class="docutils literal notranslate"><span class="pre">EPICS_PVAS_AUTH_ORGANIZATION</span></code> environment variable is set</p></li>
+</ul>
+</li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">OU</span></code> field in the certificate will not be set</p>
+<ul>
+<li><p>unless the <code class="docutils literal notranslate"><span class="pre">--ou</span></code>  commandline option is set</p></li>
+<li><p>unless the <code class="docutils literal notranslate"><span class="pre">EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT</span></code>, <code class="docutils literal notranslate"><span class="pre">EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT</span></code> environment variable is set</p></li>
+</ul>
+</li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">C</span></code> field in the certificate will be set to the local country code</p>
+<ul>
+<li><p>unless the <code class="docutils literal notranslate"><span class="pre">-c</span></code> <code class="docutils literal notranslate"><span class="pre">--country</span></code>  commandline option is set</p></li>
+<li><p>unless the <code class="docutils literal notranslate"><span class="pre">EPICS_PVA_AUTH_COUNTRY</span></code>, <code class="docutils literal notranslate"><span class="pre">EPICS_PVAS_AUTH_COUNTRY</span></code> environment variable is set</p></li>
+</ul>
+</li>
+</ul>
+<p><strong>usage</strong></p>
+<p>Uses the standard <code class="docutils literal notranslate"><span class="pre">EPICS_PVA_TLS_&lt;name&gt;</span></code> environment variables to determine the keychain,
+and password file locations.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnstd<span class="w"> </span>-<span class="w"> </span>Secure<span class="w"> </span>PVAccess<span class="w"> </span>Standard<span class="w"> </span>Authenticator
+
+Generates<span class="w"> </span>client,<span class="w"> </span>server,<span class="w"> </span>or<span class="w"> </span>ioc<span class="w"> </span>certificates<span class="w"> </span>based<span class="w"> </span>on<span class="w"> </span>the<span class="w"> </span>Standard<span class="w"> </span>Authenticator.
+Uses<span class="w"> </span>specified<span class="w"> </span>parameters<span class="w"> </span>to<span class="w"> </span>create<span class="w"> </span>certificates<span class="w"> </span>that<span class="w"> </span>require<span class="w"> </span>administrator<span class="w"> </span>APPROVAL<span class="w"> </span>before<span class="w"> </span>becoming<span class="w"> </span>VALID.
+
+usage:
+<span class="w">  </span>authnstd<span class="w"> </span><span class="o">[</span>options<span class="o">]</span><span class="w">                         </span>Create<span class="w"> </span>certificate<span class="w"> </span><span class="k">in</span><span class="w"> </span>PENDING_APPROVAL<span class="w"> </span>state
+<span class="w">  </span>authnstd<span class="w"> </span><span class="o">(</span>-h<span class="w"> </span><span class="p">|</span><span class="w"> </span>--help<span class="o">)</span><span class="w">                     </span>Show<span class="w"> </span>this<span class="w"> </span><span class="nb">help</span><span class="w"> </span>message<span class="w"> </span>and<span class="w"> </span><span class="nb">exit</span>
+<span class="w">  </span>authnstd<span class="w"> </span><span class="o">(</span>-V<span class="w"> </span><span class="p">|</span><span class="w"> </span>--version<span class="o">)</span><span class="w">                  </span>Print<span class="w"> </span>version<span class="w"> </span>and<span class="w"> </span><span class="nb">exit</span>
+
+options:
+<span class="w">  </span><span class="o">(</span>-u<span class="w"> </span><span class="p">|</span><span class="w"> </span>--cert-usage<span class="o">)</span><span class="w"> </span>&lt;usage&gt;<span class="w">                </span>Specify<span class="w"> </span>the<span class="w"> </span>certificate<span class="w"> </span>usage.<span class="w">  </span>client<span class="p">|</span>server<span class="p">|</span>ioc.<span class="w">  </span>Default<span class="w"> </span><span class="sb">`</span>client<span class="sb">`</span>
+<span class="w">  </span><span class="o">(</span>-n<span class="w"> </span><span class="p">|</span><span class="w"> </span>--name<span class="o">)</span><span class="w"> </span>&lt;name&gt;<span class="w">                       </span>Specify<span class="w"> </span>common<span class="w"> </span>name<span class="w"> </span>of<span class="w"> </span>the<span class="w"> </span>certificate.<span class="w"> </span>Default<span class="w"> </span>&lt;logged-in-username&gt;
+<span class="w">  </span><span class="o">(</span>-o<span class="w"> </span><span class="p">|</span><span class="w"> </span>--organization<span class="o">)</span><span class="w"> </span>&lt;organization&gt;<span class="w">       </span>Specify<span class="w"> </span>organisation<span class="w"> </span>name<span class="w"> </span><span class="k">for</span><span class="w"> </span>the<span class="w"> </span>certificate.<span class="w"> </span>Default<span class="w"> </span>&lt;hostname&gt;
+<span class="w">        </span>--ou<span class="w"> </span>&lt;org-unit&gt;<span class="w">                      </span>Specify<span class="w"> </span>organisational<span class="w"> </span>unit<span class="w"> </span><span class="k">for</span><span class="w"> </span>the<span class="w"> </span>certificate.<span class="w"> </span>Default<span class="w"> </span>&lt;blank&gt;
+<span class="w">  </span><span class="o">(</span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>--country<span class="o">)</span><span class="w"> </span>&lt;country&gt;<span class="w">                 </span>Specify<span class="w"> </span>country<span class="w"> </span><span class="k">for</span><span class="w"> </span>the<span class="w"> </span>certificate.<span class="w"> </span>Default<span class="w"> </span>locale<span class="w"> </span>setting<span class="w"> </span><span class="k">if</span><span class="w"> </span>detectable<span class="w"> </span>otherwise<span class="w"> </span><span class="sb">`</span>US<span class="sb">`</span>
+<span class="w">  </span><span class="o">(</span>-t<span class="w"> </span><span class="p">|</span><span class="w"> </span>--time<span class="o">)</span><span class="w"> </span>&lt;minutes&gt;<span class="w">                    </span>Duration<span class="w"> </span>of<span class="w"> </span>the<span class="w"> </span>certificate<span class="w"> </span><span class="k">in</span><span class="w"> </span>minutes.<span class="w">  </span>e.g.<span class="w"> </span><span class="m">30</span><span class="w"> </span>or<span class="w"> </span>1d<span class="w"> </span>or<span class="w"> </span>1y3M2d4m
+<span class="w">  </span><span class="o">(</span>-D<span class="w"> </span><span class="p">|</span><span class="w"> </span>--daemon<span class="o">)</span><span class="w">                            </span>Start<span class="w"> </span>a<span class="w"> </span>daemon<span class="w"> </span>that<span class="w"> </span>re-requests<span class="w"> </span>a<span class="w"> </span>certificate<span class="w"> </span>on<span class="w"> </span>expiration<span class="sb">`</span>
+<span class="w">        </span>--cert-pv-prefix<span class="w"> </span>&lt;cert_pv_prefix&gt;<span class="w">     </span>Specifies<span class="w"> </span>the<span class="w"> </span>pv<span class="w"> </span>prefix<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span>to<span class="w"> </span>contact<span class="w"> </span>PVACMS.<span class="w">  </span>Default<span class="w"> </span><span class="sb">`</span>CERT<span class="sb">`</span>
+<span class="w">        </span>--add-config-uri<span class="w">                      </span>Add<span class="w"> </span>a<span class="w"> </span>config<span class="w"> </span>uri<span class="w"> </span>to<span class="w"> </span>the<span class="w"> </span>generated<span class="w"> </span>certificate
+<span class="w">        </span>--force<span class="w">                               </span>Force<span class="w"> </span>overwrite<span class="w"> </span><span class="k">if</span><span class="w"> </span>certificate<span class="w"> </span>exists
+<span class="w">  </span><span class="o">(</span>-a<span class="w"> </span><span class="p">|</span><span class="w"> </span>--trust-anchor<span class="o">)</span><span class="w">                       </span>Download<span class="w"> </span>Trust<span class="w"> </span>Anchor<span class="w"> </span>into<span class="w"> </span>keychain<span class="w"> </span>file.<span class="w">  </span>Do<span class="w"> </span>not<span class="w"> </span>create<span class="w"> </span>a<span class="w"> </span>certificate
+<span class="w">  </span><span class="o">(</span>-s<span class="w"> </span><span class="p">|</span><span class="w"> </span>--no-status<span class="o">)</span><span class="w">                          </span>Request<span class="w"> </span>that<span class="w"> </span>status<span class="w"> </span>checking<span class="w"> </span>not<span class="w"> </span>be<span class="w"> </span>required<span class="w"> </span><span class="k">for</span><span class="w"> </span>this<span class="w"> </span>certificate
+<span class="w">  </span><span class="o">(</span>-i<span class="w"> </span><span class="p">|</span><span class="w"> </span>--issuer<span class="o">)</span><span class="w"> </span>&lt;issuer_id&gt;<span class="w">                 </span>The<span class="w"> </span>issuer<span class="w"> </span>ID<span class="w"> </span>of<span class="w"> </span>the<span class="w"> </span>PVACMS<span class="w"> </span>service<span class="w"> </span>to<span class="w"> </span>contact.<span class="w">  </span>If<span class="w"> </span>not<span class="w"> </span>specified<span class="w"> </span><span class="o">(</span>default<span class="o">)</span><span class="w"> </span>broadcast<span class="w"> </span>to<span class="w"> </span>any<span class="w"> </span>that<span class="w"> </span>are<span class="w"> </span>listening
+<span class="w">  </span><span class="o">(</span>-v<span class="w"> </span><span class="p">|</span><span class="w"> </span>--verbose<span class="o">)</span><span class="w">                            </span>Verbose<span class="w"> </span>mode
+<span class="w">  </span><span class="o">(</span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>--debug<span class="o">)</span><span class="w">                              </span>Debug<span class="w"> </span>mode
+</pre></div>
+</div>
+<p><strong>Examples</strong></p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a client certificate for greg@slac.stanford.edu</span>
+authnstd<span class="w"> </span>-u<span class="w"> </span>client<span class="w"> </span>-n<span class="w"> </span>greg<span class="w"> </span>-o<span class="w"> </span>slac.stanford.edu
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a server certificate for IOC1</span>
+authnstd<span class="w"> </span>-u<span class="w"> </span>server<span class="w"> </span>-n<span class="w"> </span>IOC1<span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;KLI:LI01:10&quot;</span><span class="w"> </span>--ou<span class="w"> </span><span class="s2">&quot;FACET&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a client certificate for current user with no status monitoring</span>
+authnstd<span class="w"> </span>--no-status
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a ioc certificate for gateway1</span>
+authnstd<span class="w"> </span>-u<span class="w"> </span>ioc<span class="w"> </span>-n<span class="w"> </span>gateway1<span class="w"> </span>-o<span class="w"> </span>bridge.ornl.gov<span class="w"> </span>--ou<span class="w"> </span><span class="s2">&quot;Networking&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># Download the Trust Anchor into your keychain file for server-only authenticated connections</span>
+authnstd<span class="w"> </span>--trust-anchor
+</pre></div>
+</div>
+<p><strong>Setup of standard authenticator in Docker Container for testing</strong></p>
+<p>In the source code under <code class="docutils literal notranslate"><span class="pre">/examples/docker/spva_std</span></code> you’ll find a Dockerfile and supporting resources for creating an environment
+that contains a working Secure PVAccess with the following characteristics:</p>
+<ul class="simple">
+<li><p>users (unix)</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">pvacms</span></code> - service</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">admin</span></code> - principal with password “secret” (includes a configured PVACMS administrator certificate)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">softioc</span></code> - service principal with password “secret”</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">client</span></code> - principal with password “secret”</p></li>
+</ul>
+</li>
+<li><p>services</p>
+<ul>
+<li><p>PVACMS</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="authkrb-configuration-and-usage">
+<h4>authkrb Configuration and Usage<a class="headerlink" href="#authkrb-configuration-and-usage" title="Link to this heading">¶</a></h4>
+<p>This Authenticator is a TYPE <code class="docutils literal notranslate"><span class="pre">2</span></code> Authenticator.
+It can be used to create a certificate from a Kerberos ticket.</p>
+<p>A user will need to have a Kerberos ticket to use this Authenticator typically
+using the <code class="docutils literal notranslate"><span class="pre">kinit</span></code> command.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>kinit<span class="w"> </span>-l<span class="w"> </span>24h<span class="w"> </span>greg@SLAC.STANFORD.EDU
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">CN</span></code> field in the certificate will be kerberos username</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">O</span></code> field in the certificate will be the kerberos realm</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">OU</span></code> field in the certificate will not be set</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">C</span></code> field in the certificate will be set to the local country code</p></li>
+</ul>
+<p><strong>usage</strong></p>
+<p>Uses the standard <code class="docutils literal notranslate"><span class="pre">EPICS_PVA_TLS_&lt;name&gt;</span></code> environment variables to determine the keychain,
+and password file locations.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>authnkrb - Secure PVAccess Kerberos Authenticator
+
+Generates client, server, or ioc certificates based on the kerberos Authenticator.
+Uses current kerberos ticket to create certificates with the same validity as the ticket.
+
+usage:
+  authnkrb [options]                         Create certificate
+  authnkrb (-h | --help)                     Show this help message and exit
+  authnkrb (-V | --version)                  Print version and exit
+
+options:
+  (-u | --cert-usage) &lt;usage&gt;                Specify the certificate usage.  client|server|ioc.  Default ``client``
+        --krb-validator &lt;service-name&gt;       Specify kerberos validator name.  Default ``pvacms``
+        --krb-realm &lt;krb-realm&gt;              Specify the kerberos realm.  If not specified we&#39;ll take it from the ticket
+  (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`
+        --cert-pv-prefix &lt;cert_pv_prefix&gt;    Specifies the pv prefix to use to contact PVACMS.  Default `CERT`
+        --add-config-uri                     Add a config uri to the generated certificate
+        --force                              Force overwrite if certificate exists
+  (-s | --no-status)                         Request that status checking not be required for this certificate
+  (-i | --issuer) &lt;issuer_id&gt;                The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening
+  (-v | --verbose)                           Verbose mode
+  (-d | --debug)                             Debug mode
+</pre></div>
+</div>
+<p><strong>Extra options that are available in PVACMS</strong></p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>usage:
+<span class="w">  </span>pvacms<span class="w"> </span><span class="o">[</span>kerberos<span class="w"> </span>options<span class="o">]</span><span class="w">                  </span>Run<span class="w"> </span>PVACMS.<span class="w">  </span>Interrupt<span class="w"> </span>to<span class="w"> </span>quit
+
+kerberos<span class="w"> </span>options
+<span class="w">        </span>--krb-keytab<span class="w"> </span>&lt;keytab<span class="w"> </span>file&gt;<span class="w">           </span>kerberos<span class="w"> </span>keytab<span class="w"> </span>file<span class="w"> </span><span class="k">for</span><span class="w"> </span>non-interactive<span class="w"> </span>login<span class="sb">`</span>
+<span class="w">        </span>--krb-realm<span class="w"> </span>&lt;realm&gt;<span class="w">                  </span>kerberos<span class="w"> </span>realm.<span class="w">  </span>Default<span class="w"> </span><span class="sb">``</span>EPICS.ORG<span class="sb">``</span>
+<span class="w">        </span>--krb-validator<span class="w"> </span>&lt;validator-service&gt;<span class="w">  </span>pvacms<span class="w"> </span>kerberos<span class="w"> </span>service<span class="w"> </span>name.<span class="w">  </span>Default<span class="w"> </span><span class="sb">``</span>pvacms<span class="sb">``</span>
+</pre></div>
+</div>
+<p><strong>Environment Variables for PVACMS AuthnKRB Verifier</strong></p>
+<p>The environment variables and parameters in the following table configure the Kerberos
+Credentials Verifier for <a class="reference internal" href="spvacerts.html#pvacms"><span class="std std-ref">PVACMS</span></a> at runtime.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Env. <em>authnkrb</em></p></th>
+<th class="head"><p>Env. <em>pvacms</em></p></th>
+<th class="head"><p>Params. <em>authkrb</em></p></th>
+<th class="head"><p>Params. <em>pvacms</em></p></th>
+<th class="head"><p>Keys and Values</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td rowspan="2"><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">KRB5_KTNAME</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">--krb-keytab</span></code></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">{string location of keytab file}</div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td rowspan="2"><div class="line-block">
+<div class="line">This is the keytab file shared with <a class="reference internal" href="spvacerts.html#pvacms"><span class="std std-ref">PVACMS</span></a> by the KDC so</div>
+<div class="line">that it can verify kerberos tickets</div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line">KRB5_CLIENT_KTNAME</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td colspan="2"><div class="line-block">
+<div class="line">EPICS_AUTH_KRB_VALIDATOR_SERVICE</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td colspan="2"><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">--krb-validator</span></code></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{this is validator service name}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">pvacms</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">The name of the service user created in the KDC that the pvacms</div>
+<div class="line">service will log in as.  <code class="docutils literal notranslate"><span class="pre">/cluster&#64;{realm}</span></code> will be added</div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td colspan="2"><div class="line-block">
+<div class="line">EPICS_AUTH_KRB_REALM</div>
+</div>
+</td>
+<td colspan="2"><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">--krb-realm</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">EPICS.ORG</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">Kerberos REALM to authenticate against</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Setup of Kerberos in Docker Container for testing</strong></p>
+<p>In the source code under <code class="docutils literal notranslate"><span class="pre">/examples/docker/spva_krb</span></code> you’ll find a Dockerfile and supporting resources for creating an environment
+that contains a working kerberos KDC with the following characteristics:</p>
+<ul class="simple">
+<li><p>users (both unix and kerberos principals)</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">pvacms</span></code> - service principal with private keytab file for authentication in <code class="docutils literal notranslate"><span class="pre">~/.config/pva/1.3/pvacms.keytab</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">admin</span></code> - principal with password “secret” (includes a configured PVACMS administrator certificate)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">softioc</span></code> - service principal with password “secret”</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">client</span></code> - principal with password “secret”</p></li>
+</ul>
+</li>
+<li><p>services</p>
+<ul>
+<li><p>KDC</p></li>
+<li><p>kadmin Daemon</p></li>
+<li><p>PVACMS</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="authldap-configuration-and-usage">
+<h4>authldap Configuration and Usage<a class="headerlink" href="#authldap-configuration-and-usage" title="Link to this heading">¶</a></h4>
+<p>This Authenticator is a TYPE <code class="docutils literal notranslate"><span class="pre">2</span></code> Authenticator.
+It can be used to create a certificate by logging in to the LDAP directory service.</p>
+<p>A user will be prompted to log in to the LDAP directory service to verify their identity.</p>
+<ul class="simple">
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">CN</span></code> field in the certificate will be LDAP username</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">O</span></code> field in the certificate will be the LDAP domain parts concatenated with “.”</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">OU</span></code> field in the certificate will not be set</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">C</span></code> field in the certificate will be set to the local country code</p></li>
+</ul>
+<p><strong>usage</strong></p>
+<p>Uses the standard <code class="docutils literal notranslate"><span class="pre">EPICS_PVA_TLS_&lt;name&gt;</span></code> environment variables to determine the keychain,
+and password file locations.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnldap<span class="w"> </span>-<span class="w"> </span>Secure<span class="w"> </span>PVAccess<span class="w"> </span>LDAP<span class="w"> </span>Authenticator
+
+Generates<span class="w"> </span>client,<span class="w"> </span>server,<span class="w"> </span>or<span class="w"> </span>ioc<span class="w"> </span>certificates<span class="w"> </span>based<span class="w"> </span>on<span class="w"> </span>the<span class="w"> </span>LDAP<span class="w"> </span>credentials.
+
+usage:
+<span class="w">  </span>authnldap<span class="w"> </span><span class="o">[</span>options<span class="o">]</span><span class="w">                        </span>Create<span class="w"> </span>certificate<span class="w"> </span><span class="k">in</span><span class="w"> </span>PENDING_APPROVAL<span class="w"> </span>state
+<span class="w">  </span>authnldap<span class="w"> </span><span class="o">(</span>-h<span class="w"> </span><span class="p">|</span><span class="w"> </span>--help<span class="o">)</span><span class="w">                    </span>Show<span class="w"> </span>this<span class="w"> </span><span class="nb">help</span><span class="w"> </span>message<span class="w"> </span>and<span class="w"> </span><span class="nb">exit</span>
+<span class="w">  </span>authnldap<span class="w"> </span><span class="o">(</span>-V<span class="w"> </span><span class="p">|</span><span class="w"> </span>--version<span class="o">)</span><span class="w">                 </span>Print<span class="w"> </span>version<span class="w"> </span>and<span class="w"> </span><span class="nb">exit</span>
+
+options:
+<span class="w">  </span><span class="o">(</span>-u<span class="w"> </span><span class="p">|</span><span class="w"> </span>--cert-usage<span class="o">)</span><span class="w"> </span>&lt;usage&gt;<span class="w">                </span>Specify<span class="w"> </span>the<span class="w"> </span>certificate<span class="w"> </span>usage.<span class="w">  </span>client<span class="p">|</span>server<span class="p">|</span>ioc.<span class="w">  </span>Default<span class="w"> </span><span class="sb">`</span>client<span class="sb">`</span>
+<span class="w">  </span><span class="o">(</span>-n<span class="w"> </span><span class="p">|</span><span class="w"> </span>--name<span class="o">)</span><span class="w"> </span>&lt;name&gt;<span class="w">                       </span>Specify<span class="w"> </span>LDAP<span class="w"> </span>username<span class="w"> </span><span class="k">for</span><span class="w"> </span>common<span class="w"> </span>name<span class="w"> </span><span class="k">in</span><span class="w"> </span>the<span class="w"> </span>certificate.
+<span class="w">                                             </span>e.g.<span class="w"> </span><span class="nv">name</span><span class="w"> </span><span class="o">==</span>&gt;<span class="w"> </span>LDAP:<span class="w"> </span><span class="nv">uid</span><span class="o">=</span>name,<span class="w"> </span><span class="nv">ou</span><span class="o">=</span><span class="nv">People</span><span class="w"> </span><span class="o">==</span>&gt;<span class="w"> </span>Cert:<span class="w"> </span><span class="nv">CN</span><span class="o">=</span>name
+<span class="w">                                             </span>Default<span class="w"> </span>&lt;logged-in-username&gt;
+<span class="w">  </span><span class="o">(</span>-o<span class="w"> </span><span class="p">|</span><span class="w"> </span>--organization<span class="o">)</span><span class="w"> </span>&lt;organization&gt;<span class="w">       </span>Specify<span class="w"> </span>LDAP<span class="w"> </span>org<span class="w"> </span><span class="k">for</span><span class="w"> </span>organization<span class="w"> </span><span class="k">in</span><span class="w"> </span>the<span class="w"> </span>certificate.
+<span class="w">                                             </span>e.g.<span class="w"> </span>epics.org<span class="w"> </span><span class="o">==</span>&gt;<span class="w"> </span>LDAP:<span class="w"> </span><span class="nv">dc</span><span class="o">=</span>epics,<span class="w"> </span><span class="nv">dc</span><span class="o">=</span><span class="nv">org</span><span class="w"> </span><span class="o">==</span>&gt;<span class="w"> </span>Cert:<span class="w"> </span><span class="nv">O</span><span class="o">=</span>epics.org
+<span class="w">                                             </span>Default<span class="w"> </span>&lt;hostname&gt;
+<span class="w">  </span><span class="o">(</span>-p<span class="w"> </span><span class="p">|</span><span class="w"> </span>--password<span class="o">)</span><span class="w"> </span>&lt;name&gt;<span class="w">                   </span>Specify<span class="w"> </span>LDAP<span class="w"> </span>password.<span class="w"> </span>If<span class="w"> </span>not<span class="w"> </span>specified<span class="w"> </span>will<span class="w"> </span>prompt<span class="w"> </span><span class="k">for</span><span class="w"> </span>password
+<span class="w">        </span>--ldap-host<span class="w"> </span>&lt;hostname&gt;<span class="w">               </span>LDAP<span class="w"> </span>server<span class="w"> </span>host
+<span class="w">        </span>--ldap-port<span class="w"> </span>&lt;port&gt;<span class="w">                   </span>LDAP<span class="w"> </span>serever<span class="w"> </span>port
+<span class="w">  </span><span class="o">(</span>-D<span class="w"> </span><span class="p">|</span><span class="w"> </span>--daemon<span class="o">)</span><span class="w">                            </span>Start<span class="w"> </span>a<span class="w"> </span>daemon<span class="w"> </span>that<span class="w"> </span>re-requests<span class="w"> </span>a<span class="w"> </span>certificate<span class="w"> </span>on<span class="w"> </span>expiration<span class="sb">`</span>
+<span class="w">        </span>--cert-pv-prefix<span class="w"> </span>&lt;cert_pv_prefix&gt;<span class="w">    </span>Specifies<span class="w"> </span>the<span class="w"> </span>pv<span class="w"> </span>prefix<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span>to<span class="w"> </span>contact<span class="w"> </span>PVACMS.<span class="w">  </span>Default<span class="w"> </span><span class="sb">`</span>CERT<span class="sb">`</span>
+<span class="w">        </span>--add-config-uri<span class="w">                     </span>Add<span class="w"> </span>a<span class="w"> </span>config<span class="w"> </span>uri<span class="w"> </span>to<span class="w"> </span>the<span class="w"> </span>generated<span class="w"> </span>certificate
+<span class="w">        </span>--force<span class="w">                              </span>Force<span class="w"> </span>overwrite<span class="w"> </span><span class="k">if</span><span class="w"> </span>certificate<span class="w"> </span>exists
+<span class="w">  </span><span class="o">(</span>-s<span class="w"> </span><span class="p">|</span><span class="w"> </span>--no-status<span class="o">)</span><span class="w">                         </span>Request<span class="w"> </span>that<span class="w"> </span>status<span class="w"> </span>checking<span class="w"> </span>not<span class="w"> </span>be<span class="w"> </span>required<span class="w"> </span><span class="k">for</span><span class="w"> </span>this<span class="w"> </span>certificate
+<span class="w">  </span><span class="o">(</span>-i<span class="w"> </span><span class="p">|</span><span class="w"> </span>--issuer<span class="o">)</span><span class="w"> </span>&lt;issuer_id&gt;<span class="w">                </span>The<span class="w"> </span>issuer<span class="w"> </span>ID<span class="w"> </span>of<span class="w"> </span>the<span class="w"> </span>PVACMS<span class="w"> </span>service<span class="w"> </span>to<span class="w"> </span>contact.<span class="w">  </span>If<span class="w"> </span>not<span class="w"> </span>specified<span class="w"> </span><span class="o">(</span>default<span class="o">)</span><span class="w"> </span>broadcast<span class="w"> </span>to<span class="w"> </span>any<span class="w"> </span>that<span class="w"> </span>are<span class="w"> </span>listening
+<span class="w">  </span><span class="o">(</span>-v<span class="w"> </span><span class="p">|</span><span class="w"> </span>--verbose<span class="o">)</span><span class="w">                           </span>Verbose<span class="w"> </span>mode
+<span class="w">  </span><span class="o">(</span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>--debug<span class="o">)</span><span class="w">                             </span>Debug<span class="w"> </span>mode
+</pre></div>
+</div>
+<p><strong>Extra options that are available in PVACMS</strong></p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>usage:
+<span class="w">  </span>pvacms<span class="w"> </span><span class="o">[</span>ldap<span class="w"> </span>options<span class="o">]</span><span class="w">                      </span>Run<span class="w"> </span>PVACMS.<span class="w">  </span>Interrupt<span class="w"> </span>to<span class="w"> </span>quit
+
+ldap<span class="w"> </span>options
+<span class="w">        </span>--ldap-host<span class="w"> </span>&lt;host&gt;<span class="w">                   </span>LDAP<span class="w"> </span>Host.<span class="w">  </span>Default<span class="w"> </span>localhost
+<span class="w">        </span>--ldap-port<span class="w"> </span>&lt;port&gt;<span class="w">                   </span>LDAP<span class="w"> </span>port.<span class="w">  </span>Default<span class="w"> </span><span class="m">389</span>
+</pre></div>
+</div>
+<p><strong>Environment Variables for authnldap and PVACMS AuthnLDAP Verifier</strong></p>
+<p>The environment variables and parameters in the following table configure the authnldap client and
+LDAP Credentials Verifier for <a class="reference internal" href="spvacerts.html#pvacms"><span class="std std-ref">PVACMS</span></a> at runtime.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Env. <em>authnldap</em></p></th>
+<th class="head"><p>Env. <em>pvacms</em></p></th>
+<th class="head"><p>Params. <em>authldap</em></p></th>
+<th class="head"><p>Params. <em>pvacms</em></p></th>
+<th class="head"><p>Keys and Values</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><div class="line-block">
+<div class="line">EPICS_AUTH_LDAP</div>
+<div class="line">_ACCOUNT_PWD_FILE</div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{location of password file}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">~/.config/ldap.pass/</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">file containing password for the given LDAP user account</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">-p</span></code></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">--password</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{LDAP account password}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">secret</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">password for the given LDAP user account</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td colspan="2"><div class="line-block">
+<div class="line">EPICS_AUTH_LDAP_HOST</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td colspan="2"><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">--ldap-host</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">{hostname of LDAP server}</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">ldap.stanford.edu</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">Trusted hostname of the LDAP server</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+<tr class="row-odd"><td colspan="2"><div class="line-block">
+<div class="line">EPICS_AUTH_LDAP_PORT</div>
+<div class="line"><br /></div>
+</div>
+</td>
+<td colspan="2"><div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">--ldap-port</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">&lt;port_number&gt;</div>
+<div class="line">e.g. <code class="docutils literal notranslate"><span class="pre">389</span></code></div>
+</div>
+</td>
+<td><div class="line-block">
+<div class="line">LDAP server port number. Default is 389</div>
+<div class="line"><br /></div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Setup of LDAP in Docker Container for testing</strong></p>
+<p>In the source code under <code class="docutils literal notranslate"><span class="pre">/examples/docker/spva_ldap</span></code> you’ll find a Dockerfile and supporting resources for creating an environment
+that contains a working LDAP with the following characteristics:</p>
+<ul class="simple">
+<li><p>users (both unix and LDAP users)</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">pvacms</span></code> - service with verifier for LDAP service</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">admin</span></code> - principal with password “secret” (includes a configured PVACMS administrator certificate)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">softioc</span></code> - service principal with password “secret”</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">client</span></code> - principal with password “secret”</p></li>
+</ul>
+</li>
+<li><p>services</p>
+<ul>
+<li><p>LDAP service + example schemas</p></li>
+<li><p>PVACMS</p></li>
+</ul>
+</li>
+</ul>
+</section>
+</section>
+</section>
+<section id="long-running-certificates">
+<span id="epics-security"></span><h2>Long Running Certificates<a class="headerlink" href="#long-running-certificates" title="Link to this heading">¶</a></h2>
+<p>In Experimental Physics and Industrial Control Systems, maintaining uninterrupted connections is critical. Even a microsecond break can trigger fail-safety mechanisms that might disrupt experiments.</p>
+<p>With TLS 1.3 (implemented in OpenSSL), renegotiation has been completely removed from the protocol due to serious security vulnerabilities. Previous versions of TLS allowed session
+renegotiation, which permitted changing security parameters (including certificates) without closing the connection. However, this feature was exploited in
+several attacks, including the “Triple Handshake Attack” and “Secure Renegotiation” vulnerabilities.</p>
+<p>This means that once a TLS connection has been established with an IOC over Secure PVAccess, we cannot change the certificate without breaking and re-establishing the connection. Our solution to this problem involves:</p>
+<ul class="simple">
+<li><p>Creating very long running certificates (decades)</p></li>
+<li><p>Allowing them to be <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">REVOKED</span></code> by administrators when necessary</p></li>
+<li><p>Implementing a kind of “soft-expiration” tied to authenticator configuration</p></li>
+<li><p>Providing the ability to renew certificates without breaking existing connections</p></li>
+</ul>
+<section id="specifying-long-running-certificates">
+<h3>Specifying long running certificates<a class="headerlink" href="#specifying-long-running-certificates" title="Link to this heading">¶</a></h3>
+<section id="common-to-all-authenticators-commandline-parameters">
+<h4>Common to all Authenticators - commandline parameters<a class="headerlink" href="#common-to-all-authenticators-commandline-parameters" title="Link to this heading">¶</a></h4>
+<p>Use the <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">-t,--time</span></code> flag to specify a duration for the certificate using these components:</p>
+<ul class="simple">
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">y</span></code> - Years (e.g., <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">2y</span></code> for two years)</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">M</span></code> - Months (e.g., <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">6M</span></code> for six months)</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">w</span></code> - Weeks (e.g., <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">1w</span></code> for one week)</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">d</span></code> - Days (e.g., <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">15d</span></code> for 15 days)</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">h</span></code> - Hours (e.g., <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">12h</span></code> for 12 hours)</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">m</span></code> - Minutes (e.g., <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">30m</span></code> for 30 minutes, or simply <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">30</span></code>)</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">s</span></code> - Seconds (e.g., <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">45s</span></code> for 45 seconds)</p></li>
+</ul>
+<p>Examples:</p>
+<ul class="simple">
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">1y</span> <span class="pre">and</span> <span class="pre">6M</span></code> - one year and six months</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">2y3M15d</span></code> - two years, three months, and 15 days</p></li>
+</ul>
+<p>The system uses natural time understanding, accounting for daylight savings, leap years, etc. For example, if you specify 1
+year, the certificate will expire on the same calendar day next year, regardless of leap years.</p>
+</section>
+<section id="common-to-all-authenticators-environment-variables">
+<h4>Common to all Authenticators - environment variables<a class="headerlink" href="#common-to-all-authenticators-environment-variables" title="Link to this heading">¶</a></h4>
+<p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">EPICS_AUTH_CERT_VALIDITY_MINS</span></code> - sets a global duration for any Authenticator using the same format as the commandline parameter.</p>
+</section>
+<section id="pvacms-defaults-parameters">
+<h4>PVACMS Defaults - Parameters<a class="headerlink" href="#pvacms-defaults-parameters" title="Link to this heading">¶</a></h4>
+<p>PVACMS defaults to 6 months for certificate duration unless overridden by:</p>
+<ul class="simple">
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">--cert_validity</span></code> - default duration for all certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">--cert_validity-client</span></code> - default for client certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">--cert_validity-server</span></code> - default for server certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">--cert_validity-ioc</span></code> - default for IOC certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">--disallow-custom-durations</span></code> - prevents clients from specifying durations for any certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">--disallow-custom-durations-client</span></code> - restricts custom durations for client certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">--disallow-custom-durations-server</span></code> - restricts custom durations for server certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">--disallow-custom-durations-ioc</span></code> - restricts custom durations for IOC certificates</p></li>
+</ul>
+</section>
+<section id="pvacms-defaults-environment-variables">
+<h4>PVACMS Defaults - Environment Variables<a class="headerlink" href="#pvacms-defaults-environment-variables" title="Link to this heading">¶</a></h4>
+<p>Values can also be set using environment variables:</p>
+<ul class="simple">
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">EPICS_PVACMS_CERT_VALIDITY</span></code> - default duration for all certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">EPICS_PVACMS_CERT_VALIDITY_CLIENT</span></code> - default for client certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">EPICS_PVACMS_CERT_VALIDITY_SERVER</span></code> - default for server certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">EPICS_PVACMS_CERT_VALIDITY_IOC</span></code> - default for IOC certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">EPICS_PVACMS_DISALLOW_CUSTOM_DURATION</span></code> - YES/NO to prevent custom durations for any certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">EPICS_PVACMS_DISALLOW_CLIENT_CUSTOM_DURATION</span></code> - YES/NO for client certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION</span></code> - YES/NO for server certificates</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">EPICS_PVACMS_DISALLOW_IOC_CUSTOM_DURATION</span></code> - YES/NO for IOC certificates</p></li>
+</ul>
+</section>
+</section>
+<section id="the-authenticator-controls-the-certificate-renewal-date">
+<h3>The Authenticator Controls the Certificate Renewal Date<a class="headerlink" href="#the-authenticator-controls-the-certificate-renewal-date" title="Link to this heading">¶</a></h3>
+<p>The actual time before a certificate needs renewal is determined by the Authenticator (and by extension, the network administrators controlling the authentication methods).</p>
+<p>This is known as the <strong>Authenticated Expiration Date</strong>:</p>
+<ul class="simple">
+<li><p><strong>Standard Authenticator</strong>: Default is 6 months with no upper limit (subject to admin approval)</p></li>
+<li><p><strong>Kerberos</strong>: Limited by service ticket lifetime (typically 1 day)</p></li>
+<li><p><strong>LDAP</strong>: Limited by server default (typically 1 day)</p></li>
+</ul>
+<section id="mapping-requested-duration-to-certificate-expiration">
+<h4>Mapping requested duration to certificate expiration<a class="headerlink" href="#mapping-requested-duration-to-certificate-expiration" title="Link to this heading">¶</a></h4>
+<p>Two critical dates govern certificate lifecycle:</p>
+<ul class="simple">
+<li><p><strong>Requested Duration → Certificate Expiration Date</strong>: When the certificate becomes invalid</p></li>
+<li><p><strong>Authenticated Expiration → Certificate Renew-By Date</strong>: When the certificate should be renewed</p></li>
+</ul>
+<p>The PVACMS will change a certificate’s status from <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">VALID</span></code> to <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">PENDING_RENEWAL</span></code> when it reaches the
+renew-by date. Certificates in this state can’t establish new connections, but existing connections
+can continue until the certificate is renewed.</p>
+</section>
+</section>
+<section id="how-do-we-enforce-renew-by-dates">
+<h3>How do we enforce Renew By dates<a class="headerlink" href="#how-do-we-enforce-renew-by-dates" title="Link to this heading">¶</a></h3>
+<p>All certificates with renew-by dates must have certificate status monitoring enabled. If status
+monitoring is disabled for the PVACMS server, generating certificates with renew-by dates will be forbidden.</p>
+<p>Secure PVAccess monitors certificate status and reacts to state changes:</p>
+<ul class="simple">
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">VALID</span></code>: Certificate is operational</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">PENDING_RENEWAL</span></code>: Certificate needs renewal but isn’t revoked</p></li>
+<li><p><code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">REVOKED</span></code> / <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">EXPIRED</span></code>: Certificate is permanently invalidated</p></li>
+</ul>
+<p>When a certificate transitions to <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">PENDING_RENEWAL</span></code>:</p>
+<ul class="simple">
+<li><p>IOCs/servers will only accept TCP connections (no TLS)</p></li>
+<li><p>Clients won’t search for TLS protocol services</p></li>
+<li><p>Monitoring consoles will pause until certificate renewal</p></li>
+</ul>
+<section id="renewing-certificates">
+<h4>Renewing certificates<a class="headerlink" href="#renewing-certificates" title="Link to this heading">¶</a></h4>
+<p>To renew a certificate, simply perform the same action used to get the original certificate. PVACMS will:</p>
+<ol class="arabic simple">
+<li><p>Recognize that the certificate is for the same subject</p></li>
+<li><p>Automatically renew it</p></li>
+<li><p>Keep both the new certificate and the original one active</p></li>
+</ol>
+<p>This means:</p>
+<ul class="simple">
+<li><p>Existing connections using the long-running certificate continue without interruption</p></li>
+<li><p>New connections will use the newer certificate</p></li>
+</ul>
+<p>You can renew certificates multiple times, and the system will always keep the last certificate obtained as well as the original, renewed one.</p>
+<p>Best practice: Renew before the certificate enters <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">PENDING_RENEWAL</span></code> state to maintain uninterrupted service. If renewal occurs after the renew-by date, the certificate will automatically transition back to <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">VALID</span></code> upon successful renewal.</p>
+</section>
+</section>
+</section>
+<section id="authorization">
+<h2>Authorization<a class="headerlink" href="#authorization" title="Link to this heading">¶</a></h2>
+<p>Secure PVAccess’ authentication mechanisms integrate with EPICS Security’s authorization system
+to provide fine-grained access control options. These improvements enable robust
+security while maintaining backward compatibility with legacy systems.</p>
+<ul class="simple">
+<li><p><strong>Certificate-based Identity</strong>:</p>
+<ul>
+<li><p>Authentication using X.509 certificates provides stronger identity verification than legacy username/host identification.</p></li>
+</ul>
+</li>
+<li><p><strong>Expanded Access Control Rules</strong>:</p>
+<ul>
+<li><p>New rule elements for <code class="docutils literal notranslate"><span class="pre">METHOD</span></code>, <code class="docutils literal notranslate"><span class="pre">AUTHORITY</span></code>, and <code class="docutils literal notranslate"><span class="pre">PROTOCOL</span></code> enable precise permission definitions.</p></li>
+</ul>
+</li>
+<li><p><strong>Enhanced Permission Types</strong>:</p>
+<ul>
+<li><p>Addition of <code class="docutils literal notranslate"><span class="pre">RPC</span></code> permission supports fine-grained control over remote procedure calls.</p></li>
+</ul>
+</li>
+<li><p><strong>Protocol-aware Security</strong>:</p>
+<ul>
+<li><p>Permissions can be granted based on encrypted (<code class="docutils literal notranslate"><span class="pre">TLS</span></code>) or unencrypted (<code class="docutils literal notranslate"><span class="pre">TCP</span></code>) connections.</p></li>
+</ul>
+</li>
+<li><p><strong>API Extensions</strong>:</p>
+<ul>
+<li><p>New APIs for client identity management and auditing security events with enhanced identity data.</p></li>
+</ul>
+</li>
+</ul>
+<section id="new-security-features">
+<h3>New Security Features<a class="headerlink" href="#new-security-features" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p><strong>Identity Verification</strong>:</p>
+<ul class="simple">
+<li><p>Certificates provide cryptographically secure identity verification</p></li>
+</ul>
+</li>
+<li><p><strong>Fine-grained Control</strong>:</p>
+<ul class="simple">
+<li><p>Combine authentcation <code class="docutils literal notranslate"><span class="pre">METHOD</span></code>, certifying <code class="docutils literal notranslate"><span class="pre">AUTHORITY</span></code>, and transport <code class="docutils literal notranslate"><span class="pre">PROTOCOL</span></code> for precise access control</p></li>
+</ul>
+</li>
+<li><p><strong>Connection Security</strong>:</p>
+<ul class="simple">
+<li><p>Control access based on encrypted (<code class="docutils literal notranslate"><span class="pre">TLS</span></code>) vs. unencrypted (<code class="docutils literal notranslate"><span class="pre">TCP</span></code>) connections</p></li>
+</ul>
+</li>
+<li><p><strong>Defense in Depth</strong>:</p>
+<ul class="simple">
+<li><p>Layer multiple security rules for comprehensive protection</p></li>
+</ul>
+</li>
+<li><p><strong>Backward Compatibility</strong>:</p>
+<ul class="simple">
+<li><p>Support legacy clients while providing enhanced security for modern clients</p></li>
+</ul>
+</li>
+<li><p><strong>Centralized Management</strong>:</p>
+<ul class="simple">
+<li><p>Revocation of permisions now managed through PVACMS with immediate effect</p></li>
+</ul>
+</li>
+<li><p><strong>Scalable Architecture</strong>:</p>
+<ul class="simple">
+<li><p>Support for multiple authentication methods via Authenticators</p></li>
+</ul>
+</li>
+</ol>
+<p>By leveraging these enhanced security features, Secure PVAccess provides a robust
+security model that can meet the requirements of modern control systems while
+maintaining compatibility with existing EPICS deployments.</p>
+</section>
+<section id="epics-security-access-control-file-acf-extensions">
+<h3>EPICS Security Access Control File (ACF) Extensions<a class="headerlink" href="#epics-security-access-control-file-acf-extensions" title="Link to this heading">¶</a></h3>
+<p>Secure PVAccess extends the Access Control File (ACF) syntax with new rule predicates:</p>
+<section id="method">
+<h4>METHOD<a class="headerlink" href="#method" title="Link to this heading">¶</a></h4>
+<p>Defines access permissions based on authentication method:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">x509</span></code>: Certificate-based authentication</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ca</span></code>: Legacy PVAccess AUTHZ with user-specified account</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">anonymous</span></code>: Access without specified name</p></li>
+</ul>
+<p>Can be provided as quoted or unquoted strings.</p>
+<p>Example:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>RULE(1,READ) {
+    METHOD(&quot;x509&quot;)
+}
+</pre></div>
+</div>
+<p>The above rule will match any client that presents an x509 certificate to assert its identity.</p>
+</section>
+<section id="authority">
+<h4>AUTHORITY<a class="headerlink" href="#authority" title="Link to this heading">¶</a></h4>
+<p>1. A new top level item in ACF files AUTHORITY declares the heirarchy of Certificate Authorities that can be
+referenced, going all the way back to the Root Certificate Authority.</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Specifies Certifying Authority:</p>
+<ul>
+<li><p>Uses name from <code class="docutils literal notranslate"><span class="pre">CN</span></code> field of certificate authority certificate’s subject</p></li>
+<li><p>The whole chain must be specified back to the root certificate</p></li>
+<li><p>Not all nodes need to be named especially if they are intermediate certificates</p></li>
+</ul>
+</li>
+</ul>
+</div></blockquote>
+<p>Example:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>AUTHORITY(AUTH_EPICS_ROOT, &quot;EPICS Root Certificate Authority&quot;) {
+    AUTHORITY(&quot;SNS Intermediate CA&quot;) {
+        AUTHORITY(AUTH_SNS_CTRL, &quot;SNS Control Systems CA&quot;)
+        AUTHORITY(AUTH_BEAMLINE, &quot;SNS Beamline Operations CA&quot;)
+   }
+}
+
+AUTHORITY(AUTH_EPICS_IT_ROOT, &quot;EPICS IT Root Certificate Authority&quot;) {
+    AUTHORITY(AUTH_EPICS_USERS, &quot;EPICS Users Certificate Authority&quot;)
+}
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>A new AUTHORITY predicate in ASG RULES references the top level AUTHORITY to constrain rules</p></li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li><p>References the Top Level Authority definition:</p>
+<ul>
+<li><p>Only applicable for X.509 certificate authentication</p></li>
+<li><p>Multiple authorities can be specified and any one of them will be accepted</p></li>
+</ul>
+</li>
+</ul>
+</div></blockquote>
+<p>Example:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>RULE(1,READ) {
+    AUTHORITY(AUTH_EPICS_USERS, AUTH_EPICS_ROOT)
+}
+</pre></div>
+</div>
+<p>The above rule will match any client that presents an x509 certificate
+that is signed by the EPICS Root Certificate Authority or the
+EPICS Users Certificate Authority.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>RULE(1,WRITE) {
+    AUTHORITY(AUTH_SNS_CTRL)
+}
+</pre></div>
+</div>
+<p>The above rule will match any client that presents an x509 certificate
+that is signed by the SNS Control Systems CA.</p>
+</section>
+<section id="id3">
+<h4>PROTOCOL<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h4>
+<p>Specifies the connection protocol requirement:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">TCP</span></code>: Default unencrypted connection</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">TLS</span></code>: Encrypted connection</p></li>
+</ul>
+<p>Can be provided as quoted or unquoted strings.  Upper or lower case is accepted.</p>
+<p>Example:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>RULE(1,READ) {
+    PROTOCOL(&quot;TLS&quot;)
+}
+</pre></div>
+</div>
+<p>The above rule will match any client that connects using an encrypted (TLS) connection.
+This is always the case for when clients provide an x509 certificate to assert their identity,
+however it can also be the case for server-only authenticated connections.  In the later case
+the connection METHOD could be <code class="docutils literal notranslate"><span class="pre">ca</span></code> or <code class="docutils literal notranslate"><span class="pre">anonymous</span></code> but the PROTOCOL will be <code class="docutils literal notranslate"><span class="pre">TLS</span></code>.</p>
+<p>Note that you can also specify <code class="docutils literal notranslate"><span class="pre">TCP</span></code> to define a rule that matches only unencrypted (TCP) connections.</p>
+<p>Example:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>RULE(1,NONE) {
+    PROTOCOL(&quot;TCP&quot;)
+}
+</pre></div>
+</div>
+<p>The above rule will explicitly prohibit any client that connects using an unencrypted (TCP) connection.</p>
+</section>
+<section id="rpc-permission">
+<h4>RPC Permission<a class="headerlink" href="#rpc-permission" title="Link to this heading">¶</a></h4>
+<p>New rule permission for RPC message access control:</p>
+<ul class="simple">
+<li><p>Supplements existing <code class="docutils literal notranslate"><span class="pre">NONE</span></code>, <code class="docutils literal notranslate"><span class="pre">READ</span></code> (<code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">GET</span></code>), and <code class="docutils literal notranslate"><span class="pre">WRITE</span></code> (<code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">PUT</span></code>)</p></li>
+<li><p>Controls access to <code class="xref cpp cpp-any docutils literal notranslate"><span class="pre">RPC</span></code> PVAccess messages</p></li>
+</ul>
+<p>Note: The syntax has been implemented for ACF files but control of RPC access is not yet available.</p>
+<p>Example:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>RULE(1,RPC) {
+    UAG(admins)
+}
+</pre></div>
+</div>
+</section>
+<section id="full-acf-examples">
+<h4>Full ACF Examples<a class="headerlink" href="#full-acf-examples" title="Link to this heading">¶</a></h4>
+<p>These examples demonstrate combining security features for granular access control:</p>
+<p><em>Authorization based on PROTOCOL, METHOD, and AUTHORITY</em></p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>UAG(operators) {greg, karen, ralph}
+UAG(engineers) {kay, george, michael}
+UAG(admins) {aqeel, earnesto, pierrick}
+
+AUTHORITY(AUTH_EPICS_ROOT, &quot;EPICS Root Certificate Authority&quot;) {
+    AUTHORITY(&quot;Intermediate CA&quot;) {
+        AUTHORITY(AUTH_LBNL_CTRL, &quot;LBNL Certificate Authority&quot;)
+    }
+    AUTHORITY(AUTH_SLAC_ROOT, &quot;SLAC Certificate Authority&quot;) {
+        AUTHORITY(AUTH_EPICS_USERS, &quot;EPICS Users Certificate Authority&quot;)
+    }
+}
+
+
+ASG(DEFAULT) {
+# Default - No access
+   RULE(0,NONE)
+
+# Read-only access for operators, requiring TLS
+   RULE(1,READ) {
+       UAG(operators,engineers,admins)
+       PROTOCOL(tls)
+   }
+
+# Write access for engineers from SLAC or LBNL using x509 auth
+   RULE(2,WRITE) {
+       UAG(engineers,admins)
+       METHOD(x509)
+       AUTHORITY(AUTH_LBNL_CTRL, AUTH_SLAC_ROOT)
+   }
+
+# RPC access for admins using specific Cert Auth and TLS
+   RULE(3,RPC) {
+       UAG(admins)
+       METHOD(&quot;x509&quot;)
+       AUTHORITY(AUTH_EPICS_ROOT)
+   }
+}
+</pre></div>
+</div>
+<p><em>Legacy compatible with Enhanced Security</em></p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>AUTHORITY(AUTH_EPICS_ROOT, &quot;EPICS Root Certificate Authority&quot;)
+
+# Support both legacy and SPVA clients
+ASG(backward_compatible) {
+   RULE(0,NONE)
+   # Legacy access - read only
+   RULE(1,READ) {
+       METHOD(&quot;ca&quot;, &quot;anonymous&quot;)
+       PROTOCOL(tcp)
+   }
+   # Enhanced access - write with secure authentication
+   RULE(2,WRITE) {
+       UAG(operators)
+       METHOD(&quot;x509&quot;)
+       AUTHORITY(AUTH_EPICS_ROOT)
+       PROTOCOL(&quot;tls&quot;)
+   }
+}
+</pre></div>
+</div>
+</section>
+</section>
+<section id="authenticator-development">
+<h3>Authenticator Development<a class="headerlink" href="#authenticator-development" title="Link to this heading">¶</a></h3>
+<p>To implement a new Authenticator requires the following steps:</p>
+<section id="source-code">
+<h4>1. Source Code<a class="headerlink" href="#source-code" title="Link to this heading">¶</a></h4>
+<p>Create under <code class="docutils literal notranslate"><span class="pre">/certs/authn/&lt;name&gt;</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">authn&lt;name&gt;main.cpp</span></code></p>
+<ul>
+<li><p>Main runner (copy from template)</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">authn&lt;name&gt;.cpp</span></code></p>
+<ul>
+<li><p>Main implementation subclassing <code class="docutils literal notranslate"><span class="pre">Authn</span></code>,</p></li>
+<li><p>includes registration and PVACMS extensions &amp; verifier</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">authn&lt;name&gt;.h</span></code></p>
+<ul>
+<li><p>Header file</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">config&lt;name&gt;.cpp</span></code></p>
+<ul>
+<li><p>Configuration interface subclassing <code class="docutils literal notranslate"><span class="pre">AuthnConfig</span></code></p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">config&lt;name&gt;.h</span></code></p>
+<ul>
+<li><p>Header file</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Makefile</span></code></p>
+<ul>
+<li><p>Build configuration</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">README.md</span></code></p>
+<ul>
+<li><p>Documentation</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="build-flag-to-enable-code-to-be-compiled-in">
+<h4>2. Build flag to enable code to be compiled in<a class="headerlink" href="#build-flag-to-enable-code-to-be-compiled-in" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>choose a make flag name of the form <code class="docutils literal notranslate"><span class="pre">PVXS_ENABLE_&lt;NAME&gt;_AUTH</span></code> where <code class="docutils literal notranslate"><span class="pre">NAME</span></code>
+is a three or four letter acronynm. e.g. <code class="docutils literal notranslate"><span class="pre">KRB</span></code></p></li>
+<li><p>update <code class="docutils literal notranslate"><span class="pre">/certs/authn/Makefile</span></code> to add a line at the end similar to the following:</p></li>
+</ul>
+<div class="highlight-make notranslate"><div class="highlight"><pre><span></span><span class="c">#--------------------------------------------</span>
+<span class="c">#  ADD AUTHENTICATOR PLUGINS AFTER THIS LINE</span>
+
+<span class="cp">ifeq ($(PVXS_ENABLE_KRB_AUTH),YES)</span>
+<span class="cp">include $(AUTHN)/krb/Makefile</span>
+<span class="cp">endif</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Sites compiling PVXS will set these macros in their private <code class="docutils literal notranslate"><span class="pre">CONFIG_SITE.local</span></code> stored one level above
+the root of the source tree.  e.g.</p></li>
+</ul>
+<div class="highlight-make notranslate"><div class="highlight"><pre><span></span><span class="nv">PVXS_ENABLE_KRB_AUTH</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>YES
+<span class="nv">PVXS_ENABLE_LDAP_AUTH</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>YES
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>To build PVACMS add the following, by default it will not be built</p></li>
+</ul>
+<div class="highlight-make notranslate"><div class="highlight"><pre><span></span><span class="nv">PVXS_ENABLE_PVACMS</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>YES
+</pre></div>
+</div>
+</section>
+<section id="extra-options-for-pvacms">
+<h4>3. Extra options for PVACMS<a class="headerlink" href="#extra-options-for-pvacms" title="Link to this heading">¶</a></h4>
+<p>If you need to add some options to the commandline for PVACMS for your
+Authenticator just override these methods in the base <code class="docutils literal notranslate"><span class="pre">Auth</span></code> class.  e.g. for LDAP
+below:</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">AuthNLdap</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="n">Auth</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="c1">// Copy config settings into the Authenticator</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">configure</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">client</span><span class="o">::</span><span class="n">Config</span><span class="w"> </span><span class="o">&amp;</span><span class="n">config</span><span class="p">)</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">config_ldap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">dynamic_cast</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">ConfigLdap</span><span class="w"> </span><span class="o">&amp;&gt;</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
+<span class="w">        </span><span class="n">ldap_server</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">config_ldap</span><span class="p">.</span><span class="n">ldap_host</span><span class="p">;</span>
+<span class="w">        </span><span class="n">ldap_port</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">config_ldap</span><span class="p">.</span><span class="n">ldap_port</span><span class="p">;</span>
+<span class="w">    </span><span class="p">};</span>
+
+<span class="w">    </span><span class="c1">// Define placeholder text e.g. `command [placeholder] [options] positional parameters`</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="nf">getOptionsPlaceholderText</span><span class="p">()</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="s">&quot; [ldap options]&quot;</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// Define the help text for the options</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="nf">getOptionsHelpText</span><span class="p">()</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+<span class="w">               </span><span class="s">&quot;ldap options</span><span class="se">\n</span><span class="s">&quot;</span>
+<span class="w">               </span><span class="s">&quot;        --ldap-host &lt;host&gt;                   LDAP Host.  Default localhost</span><span class="se">\n</span><span class="s">&quot;</span>
+<span class="w">               </span><span class="s">&quot;        --ldap-port &lt;port&gt;                   LDAP port.  Default 389</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// Add options to given commandline parser</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">addOptions</span><span class="p">(</span><span class="n">CLI</span><span class="o">::</span><span class="n">App</span><span class="w"> </span><span class="o">&amp;</span><span class="n">app</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">client</span><span class="o">::</span><span class="n">Config</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">authn_config_map</span><span class="p">)</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">config</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">authn_config_map</span><span class="p">.</span><span class="n">at</span><span class="p">(</span><span class="n">PVXS_LDAP_AUTH_TYPE</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">config_ldap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">dynamic_cast</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">ConfigLdap</span><span class="w"> </span><span class="o">&amp;&gt;</span><span class="p">(</span><span class="o">*</span><span class="n">config</span><span class="p">);</span>
+<span class="w">        </span><span class="n">app</span><span class="p">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--ldap-host&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">config_ldap</span><span class="p">.</span><span class="n">ldap_host</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Specify LDAP hostname or IP address&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="n">app</span><span class="p">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--ldap-port&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">config_ldap</span><span class="p">.</span><span class="n">ldap_port</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Specify LDAP port number&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</section>
+<section id="extra-environment-variables-for-pvacms">
+<h4>4. Extra environment variables for PVACMS<a class="headerlink" href="#extra-environment-variables-for-pvacms" title="Link to this heading">¶</a></h4>
+<p>If you need to add some environment variables for PVACMS for your Authenticator
+just override these methods in the base <code class="docutils literal notranslate"><span class="pre">Auth</span></code> and <code class="docutils literal notranslate"><span class="pre">ConfigAuthN</span></code> classes.
+e.g. for Kerberos shown below.</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">AuthNKrb</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="n">Auth</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="c1">// Copy config settings into the Authenticator</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">configure</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">client</span><span class="o">::</span><span class="n">Config</span><span class="w"> </span><span class="o">&amp;</span><span class="n">config</span><span class="p">)</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">config_krb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">dynamic_cast</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">ConfigKrb</span><span class="w"> </span><span class="o">&amp;&gt;</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
+<span class="w">        </span><span class="n">krb_validator_service_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SB</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">config_krb</span><span class="p">.</span><span class="n">krb_validator_service</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">PVXS_KRB_DEFAULT_VALIDATOR_CLUSTER_PART</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">config_krb</span><span class="p">.</span><span class="n">krb_realm</span><span class="p">;</span>
+<span class="w">        </span><span class="n">krb_realm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">config_krb</span><span class="p">.</span><span class="n">krb_realm</span><span class="p">;</span>
+<span class="w">        </span><span class="n">krb_keytab_file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">config_krb</span><span class="p">.</span><span class="n">krb_keytab</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// Update the definitions map for display of effective config</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">updateDefs</span><span class="p">(</span><span class="n">client</span><span class="o">::</span><span class="n">Config</span><span class="o">::</span><span class="n">defs_t</span><span class="w"> </span><span class="o">&amp;</span><span class="n">defs</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">defs</span><span class="p">[</span><span class="s">&quot;KRB5_KTNAME&quot;</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">krb_keytab_file</span><span class="p">;</span>
+<span class="w">        </span><span class="n">defs</span><span class="p">[</span><span class="s">&quot;KRB5_CLIENT_KTNAME&quot;</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">krb_keytab_file</span><span class="p">;</span>
+<span class="w">        </span><span class="n">defs</span><span class="p">[</span><span class="s">&quot;EPICS_AUTH_KRB_VALIDATOR_SERVICE&quot;</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">krb_validator_service_name</span><span class="p">;</span>
+<span class="w">        </span><span class="n">defs</span><span class="p">[</span><span class="s">&quot;EPICS_AUTH_KRB_REALM&quot;</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">krb_realm</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// Construct a new AuthNKrb, configured from the environment</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">fromEnv</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">client</span><span class="o">::</span><span class="n">Config</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">config</span><span class="p">)</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">config</span><span class="p">.</span><span class="n">reset</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">ConfigKrb</span><span class="p">(</span><span class="n">ConfigKrb</span><span class="o">::</span><span class="n">fromEnv</span><span class="p">()));</span><span class="w"> </span><span class="p">}</span>
+<span class="p">};</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ConfigKrb</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="n">ConfigAuthN</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">ConfigKrb</span><span class="o">&amp;</span><span class="w"> </span><span class="n">applyEnv</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">Config</span><span class="o">::</span><span class="n">applyEnv</span><span class="p">(</span><span class="nb">true</span><span class="p">,</span><span class="w"> </span><span class="n">CLIENT</span><span class="p">);</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="k">this</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// Make a new config containing the base classes environment settings plus any</span>
+<span class="w">    </span><span class="c1">// environment variables for this Authenticator</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="n">ConfigKrb</span><span class="w"> </span><span class="n">fromEnv</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ConfigKrb</span><span class="p">{}.</span><span class="n">applyEnv</span><span class="p">();</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">defs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&gt;</span><span class="p">();</span>
+<span class="w">        </span><span class="n">config</span><span class="p">.</span><span class="n">fromAuthEnv</span><span class="p">(</span><span class="n">defs</span><span class="p">);</span>
+<span class="w">        </span><span class="n">config</span><span class="p">.</span><span class="n">fromKrbEnv</span><span class="p">(</span><span class="n">defs</span><span class="p">);</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">config</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">ConfigKrb</span><span class="o">::</span><span class="n">fromKrbEnv</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">defs</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">PickOne</span><span class="w"> </span><span class="n">pickone</span><span class="p">{</span><span class="n">defs</span><span class="p">,</span><span class="w"> </span><span class="nb">true</span><span class="p">};</span>
+
+<span class="w">        </span><span class="c1">// KRB5_KTNAME</span>
+<span class="w">        </span><span class="c1">// This is the environment variable defined by krb5</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">pickone</span><span class="p">({</span><span class="s">&quot;KRB5_KTNAME&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;KRB5_CLIENT_KTNAME&quot;</span><span class="p">}))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">krb_keytab</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pickone</span><span class="p">.</span><span class="n">val</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+
+<span class="w">        </span><span class="c1">// EPICS_AUTH_KRB_REALM</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">pickone</span><span class="p">({</span><span class="s">&quot;EPICS_AUTH_KRB_VALIDATOR_SERVICE&quot;</span><span class="p">}))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">krb_validator_service</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pickone</span><span class="p">.</span><span class="n">val</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+
+<span class="w">        </span><span class="c1">// EPICS_AUTH_KRB_REALM</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">pickone</span><span class="p">({</span><span class="s">&quot;EPICS_AUTH_KRB_REALM&quot;</span><span class="p">}))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">krb_realm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pickone</span><span class="p">.</span><span class="n">val</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="new-apis">
+<h3>New APIs<a class="headerlink" href="#new-apis" title="Link to this heading">¶</a></h3>
+<p>Secure PVAccess introduces new APIs for programatically managing security with authenticated identities:</p>
+<section id="legacy-peerinfo-structure">
+<span id="peer-info"></span><h4>Legacy <code class="docutils literal notranslate"><span class="pre">PeerInfo</span></code> Structure<a class="headerlink" href="#legacy-peerinfo-structure" title="Link to this heading">¶</a></h4>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="k">struct</span><span class="w"> </span><span class="nc">PeerInfo</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">peer</span><span class="p">;</span><span class="w">      </span><span class="c1">// network address</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">transport</span><span class="p">;</span><span class="w"> </span><span class="c1">// protocol (e.g., &quot;pva&quot;)</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">authority</span><span class="p">;</span><span class="w"> </span><span class="c1">// auth mechanism</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">realm</span><span class="p">;</span><span class="w">     </span><span class="c1">// authority scope</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">account</span><span class="p">;</span><span class="w">   </span><span class="c1">// user name</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="new-peercredentials-structure">
+<span id="peer-credentials"></span><h4>New <code class="docutils literal notranslate"><span class="pre">PeerCredentials</span></code> Structure<a class="headerlink" href="#new-peercredentials-structure" title="Link to this heading">¶</a></h4>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="k">struct</span><span class="w"> </span><span class="nc">PeerCredentials</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">peer</span><span class="p">;</span><span class="w">      </span><span class="c1">// network address</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">iface</span><span class="p">;</span><span class="w">     </span><span class="c1">// network interface</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">method</span><span class="p">;</span><span class="w">    </span><span class="c1">// &quot;anonymous&quot;, &quot;ca&quot;, or &quot;x509&quot;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">authority</span><span class="p">;</span><span class="w"> </span><span class="c1">// Certificate Authority common name for x509 if mode is `Mutual` or blank</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">account</span><span class="p">;</span><span class="w">   </span><span class="c1">// User account if mode is `Mutual` or blank</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">isTLS</span><span class="p">;</span><span class="w">            </span><span class="c1">// Secure transport status.  True is mode is `Mutual` or `Server-Only`</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</section>
+<section id="enhanced-client-management">
+<h4>Enhanced Client Management<a class="headerlink" href="#enhanced-client-management" title="Link to this heading">¶</a></h4>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">long</span><span class="w"> </span><span class="n">epicsStdCall</span><span class="w"> </span><span class="nf">asAddClientIdentity</span><span class="p">(</span>
+<span class="w">     </span><span class="n">ASCLIENTPVT</span><span class="w"> </span><span class="o">*</span><span class="n">pasClientPvt</span><span class="p">,</span><span class="w"> </span><span class="n">ASMEMBERPVT</span><span class="w"> </span><span class="n">asMemberPvt</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">asl</span><span class="p">,</span>
+<span class="w">     </span><span class="n">ASIDENTITY</span><span class="w"> </span><span class="n">identity</span><span class="p">);</span>
+
+<span class="kt">long</span><span class="w"> </span><span class="n">epicsStdCall</span><span class="w"> </span><span class="nf">asChangeClientIdentity</span><span class="p">(</span>
+<span class="w">     </span><span class="n">ASCLIENTPVT</span><span class="w"> </span><span class="n">asClientPvt</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">asl</span><span class="p">,</span>
+<span class="w">     </span><span class="n">ASIDENTITY</span><span class="w"> </span><span class="n">identity</span><span class="p">);</span>
+</pre></div>
+</div>
+</section>
+<section id="enhanced-auditing">
+<h4>Enhanced Auditing<a class="headerlink" href="#enhanced-auditing" title="Link to this heading">¶</a></h4>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">void</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">epicsStdCall</span><span class="w"> </span><span class="n">asTrapWriteBeforeWithIdentityData</span><span class="p">(</span>
+<span class="w">     </span><span class="n">ASIDENTITY</span><span class="w"> </span><span class="n">identity</span><span class="p">,</span>
+<span class="w">     </span><span class="n">dbChannel</span><span class="w"> </span><span class="o">*</span><span class="n">addr</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">dbrType</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">no_elements</span><span class="p">,</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="o">*</span><span class="n">data</span><span class="p">);</span>
+</pre></div>
+</div>
+</section>
+<section id="identity-structure">
+<span id="identity-structure-for-apis"></span><h4>Identity Structure for APIs<a class="headerlink" href="#identity-structure" title="Link to this heading">¶</a></h4>
+<p>This unified structure replaces separate user/host parameters:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="k">typedef</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="nc">asIdentity</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="w"> </span><span class="o">*</span><span class="n">user</span><span class="p">;</span><span class="w">         </span><span class="c1">// User identifier (CN from certificate)</span>
+<span class="w">    </span><span class="kt">char</span><span class="w"> </span><span class="o">*</span><span class="n">host</span><span class="p">;</span><span class="w">               </span><span class="c1">// Host identifier (O from certificate)</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="w"> </span><span class="o">*</span><span class="n">method</span><span class="p">;</span><span class="w">       </span><span class="c1">// Authentication method (&quot;ca&quot;, &quot;x509&quot;, &quot;anonymous&quot;)</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="w"> </span><span class="o">*</span><span class="n">authority</span><span class="p">;</span><span class="w">    </span><span class="c1">// Certificate authority</span>
+<span class="w">    </span><span class="k">enum</span><span class="w"> </span><span class="n">AsProtocol</span><span class="w"> </span><span class="n">protocol</span><span class="p">;</span><span class="w"> </span><span class="c1">// Connection protocol (TCP/TLS)</span>
+<span class="p">}</span><span class="w"> </span><span class="n">ASIDENTITY</span><span class="p">;</span>
+</pre></div>
+</div>
+</section>
+<section id="protocol-enumeration">
+<h4>Protocol Enumeration<a class="headerlink" href="#protocol-enumeration" title="Link to this heading">¶</a></h4>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="k">enum</span><span class="w"> </span><span class="n">AsProtocol</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">AS_PROTOCOL_TCP</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w">     </span><span class="c1">// Unencrypted connection</span>
+<span class="w">    </span><span class="n">AS_PROTOCOL_TLS</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w">      </span><span class="c1">// Encrypted connection</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">PVXS</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="netconfig.html">PVA Network Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstart.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start PVXS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartstd.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start Std</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartkrb.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start KRB</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartldap.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start LDAP</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spva.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Secure PVAccess</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> AuthN &amp; AuthZ</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#authentication-modes">Authentication Modes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#legacy-authentication-mode">Legacy Authentication Mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#secure-pvaccess-authentication-mode">Secure PVAccess Authentication Mode</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#authentication-method">Authentication Method</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#anonymous-method">anonymous Method</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ca-method">ca Method</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#x509-method">x509 Method</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#certifying-authority">Certifying Authority</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#protocol">Protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#site-authenticators">Site Authenticators</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#reference-authenticators">Reference Authenticators</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#common-environment-variables-for-all-authenticators">Common Environment Variables for all Authenticators</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#included-reference-authenticators">Included Reference Authenticators</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#long-running-certificates">Long Running Certificates</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#specifying-long-running-certificates">Specifying long running certificates</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#the-authenticator-controls-the-certificate-renewal-date">The Authenticator Controls the Certificate Renewal Date</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#how-do-we-enforce-renew-by-dates">How do we enforce Renew By dates</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#authorization">Authorization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#new-security-features">New Security Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#epics-security-access-control-file-acf-extensions">EPICS Security Access Control File (ACF) Extensions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#authenticator-development">Authenticator Development</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#new-apis">New APIs</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spvacerts.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Cert Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building from Source</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html#including-pvxs-in-your-application">Including PVXS in your application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cli.html">Command Line Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="value.html">Value Container API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="client.html">Client API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server.html">Server API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html">IOC Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html#qsrv-2">QSRV 2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Misc</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaglossary.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> SPVA Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releasenotes.html">Release Notes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="spva.html" title="previous chapter"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Secure PVAccess</a></li>
+      <li>Next: <a href="spvacerts.html" title="next chapter"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Cert Management</a></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025 Michael Davidsaver, George McIntyre, Osprey DCS LLC, and SLAC.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/spvaauth.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,592 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>PVXS client/server for PVA Protocol &#8212; PVXS 1.3.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=bb516dca"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="icon" href="_static/favicon.png"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Overview" href="overview.html" />
+
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+<!-- Material Icons -->
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="pvxs-client-server-for-pva-protocol">
+<h1>PVXS client/server for PVA Protocol<a class="headerlink" href="#pvxs-client-server-for-pva-protocol" title="Link to this heading">¶</a></h1>
+<p>This module provides a library (libpvxs.so or pvxs.dll) and a set of
+CLI utilities acting as PVAccess protocol client and/or server.</p>
+<p>PVXS is functionally equivalent to the
+<a class="reference external" href="https://github.com/epics-base/pvDataCPP">pvDataCPP</a> and
+<a class="reference external" href="https://github.com/epics-base/pvAccessCPP">pvAccessCPP</a> modules,
+which it hopes to eventually supplant (Ok, the author hopes).</p>
+<ul class="simple">
+<li><p>VCS: <a class="reference external" href="https://github.com/epics-base/pvxs/">https://github.com/epics-base/pvxs/</a></p></li>
+<li><p>Docs: <a class="reference external" href="https://epics-base.github.io/pvxs/">https://epics-base.github.io/pvxs/</a></p></li>
+<li><p><a class="reference external" href="https://github.com/epics-base/pvxs/issues">Issues</a> (see <a class="reference internal" href="details.html#reportbug"><span class="std std-ref">Reporting a Bug</span></a>)</p></li>
+<li><p><a class="reference internal" href="details.html#contrib"><span class="std std-ref">Contributing</span></a></p></li>
+</ul>
+<p>Dependencies</p>
+<ul class="simple">
+<li><p>A C++11 compliant compiler</p></li>
+</ul>
+<blockquote>
+<div><ul class="simple">
+<li><p>GCC &gt;= 4.8</p></li>
+<li><p>Visual Studio &gt;= 2015 / 12.0’</p></li>
+<li><p>clang</p></li>
+</ul>
+</div></blockquote>
+<ul class="simple">
+<li><p><a class="reference external" href="https://epics-controls.org/resources-and-support/base/">EPICS Base</a> &gt;=3.15.1</p></li>
+<li><p><a class="reference external" href="http://libevent.org/">libevent</a> &gt;=2.0.1  (Optionally bundled)</p></li>
+<li><p>(optional) <a class="reference external" href="https://cmake.org/">CMake</a> &gt;=3.1, only needed when building bundled libevent</p></li>
+</ul>
+<p>See <a class="reference internal" href="building.html#building"><span class="std std-ref">Building from Source</span></a> for details.</p>
+<section id="download">
+<h2>Download<a class="headerlink" href="#download" title="Link to this heading">¶</a></h2>
+<p>Releases are published to <a class="reference external" href="https://github.com/mdavidsaver/pvxs/releases">https://github.com/mdavidsaver/pvxs/releases</a>.
+See <a class="reference internal" href="details.html#relpolicy"><span class="std std-ref">Release Policy</span></a> for details.</p>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="overview.html#basics">Basics</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#what-is-epics">What is EPICS?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#what-is-pvaccess">What is PVAccess?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#what-is-secure-pvaccess">What is Secure PVAccess?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#what-is-a-pv">What is a PV?</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="overview.html#pvxs-module">PVXS Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview.html#comparison-with-pvdatacpp">Comparison with pvDataCPP</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#sub-field-lookup">Sub-field Lookup</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#structure-iteration">Structure Iteration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#testing-for-changed-fields">Testing for changed fields</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#tracking-changed-fields">Tracking changed fields</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#ntscalar">NTScalar</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#custom-structures">Custom Structures</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="overview.html#comparison-with-pvaccesscpp">Comparison with pvAccessCPP</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="netconfig.html">PVA Network Configuration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="netconfig.html#big-picture">Big Picture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="netconfig.html#environment-variables">Environment variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="netconfig.html#address-spec">Address Spec.</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstart.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start PVXS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="spvaqstart.html#learn-you-will-learn"><i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i> You will learn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvaqstart.html#pre-packagedprepackaged"><i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>Prepackaged</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstart.html#run-pvacms"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Run PVACMS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstart.html#run-tools"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Run Tools</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="spvaqstart.html#step-by-step-step-by-step"><i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i> Step-by-Step</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstart.html#step-docker-image"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Docker Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstart.html#step-build-pvxs"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Build PVXS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstart.html#step-pvacms"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> PVACMS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstart.html#step-test"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Test</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartstd.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start Std</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="spvaqstartstd.html#learn-you-will-learn"><i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i> You will learn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvaqstartstd.html#pre-packagedprepackaged"><i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>Prepackaged</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#load-image"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Load image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#administrator"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Administrator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#service"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Service</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#client"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#approve-certs"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Approve Certs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#start-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_6</i> Start SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#get-pv-value"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_7</i> Get PV value</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="spvaqstartstd.html#step-by-step-step-by-step"><i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i> Step-By-Step</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#step-docker-image"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Docker Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#step-epics-agents"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> EPICS Agents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#step-run-pvacms"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run PVACMS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#step-run-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#step-spva-client"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> SPVA Client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartstd.html#step-permissions"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Permissions</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartkrb.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start KRB</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="spvaqstartkrb.html#learn-you-will-learn"><i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i> You will learn:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvaqstartkrb.html#pre-packagedprepackaged"><i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>Prepackaged</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartkrb.html#load-image"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Load image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartkrb.html#service"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Service</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartkrb.html#client"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartkrb.html#start-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Start SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartkrb.html#get-pv-value"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Get PV value</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="spvaqstartkrb.html#step-by-step-step-by-step"><i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i> Step-By-Step</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartkrb.html#step-docker-image"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Docker Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartkrb.html#step-kdc-kadmin"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> KDC &amp; KAdmin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartkrb.html#step-run-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartkrb.html#step-spva-client"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> SPVA Client</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartldap.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start LDAP</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="spvaqstartldap.html#learn-you-will-learn"><i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i> You will learn:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvaqstartldap.html#pre-packagedprepackaged"><i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>Prepackaged</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartldap.html#load-image"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Load image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartldap.html#service"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Service</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartldap.html#client"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartldap.html#start-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Start SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartldap.html#get-pv-value"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Get PV value</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="spvaqstartldap.html#step-by-step-step-by-step"><i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i> Step-By-Step</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartldap.html#step-docker-image"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Docker Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartldap.html#step-ldap-service"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> LDAP Service</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartldap.html#step-run-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaqstartldap.html#step-spva-client"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> SPVA Client</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spva.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Secure PVAccess</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="spva.html#transport-layer-security">Transport Layer Security</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#supported-keychain-file-formats-encodings-and-file-types">Supported Keychain-File Formats, Encodings and File Types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#unsupported-certificate-formats-encodings-and-file-types">Unsupported Certificate Formats, Encodings and File Types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#tls-encapsulation-of-the-pvaccess-protocol">TLS encapsulation of the PVAccess protocol</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#environment-variables">Environment Variables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#api-configuration-options">API Configuration Options</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#api-additions-for-secure-pvaccess">API Additions for Secure PVAccess</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="spva.html#protocol-operation">Protocol Operation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#connection-establishment">Connection Establishment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#connection-types">Connection Types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#state-machines">State Machines</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#certificate-status-verification">Certificate Status Verification</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#status-caching">Status Caching</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#beacons">Beacons</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="spva.html#protocol-debugging">Protocol Debugging</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#tls-packet-inspection">TLS Packet Inspection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#debug-logging">Debug Logging</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="spva.html#network-deployment">Network Deployment</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#deployment-patterns">Deployment Patterns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#keychain-file-storage">Keychain-File Storage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spva.html#trust-establishment">Trust Establishment</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spvaauth.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> AuthN &amp; AuthZ</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="spvaauth.html#authentication-modes">Authentication Modes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#legacy-authentication-mode">Legacy Authentication Mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#secure-pvaccess-authentication-mode">Secure PVAccess Authentication Mode</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="spvaauth.html#authentication-method">Authentication Method</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#anonymous-method">anonymous Method</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#ca-method">ca Method</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#x509-method">x509 Method</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="spvaauth.html#certifying-authority">Certifying Authority</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvaauth.html#protocol">Protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvaauth.html#site-authenticators">Site Authenticators</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#reference-authenticators">Reference Authenticators</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#common-environment-variables-for-all-authenticators">Common Environment Variables for all Authenticators</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#included-reference-authenticators">Included Reference Authenticators</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="spvaauth.html#long-running-certificates">Long Running Certificates</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#specifying-long-running-certificates">Specifying long running certificates</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#the-authenticator-controls-the-certificate-renewal-date">The Authenticator Controls the Certificate Renewal Date</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#how-do-we-enforce-renew-by-dates">How do we enforce Renew By dates</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="spvaauth.html#authorization">Authorization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#new-security-features">New Security Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#epics-security-access-control-file-acf-extensions">EPICS Security Access Control File (ACF) Extensions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#authenticator-development">Authenticator Development</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvaauth.html#new-apis">New APIs</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spvacerts.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Cert Management</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="spvacerts.html#public-and-private-keys">Public and Private Keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvacerts.html#trust-establishment">Trust Establishment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvacerts.html#certificates">Certificates</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvacerts.html#certificate-attributes">Certificate Attributes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvacerts.html#certificate-states">Certificate States</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvacerts.html#certificate-status-message">Certificate Status Message</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvacerts.html#certificate-creation-request-ccr">Certificate Creation Request (CCR)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvacerts.html#certificate-management-operations">Certificate Management Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvacerts.html#certificate-management-tools">Certificate Management Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvacerts.html#pvxcert">pvxcert</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvacerts.html#certificate-usage">Certificate Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spvacerts.html#pvacms">PVACMS</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="spvacerts.html#pvacms-usage">PVACMS Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvacerts.html#pvacms-configuration">PVACMS Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvacerts.html#extensions-to-config-for-pvacms">Extensions to Config for PVACMS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="spvacerts.html#pvacms-authorization">PVACMS Authorization</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="example.html">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="example.html#shortest-client-get">Shortest Client Get</a></li>
+<li class="toctree-l2"><a class="reference internal" href="example.html#shortest-server">Shortest Server</a></li>
+<li class="toctree-l2"><a class="reference internal" href="example.html#client-demo">Client Demo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="example.html#mailbox-server">Mailbox Server</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building from Source</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="building.html#running-tests">Running Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="building.html#cross-compiling-libevent2">Cross-compiling libevent2</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="building.html#including-pvxs-in-your-application">Including PVXS in your application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cli.html">Command Line Tools</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cli.html#troubleshooting-with-virtual-cable-tester">Troubleshooting with Virtual Cable Tester</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="value.html">Value Container API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="nt.html">Common Type Definitions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="ntscalar.html">NTScalar and NTScalarArray</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nt.html#forward-compatibility">Forward Compatibility</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nt.html#time-t">time_t</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nt.html#alarm-t">alarm_t</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nt.html#ntenum">NTEnum</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nt.html#ntndarray">NTNDArray</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nt.html#nttable">NTTable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nt.html#nturi">NTURI</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="typedef.html">Defining Custom Types</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="typedef.html#_CPPv4N4pvxs8TypeCodeE"><code class="docutils literal notranslate"><span class="pre">pvxs::TypeCode</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="typedef.html#_CPPv4N4pvxs7TypeDefE"><code class="docutils literal notranslate"><span class="pre">pvxs::TypeDef</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="typedef.html#_CPPv4N4pvxs6MemberE"><code class="docutils literal notranslate"><span class="pre">pvxs::Member</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="typedef.html#_CPPv4N4pvxs7membersE"><code class="docutils literal notranslate"><span class="pre">pvxs::members</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="typedef.html#_CPPv4N4pvxs4KindE"><code class="docutils literal notranslate"><span class="pre">Kind</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="value.html#value">Value</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="value.html#field-lookup">Field Lookup</a></li>
+<li class="toctree-l3"><a class="reference internal" href="value.html#iteration">Iteration</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="value.html#array-fields">Array fields</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="value.html#_CPPv4I00EN4pvxs12shared_arrayE"><code class="docutils literal notranslate"><span class="pre">pvxs::shared_array</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="value.html#_CPPv4N4pvxs11elementSizeE9ArrayType"><code class="docutils literal notranslate"><span class="pre">elementSize()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="value.html#_CPPv4N4pvxs6detail7LimiterE"><code class="docutils literal notranslate"><span class="pre">pvxs::detail::Limiter</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="value.html#_CPPv4N4pvxs9ArrayTypeE"><code class="docutils literal notranslate"><span class="pre">ArrayType</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="client.html">Client API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="client.html#configuration">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="client.html#making-requests">Making Requests</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="client.html#_CPPv4N4pvxs6client7ContextE"><code class="docutils literal notranslate"><span class="pre">pvxs::client::Context</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#get-info">Get/Info</a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#put">Put</a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#rpc">RPC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#operation-and-result">Operation and Result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#monitor">Monitor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#connect">Connect</a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#threading">Threading</a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#ownership">Ownership</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="client.html#pvrequest">pvRequest</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="client.html#_CPPv4I00EN4pvxs6client6detail13CommonBuilderE"><code class="docutils literal notranslate"><span class="pre">pvxs::client::detail::CommonBuilder</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#syntax">Syntax</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="client.html#misc">Misc</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="client.html#_CPPv4N4pvxs6client6ConfigE"><code class="docutils literal notranslate"><span class="pre">pvxs::client::Config</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#_CPPv4N4pvxs6client9ConnectedE"><code class="docutils literal notranslate"><span class="pre">pvxs::client::Connected</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#_CPPv4N4pvxs6client10DisconnectE"><code class="docutils literal notranslate"><span class="pre">pvxs::client::Disconnect</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#_CPPv4N4pvxs6client8FinishedE"><code class="docutils literal notranslate"><span class="pre">pvxs::client::Finished</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="client.html#_CPPv4N4pvxs6client11RemoteErrorE"><code class="docutils literal notranslate"><span class="pre">pvxs::client::RemoteError</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="server.html">Server API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sharedpv.html">SharedPV and StaticSource</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="sharedpv.html#_CPPv4N4pvxs6server8SharedPVE"><code class="docutils literal notranslate"><span class="pre">pvxs::server::SharedPV</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="sharedpv.html#_CPPv4N4pvxs6server12StaticSourceE"><code class="docutils literal notranslate"><span class="pre">pvxs::server::StaticSource</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="source.html">Data Source</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="source.html#threading">Threading</a></li>
+<li class="toctree-l3"><a class="reference internal" href="source.html#ownership-and-lifetime">Ownership and Lifetime</a></li>
+<li class="toctree-l3"><a class="reference internal" href="source.html#api">API</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="server.html#configuration">Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="server.html#_CPPv4N4pvxs6server6ConfigE"><code class="docutils literal notranslate"><span class="pre">pvxs::server::Config</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="server.html#_CPPv4N4pvxs6server6ServerE"><code class="docutils literal notranslate"><span class="pre">pvxs::server::Server</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html">IOC Integration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="ioc.html#ioc-shell">IOC shell</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="ioc.html#_CPPv45pvxsri"><code class="docutils literal notranslate"><span class="pre">pvxsr()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ioc.html#_CPPv45pvxsli"><code class="docutils literal notranslate"><span class="pre">pvxsl()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ioc.html#_CPPv45pvxsiv"><code class="docutils literal notranslate"><span class="pre">pvxsi()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="ioc.html#adding-custom-pvs-to-server">Adding custom PVs to Server</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="ioc.html#_CPPv4N4pvxs3ioc6serverEv"><code class="docutils literal notranslate"><span class="pre">server()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html#qsrv-2">QSRV 2</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="ioc.html#id1">IOC Shell</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="ioc.html#_CPPv45pvxgliPKc"><code class="docutils literal notranslate"><span class="pre">pvxgl()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ioc.html#_CPPv411dbLoadGroupPKcPKc"><code class="docutils literal notranslate"><span class="pre">dbLoadGroup()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="ioc.html#single-pv">Single PV</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ioc.html#group-pv">Group PV</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="qgroup.html">QSRV Groups</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="ioc.html#access-security">Access Security</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ioc.html#pvaccess-links">PVAccess Links</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="pvalink.html">PVA Links</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Misc</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="util.html#logging">Logging</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4N4pvxs5LevelE"><code class="docutils literal notranslate"><span class="pre">Level</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#controlling-logging">Controlling Logging</a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#logging-from-user-applications">Logging from User applications</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="util.html#identification">Identification</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="util.html#c.PVXS_VERSION"><code class="docutils literal notranslate"><span class="pre">PVXS_VERSION</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#c.PVXS_ABI_VERSION"><code class="docutils literal notranslate"><span class="pre">PVXS_ABI_VERSION</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#c.VERSION_INT"><code class="docutils literal notranslate"><span class="pre">VERSION_INT</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4N4pvxs11version_intEv"><code class="docutils literal notranslate"><span class="pre">version_int()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4N4pvxs11version_strEv"><code class="docutils literal notranslate"><span class="pre">version_str()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4N4pvxs15version_abi_intEv"><code class="docutils literal notranslate"><span class="pre">version_abi_int()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4N4pvxs17version_abi_checkEv"><code class="docutils literal notranslate"><span class="pre">version_abi_check()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="util.html#unit-test-helpers">Unit-test helpers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="util.html#c.testTrue"><code class="docutils literal notranslate"><span class="pre">testTrue</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#c.testFalse"><code class="docutils literal notranslate"><span class="pre">testFalse</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#c.testEq"><code class="docutils literal notranslate"><span class="pre">testEq</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#c.testNotEq"><code class="docutils literal notranslate"><span class="pre">testNotEq</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#c.testStrEq"><code class="docutils literal notranslate"><span class="pre">testStrEq</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#c.testStrMatch"><code class="docutils literal notranslate"><span class="pre">testStrMatch</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#c.testArrEq"><code class="docutils literal notranslate"><span class="pre">testArrEq</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#c.testShow"><code class="docutils literal notranslate"><span class="pre">testShow</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4I00EN4pvxs10testThrowsE8testCase2FN"><code class="docutils literal notranslate"><span class="pre">testThrows()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4I00EN4pvxs15testThrowsMatchE8testCaseRKNSt6stringE2FN"><code class="docutils literal notranslate"><span class="pre">testThrowsMatch()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4N4pvxs8testCaseE"><code class="docutils literal notranslate"><span class="pre">pvxs::testCase</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#ioc-testing">IOC Testing</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="util.html#utilities">Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4N4pvxs6escapeERKNSt6stringE"><code class="docutils literal notranslate"><span class="pre">escape()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4N4pvxs6escapeEPKc"><code class="docutils literal notranslate"><span class="pre">escape()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4N4pvxs6escapeEPKc6size_t"><code class="docutils literal notranslate"><span class="pre">escape()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4N4pvxs20cleanup_for_valgrindEv"><code class="docutils literal notranslate"><span class="pre">cleanup_for_valgrind()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4N4pvxs6SigIntE"><code class="docutils literal notranslate"><span class="pre">pvxs::SigInt</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4N4pvxs18target_informationERNSt7ostreamE"><code class="docutils literal notranslate"><span class="pre">target_information()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="util.html#_CPPv4I0EN4pvxs8MPMCFIFOE"><code class="docutils literal notranslate"><span class="pre">pvxs::MPMCFIFO</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">Details</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="details.html#reporting-a-bug">Reporting a Bug</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="details.html#packet-capture">Packet Capture</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="details.html#release-policy">Release Policy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="details.html#expert-apis">Expert APIs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="details.html#contributing">Contributing</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="details.html#contributors">Contributors</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="details.html#implementation-notes">Implementation Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spvaglossary.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> SPVA Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releasenotes.html">Release Notes</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#dec-2023">1.3.1 (Dec 2023)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#id1">1.3.0 (Dec 2023)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#oct-2023">1.2.4 (Oct 2023)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#sept-2023">1.2.3 (Sept 2023)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#june-2023">1.2.2 (June 2023)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#id2">1.2.1 (June 2023)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#may-2023">1.2.0 (May 2023)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#april-2023">1.1.4 (April 2023)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#mar-2023">1.1.3 (Mar 2023)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#feb-2023">1.1.2 (Feb 2023)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#dec-2022">1.1.1 (Dec 2022)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#nov-2022">1.1.0 (Nov 2022)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#oct-2022">1.0.1 (Oct 2022)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#sept-2022">1.0.0 (Sept 2022)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#june-2022">0.3.1 (June 2022)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#may-2022">0.3.0 (May 2022)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#jan-2022">0.2.2 (Jan 2022)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#oct-2021">0.2.1 (Oct 2021)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#july-2021">0.2.0 (July 2021)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#may-2021">0.1.5 (May 2021)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#apr-2021">0.1.4 (APR 2021)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#feb-2021">0.1.3 (FEB 2021)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#id3">0.1.2 (FEB 2021)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#jan-2021">0.1.1 (Jan 2021)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releasenotes.html#dec-2020">0.1.0 (Dec 2020)</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+</section>
+<section id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">PVXS</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="netconfig.html">PVA Network Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstart.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start PVXS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartstd.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start Std</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartkrb.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start KRB</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartldap.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start LDAP</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spva.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Secure PVAccess</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaauth.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> AuthN &amp; AuthZ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvacerts.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Cert Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building from Source</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html#including-pvxs-in-your-application">Including PVXS in your application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cli.html">Command Line Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="value.html">Value Container API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="client.html">Client API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server.html">Server API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html">IOC Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html#qsrv-2">QSRV 2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Misc</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaglossary.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> SPVA Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releasenotes.html">Release Notes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+      <li>Next: <a href="overview.html" title="next chapter">Overview</a></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025 Michael Davidsaver, George McIntyre, Osprey DCS LLC, and SLAC.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
