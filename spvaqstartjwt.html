@@ -1,0 +1,1119 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>developer_guide Quick Start JWT - OUT OF SCOPE! &#8212; PVXS 1.4.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=350a9c04"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="icon" href="_static/favicon.png"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="developer_guide Quick Start Gateway" href="spvaqstartgw.html" />
+    <link rel="prev" title="developer_guide Quick Start LDAP" href="spvaqstartldap.html" />
+
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+<!-- Material Icons -->
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+
+<!-- Inject extra CSS for pages starting with 'spva' -->
+<link rel="stylesheet" type="text/css" href="_static/style.css" />
+
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="guide-quick-start-jwt-out-of-scope">
+<span id="quick-start-jwt"></span><h1><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start JWT - OUT OF SCOPE!<a class="headerlink" href="#guide-quick-start-jwt-out-of-scope" title="Link to this heading">¶</a></h1>
+<blockquote>
+<div><p>OUT OF SCOPE!  This feature is not Included in the scope of this project</p>
+</div></blockquote>
+<p>This section contains a Quick Start <i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> for the Secure PVAccess <em>Java Web Token (JWT) Authenticator</em>.</p>
+<blockquote>
+<div><p>The JWT Authenticator is an Authenticator that uses a JSON Web Token (JWT) to create an X.509 certificate.</p>
+<p>It verifies the token’s signature and claims (such as the issuer and expiration time) to ensure the token’s authenticity.</p>
+<p>The token’s subject (<code class="docutils literal notranslate"><span class="pre">sub</span></code>) is used as the certificate’s Common Name, and the token’s issuer (<code class="docutils literal notranslate"><span class="pre">iss</span></code>)
+(or associated domain) is used for the Organization field (the Organizational Unit is left blank by default).</p>
+<p>The token is sent to the PVACMS, which validates the token (checking the signature and payload
+against the trusted issuer). If the token is valid, PVACMS generates a signed certificate in the
+<code class="docutils literal notranslate"><span class="pre">VALID</span></code> state using the token’s identity information.</p>
+</div></blockquote>
+<p>Our starting point for this Quick Start Guide is the end of the <a class="reference internal" href="spvaqstartstd.html#quick-start-std"><span class="std std-ref"> Quick Start Std</span></a> so if you haven’t gone through it yet
+do that now then come back here.  You need to have users’s configured (<code class="docutils literal notranslate"><span class="pre">pvacms</span></code>, <code class="docutils literal notranslate"><span class="pre">admin</span></code>, <code class="docutils literal notranslate"><span class="pre">client</span></code>, and <code class="docutils literal notranslate"><span class="pre">client</span></code>).
+We will set up a containerized JWT environment to simulate an identity provider and issue tokens for our users.
+We will also configure PVACMS to trust the JWT issuer’s validation URI. Then we’ll use a JWT to obtain certificates for a
+server and a client, and demonstrate a Secure PVAccess connection using those certificates.</p>
+<p>See <a class="reference internal" href="spva.html#secure-pvaccess"><span class="std std-ref"> Secure PVAccess</span></a> for general documentation on Secure PVAccess.</p>
+<p>Other Quick Start Guides:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="spvaqstart.html#quick-start"><span class="std std-ref"> Quick Start PVXS</span></a></p></li>
+<li><p><a class="reference internal" href="spvaqstartstd.html#quick-start-std"><span class="std std-ref"> Quick Start Std</span></a></p></li>
+<li><p><a class="reference internal" href="spvaqstartkrb.html#quick-start-krb"><span class="std std-ref"> Quick Start KRB</span></a></p></li>
+<li><p><a class="reference internal" href="spvaqstartldap.html#quick-start-ldap"><span class="std std-ref"> Quick Start LDAP</span></a></p></li>
+<li><p><a class="reference internal" href="spvaqstartgw.html#quick-start-gw"><span class="std std-ref"> Quick Start Gateway</span></a></p></li>
+</ul>
+<section id="learn-you-will-learn">
+<h2><i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i> You will learn:<a class="headerlink" href="#learn-you-will-learn" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="#spva-qs-jwt-kdc"><span class="std std-ref">Creating a Sample JWT Issuer &amp; Validator in a Container</span></a>,</p></li>
+<li><p><a class="reference internal" href="#spva-qs-jwt-build"><span class="std std-ref">Building PVXS with Java Web Token (JWT) Authenticator support</span></a>,</p></li>
+<li><p><a class="reference internal" href="#spva-qs-jwt-pvacms"><span class="std std-ref">Configuring PVACMS for Java Web Tokens (JWT)</span></a>,</p></li>
+<li><p><a class="reference internal" href="#spva-qs-jwt-server"><span class="std std-ref">Creating certificates using the Java Web Token (JWT) Authenticator</span></a> and</p></li>
+<li><p><a class="reference internal" href="#spva-qs-jwt-client"><span class="std std-ref">Connecting a Java Web Token (JWT) Client to an SPVA Server</span></a></p></li>
+</ul>
+</section>
+<section id="pre-packagedprepackaged">
+<h2><i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>Prepackaged<a class="headerlink" href="#pre-packagedprepackaged" title="Link to this heading">¶</a></h2>
+<p>If you want a prepackaged environment, try the following.  You will need three terminal sessions.</p>
+<section id="load-image">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Load image<a class="headerlink" href="#load-image" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>¹</p></li>
+<li><p>Start the container with a prepackaged Secure PVAccess environment that includes JWT support</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--name<span class="w"> </span>spva_jwt<span class="w"> </span>georgeleveln/spva_jwt:latest
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">2025-03-08 14:40:43,319 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.</span>
+<span class="go">2025-03-08 14:40:43,319 INFO Included extra file &quot;/etc/supervisor/conf.d/jwt-issuer.conf&quot; during parsing</span>
+<span class="go">2025-03-08 14:40:43,319 INFO Included extra file &quot;/etc/supervisor/conf.d/pvacms.conf&quot; during parsing</span>
+<span class="go">2025-03-08 14:40:43,322 INFO supervisord started with pid 1</span>
+<span class="go">2025-03-08 14:40:44,334 INFO spawned: &#39;jwt-issuer&#39; with pid 7</span>
+<span class="go">2025-03-08 14:40:44,346 INFO spawned: &#39;pvacms&#39; with pid 9</span>
+<span class="go">2025-03-08 14:40:45,589 INFO success: jwt5-issuer entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+<span class="go">2025-03-08 14:40:45,589 INFO success: pvacms entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+</pre></div>
+</div>
+</section>
+<section id="service">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Service<a class="headerlink" href="#service" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>²</p></li>
+<li><p>log in as service account</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>softioc<span class="w"> </span>spva_jwt<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>get a token.  Use “secret” as the password</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nv">TOKEN</span><span class="o">=</span><span class="k">$(</span>curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:8080/default/token?sub=softioc&amp;password=secret&quot;</span><span class="k">)</span>
+<span class="nb">echo</span><span class="w"> </span><span class="si">${</span><span class="nv">TOKEN</span><span class="si">}</span><span class="w"> </span>&gt;<span class="w"> </span>token_file
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">curl -sG --data-urlencode &quot;token=$TOKEN&quot; &quot;http://localhost:8080/default/verify&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">{&quot;claims&quot;:{&quot;aud&quot;:&quot;default&quot;,&quot;exp&quot;:1755150736,&quot;iat&quot;:1755147136,&quot;iss&quot;:&quot;http://localhost:8080/default&quot;,&quot;jti&quot;:&quot;c40d1fc2-40f2-4bf9-a84a-fff5fadea38a&quot;,&quot;nbf&quot;:1755147136,&quot;sub&quot;:&quot;softioc&quot;},&quot;header&quot;:{&quot;alg&quot;:&quot;RS256&quot;,&quot;kid&quot;:&quot;demo-key-1&quot;,&quot;typ&quot;:&quot;JWT&quot;},&quot;valid&quot;:true}</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>create a server certificate using the Java Web Token (JWT) Authenticator</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnjwt<span class="w"> </span>-u<span class="w"> </span>server<span class="w"> </span>--token-file<span class="w"> </span>token_file
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/softioc/.config/pva/1.4/server.p12</span>
+<span class="go">Certificate identifier  : 47530d89:3826361579604613180</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-f<span class="w"> </span>~/.config/pva/1.4/server.p12
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Details:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID : 47530d89:3826361579604613180</span>
+<span class="go">Entity Subject : CN=softioc, O=localhost</span>
+<span class="go">Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority</span>
+<span class="go">Valid From     : Sat Mar 08 15:23:21 2025 UTC</span>
+<span class="go">Expires On     : Sun Mar 09 15:23:09 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+
+<span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: 47530d89:3826361579604613180</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Sat Mar 08 15:47:14 2025 UTC</span>
+<span class="go">Status Expires: Sat Mar 08 16:17:14 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="client">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Client<a class="headerlink" href="#client" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+<li><p>log in as a Secure PVAccess client</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>client<span class="w"> </span>spva_jwt<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>get a token.  Use “secret” as the password</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nv">TOKEN</span><span class="o">=</span><span class="k">$(</span>curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:8080/default/token?sub=client&amp;password=secret&quot;</span><span class="k">)</span>
+<span class="nb">echo</span><span class="w"> </span><span class="si">${</span><span class="nv">TOKEN</span><span class="si">}</span><span class="w"> </span>&gt;<span class="w"> </span>token_file
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">curl -sG --data-urlencode &quot;token=$TOKEN&quot; &quot;http://localhost:8080/default/verify&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">{&quot;claims&quot;:{&quot;aud&quot;:&quot;default&quot;,&quot;exp&quot;:1755150140,&quot;iat&quot;:1755146540,&quot;iss&quot;:&quot;http://localhost:8080/default&quot;,&quot;jti&quot;:&quot;c7cad85c-ae49-49cc-abf7-c3be923ce06b&quot;,&quot;nbf&quot;:1755146540,&quot;sub&quot;:&quot;client&quot;},&quot;header&quot;:{&quot;alg&quot;:&quot;RS256&quot;,&quot;kid&quot;:&quot;demo-key-1&quot;,&quot;typ&quot;:&quot;JWT&quot;},&quot;valid&quot;:true}</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">{ &quot;valid&quot;: true, &quot;claims&quot;: { &quot;sub&quot;: &quot;client&quot;, ... } }</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>create a client certificate using the Java Web Token (JWT) Authenticator</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnjwt<span class="w"> </span>--token-file<span class="w"> </span>token_file
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/client/.config/pva/1.4/client.p12</span>
+<span class="go">Certificate identifier  : 47530d89:15177030356392297708</span>
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-f<span class="w"> </span>~/.config/pva/1.4/client.p12
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Details:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID : 47530d89:15177030356392297708</span>
+<span class="go">Entity Subject : CN=client, O=localhost</span>
+<span class="go">Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority</span>
+<span class="go">Valid From     : Sat Mar 08 15:31:44 2025 UTC</span>
+<span class="go">Expires On     : Sun Mar 09 15:27:50 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+
+<span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: 47530d89:15177030356392297708</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Sat Mar 08 15:40:20 2025 UTC</span>
+<span class="go">Status Expires: Sat Mar 08 16:10:20 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="start-softioc">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Start SoftIOC<a class="headerlink" href="#start-softioc" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>²</p></li>
+<li><p>start SoftIOC</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>softIocPVX<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-m<span class="w"> </span><span class="nv">user</span><span class="o">=</span>test,N<span class="o">=</span>tst,P<span class="o">=</span>tst<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testiocg.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-G<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.json<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-a<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.tls.acf
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">INFO: PVXS QSRV2 is loaded, permitted, and ENABLED.</span>
+<span class="go">2025-03-08T15:36:11.265341125 WARN pvxs.tcp.init Server unable to bind TCP port 5075, falling back to [::]:39377</span>
+<span class="go">2025-03-08T15:36:11.265436375 WARN pvxs.tcp.init Server unable to bind TLS port 5076, falling back to [::]:34381</span>
+<span class="go">Starting iocInit</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="gp">#</span><span class="c1"># EPICS R7.0.8.2-DEV</span>
+<span class="gp">#</span><span class="c1"># Rev. R7.0.8.1-123-g48607a42586b1a316cd6</span>
+<span class="gp">#</span><span class="c1"># Rev. Date Git: 2024-11-29 17:08:28 +0000</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="go">iocRun: All initialization complete</span>
+<span class="go">epics&gt;</span>
+</pre></div>
+</div>
+</section>
+<section id="get-pv-value">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Get PV value<a class="headerlink" href="#get-pv-value" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+<li><p>get a PV <code class="docutils literal notranslate"><span class="pre">test:enumExample</span></code> value from the SoftIOC</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxinfo<span class="w"> </span>-v<span class="w"> </span>test:enumExample
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Effective config</span>
+<span class="go">EPICS_PVA_AUTO_ADDR_LIST=YES</span>
+<span class="go">EPICS_PVA_BROADCAST_PORT=5076</span>
+<span class="go">EPICS_PVA_CONN_TMO=30</span>
+<span class="go">EPICS_PVA_SERVER_PORT=5075</span>
+<span class="go">EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.4/client.p12</span>
+<span class="go">EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp</span>
+<span class="go">EPICS_PVA_TLS_PORT=5076</span>
+<span class="go">XDG_CONFIG_HOME=/home/client/.config/pva/1.4</span>
+<span class="go">XDG_DATA_HOME=/home/client/.local/share/pva/1.4</span>
+<span class="gp"># </span>TLS<span class="w"> </span>x509:47530d89:3826361579604613181:EPICS<span class="w"> </span>Root<span class="w"> </span>Certificate<span class="w"> </span>Authority/client@172.17.0.2:34381
+<span class="go">test:enumExample from 172.17.0.2:34381</span>
+<span class="go">struct &quot;epics:nt/NTEnum:1.0&quot; {</span>
+<span class="go">    struct &quot;enum_t&quot; {</span>
+<span class="go">        int32_t index</span>
+<span class="go">        string[] choices</span>
+<span class="go">    } value</span>
+<span class="go">    struct &quot;alarm_t&quot; {</span>
+<span class="go">        int32_t severity</span>
+<span class="go">        int32_t status</span>
+<span class="go">        string message</span>
+<span class="go">    } alarm</span>
+<span class="go">    struct &quot;time_t&quot; {</span>
+<span class="go">        int64_t secondsPastEpoch</span>
+<span class="go">        int32_t nanoseconds</span>
+<span class="go">        int32_t userTag</span>
+<span class="go">    } timeStamp</span>
+<span class="go">    struct {</span>
+<span class="go">        string description</span>
+<span class="go">    } display</span>
+<span class="go">}</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>verify that connection is TLS</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">TLS</span> <span class="pre">x509:47530d89:3826361579604613181:EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority/client</span> <span class="pre">&#64;</span> <span class="pre">172.17.0.2</span></code> indicates that:</p>
+<ul>
+<li><p>The connection is <code class="docutils literal notranslate"><span class="pre">TLS</span></code>,</p></li>
+<li><p>The Server end of the channel has been authenticated by the Root Certificate Authority <code class="docutils literal notranslate"><span class="pre">EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority</span></code></p></li>
+<li><p>The Server end of the channel’s name has been authenticated as <code class="docutils literal notranslate"><span class="pre">client</span></code> and is connecting from host <code class="docutils literal notranslate"><span class="pre">172.17.0.2</span></code></p></li>
+</ul>
+</li>
+</ul>
+</section>
+</section>
+<section id="step-by-step-step-by-step">
+<h2><i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i> Step-By-Step<a class="headerlink" href="#step-by-step-step-by-step" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Env. <em>pvacms</em></p></th>
+<th class="head"><p>Params. <em>pvacms</em></p></th>
+<th class="head"><p>Keys and Values</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>EPICS_AUTH_JWT_REQUEST_FORMAT</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--jwt-request-format</span></code></p></td>
+<td><p>string format for verification request payload</p>
+<p>e.g. <code class="docutils literal notranslate"><span class="pre">{</span> <span class="pre">&quot;token&quot;:</span> <span class="pre">&quot;#token#&quot;</span> <span class="pre">}</span></code></p>
+<p>e.g. <code class="docutils literal notranslate"><span class="pre">#token#</span></code></p>
+</td>
+<td><p>A string that is used verbatim as the payload for the verification
+request while substituting the string <code class="docutils literal notranslate"><span class="pre">#token#</span></code> for the token
+value, and <code class="docutils literal notranslate"><span class="pre">#kid#</span></code> for the key id. This is used when the
+verification server requires a formatted payload for the
+verification request. If the string is simply <code class="docutils literal notranslate"><span class="pre">#token#</span></code> (default)
+then the verification endpoint is called with the raw token as
+the payload.</p></td>
+</tr>
+<tr class="row-odd"><td><p>EPICS_AUTH_JWT_REQUEST_METHOD</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--jwt-request-method</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POST</span></code> (default)
+<code class="docutils literal notranslate"><span class="pre">GET`</span></code></p>
+<p>e.g. of call made for GET:</p>
+<p><strong>GET</strong> /api/validate-token HTTP/1.1</p>
+<p><strong>Authorization</strong>: Bearer eyJhbGcXVCJ9…</p>
+</td>
+<td><p>This determines whether the endpoint will be called with
+<code class="docutils literal notranslate"><span class="pre">HTTP</span> <span class="pre">GET</span></code> or <code class="docutils literal notranslate"><span class="pre">POST</span></code> .
+If called with <code class="docutils literal notranslate"><span class="pre">POST</span></code>, then the payload is exactly what is defined
+by the <code class="docutils literal notranslate"><span class="pre">EPICS_AUTH_JWT_RESPONSE_FORMAT</span></code> variable.
+If called with GET, then the token is passed in the
+<strong>Authorization</strong> header of the <code class="docutils literal notranslate"><span class="pre">HTTP</span> <span class="pre">GET</span></code> request</p></td>
+</tr>
+<tr class="row-even"><td><p>EPICS_AUTH_JWT_RESPONSE_FORMAT</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--jwt-response-format</span></code></p></td>
+<td><p>string format for verification response value</p>
+<dl class="simple">
+<dt>e.g. <code class="docutils literal notranslate"><span class="pre">{</span> <span class="pre">&quot;payload&quot;:</span> <span class="pre">{</span> <span class="pre">*</span> <span class="pre">},</span></code></dt><dd><p>``  “valid”: #response# }``</p>
+</dd>
+</dl>
+<p>e.g. <code class="docutils literal notranslate"><span class="pre">#response#</span></code></p>
+</td>
+<td><p>A pattern string that we can use to decode the response from a
+verification endpoint if the response is formatted text. All white
+space is removed in the given string and in the response. Then all
+the text prior to <code class="docutils literal notranslate"><span class="pre">#response#</span></code> is matched and removed from the
+response and all the text after the response is likewise removed,
+what remains is the response value.
+An asterisk in the string matches any sequence of characters in the
+response. It is converted to lowercase and interpreted as valid
+if it equals <code class="docutils literal notranslate"><span class="pre">valid</span></code>, <code class="docutils literal notranslate"><span class="pre">ok</span></code>, <code class="docutils literal notranslate"><span class="pre">true</span></code>, <code class="docutils literal notranslate"><span class="pre">t</span></code>, <code class="docutils literal notranslate"><span class="pre">yes</span></code>, <code class="docutils literal notranslate"><span class="pre">y</span></code>, or
+<code class="docutils literal notranslate"><span class="pre">1</span></code>.  If the string is <code class="docutils literal notranslate"><span class="pre">#response#</span></code> (default) then the response
+is raw and is converted to lowercase and compared without removing
+any formatting</p></td>
+</tr>
+<tr class="row-odd"><td><p>EPICS_AUTH_JWT_TRUSTED_URI</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--jwt-trusted-uri</span></code></p></td>
+<td><p>uri of JWT validation endpoint</p>
+<p>e.g. <code class="docutils literal notranslate"><span class="pre">http://issuer/api/validate-token</span></code></p>
+</td>
+<td><p>Trusted URI of the validation endpoint including the <code class="docutils literal notranslate"><span class="pre">http://</span></code>,
+<code class="docutils literal notranslate"><span class="pre">https://</span></code>, and port number.  There is no default, it must be
+the text prior to <code class="docutils literal notranslate"><span class="pre">#response#</span></code> is matched and removed from the
+specified.  This is used to compare to the <code class="docutils literal notranslate"><span class="pre">iss</span></code> field in the
+decoded token payload if it is provided.  If it is not the same,
+then the validation fails.  If the <code class="docutils literal notranslate"><span class="pre">iss</span></code> field is missing, then
+the value of this variable is taken as the validation URI.</p></td>
+</tr>
+<tr class="row-even"><td><p>EPICS_AUTH_JWT_USE_RESPONSE_CODE</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--jwt-use-response-code</span></code></p></td>
+<td><p>case insensitive:
+<code class="docutils literal notranslate"><span class="pre">YES</span></code>, <code class="docutils literal notranslate"><span class="pre">TRUE</span></code>,  or <code class="docutils literal notranslate"><span class="pre">1</span></code></p></td>
+<td><p>If set this tells PVACMS that when it receives a <code class="docutils literal notranslate"><span class="pre">200</span></code>
+HTTP-response code from the HTTP request then the token is valid,
+and invalid for any other response code.</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Env. <em>authnjwt</em></p></th>
+<th class="head"><p>Params. <em>authjwt</em></p></th>
+<th class="head"><p>Keys and Values</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>EPICS_AUTH_JWT_FILE</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--token-file</span> <span class="pre">&lt;file&gt;</span></code></p></td>
+<td><p>location of JWT file
+e.g. <code class="docutils literal notranslate"><span class="pre">~/.config/pva/1.4/jwt.txt</span></code></p></td>
+<td><p>file containing JWT token text</p></td>
+</tr>
+</tbody>
+</table>
+<section id="step-docker-image">
+<h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Docker Image<a class="headerlink" href="#step-docker-image" title="Link to this heading">¶</a></h3>
+<section id="use-a-prepackaged-spva-std-image">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Use a Prepackaged spva_std image<a class="headerlink" href="#use-a-prepackaged-spva-std-image" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>¹</p></li>
+<li><p>open a terminal and load pre-built image</p></li>
+<li><p>don’t forget to add /bin/bash at the end to suppress running the pvacms</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--name<span class="w"> </span>spva_jwt<span class="w"> </span>georgeleveln/spva_std:latest<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-jwt-issuer-validator">
+<span id="spva-qs-jwt-kdc"></span><h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> JWT Issuer &amp; Validator<a class="headerlink" href="#step-jwt-issuer-validator" title="Link to this heading">¶</a></h3>
+<p>This section shows how to install and configure a Java Web Token (JWT) Issuer &amp; Validator.  This
+is included to enable you to test the Java Web Token (JWT) Authenticator before deploying it
+into your network.  It will enable you to configure EPICS agents that
+have valid JWTs that can be exchanged for X.509 certificates
+using the Java Web Token (JWT) Authenticator.</p>
+<section id="install-prerequisites">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Install prerequisites<a class="headerlink" href="#install-prerequisites" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Add Python to run our JWT Issuer and Validator</p>
+<ul>
+<li><p>python3</p></li>
+<li><dl class="simple">
+<dt>python3-pip - for package management in python</dt><dd><ul>
+<li><p>flask</p></li>
+<li><p>pyjwt package for parsing JTWs</p></li>
+<li><p>cryptography package for cryptographic keys</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>apt-get<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+apt-get<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>python3<span class="w"> </span>python3-pip<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>python3-flask<span class="w"> </span>python3-jwt<span class="w"> </span>python3-cryptography<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>curl<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+rm<span class="w"> </span>-rf<span class="w"> </span>/var/lib/apt/lists/*
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Hit:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease</span>
+<span class="go">Get:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease [126 kB]</span>
+<span class="go">Get:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease [126 kB]</span>
+<span class="go">Get:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease [126 kB]</span>
+<span class="go">Get:5 http://ports.ubuntu.com/ubuntu-ports noble-updates/multiverse arm64 Packages [39.2 kB]</span>
+<span class="go">Get:6 http://ports.ubuntu.com/ubuntu-ports noble-updates/universe arm64 Packages [1422 kB]</span>
+<span class="go">Get:7 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 Packages [1705 kB]</span>
+<span class="go">Get:8 http://ports.ubuntu.com/ubuntu-ports noble-updates/restricted arm64 Packages [2704 kB]</span>
+<span class="go">Get:9 http://ports.ubuntu.com/ubuntu-ports noble-backports/main arm64 Packages [48.8 kB]</span>
+<span class="go">Get:10 http://ports.ubuntu.com/ubuntu-ports noble-backports/universe arm64 Packages [37.2 kB] ...</span>
+</pre></div>
+</div>
+</section>
+<section id="rebuild-pvxs">
+<span id="spva-qs-jwt-build"></span><h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Rebuild pvxs<a class="headerlink" href="#rebuild-pvxs" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>enable Java Web Token (JWT) Authenticator by updating <code class="docutils literal notranslate"><span class="pre">CONFIG_SITE.local</span></code></p></li>
+<li><p>do a clean rebuild of pvxs</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">PROJECT_HOME</span><span class="o">=</span>/opt/epics
+<span class="nb">cd</span><span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>
+
+cat<span class="w"> </span>&gt;&gt;<span class="w"> </span>CONFIG_SITE.local<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">EVENT2_HAS_OPENSSL = YES</span>
+<span class="s">PVXS_ENABLE_PVACMS = YES</span>
+<span class="s">PVXS_ENABLE_JWT_AUTH = YES</span>
+<span class="s">EOF</span>
+
+<span class="nb">cd</span><span class="w"> </span>pvxs<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+make<span class="w"> </span>distclean<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>make<span class="w"> </span>-j10<span class="w"> </span>all
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">make -C ./configure realclean</span>
+<span class="go">make[1]: Entering directory &#39;/opt/epics/pvxs/configure&#39;</span>
+<span class="go">rm -rf O.*</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/configure&#39;</span>
+<span class="go">make -C ./setup realclean</span>
+<span class="go">make[1]: Entering directory &#39;/opt/epics/pvxs/setup&#39;</span>
+<span class="go">rm -rf O.*</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/setup&#39;</span>
+<span class="go">make -C ./src realclean</span>
+<span class="go">make[1]: Entering directory &#39;/opt/epics/pvxs/src&#39;</span>
+<span class="go">rm -rf O.*</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/src&#39;</span>
+<span class="go">make -C ./tools realclean</span>
+<span class="go">make[1]: Entering directory &#39;/opt/epics/pvxs/tools&#39;</span>
+<span class="go">rm -rf O.*</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/tools&#39;</span>
+<span class="go">...</span>
+<span class="go">/usr/bin/g++ -o testtlswithcms  -L/opt/epics/epics-base/lib/linux-aarch64 -L/opt/epics/pvxs/lib/linux-aarch64 -Wl,-rpath,/opt/epics/epics-base/lib/linux-aarch64 -Wl,-rpath,/opt/epics/pvxs/lib/linux-aarch64     -Wl,--as-needed -Wl,--compress-debug-sections=zlib      -rdynamic         testtlswithcms.o certstatusfactory.o certstatusmanager.o certstatus.o    -lpvxs -lCom  -levent_openssl -levent_core -levent_pthreads -lssl -lcrypto</span>
+<span class="go">perl -CSD /opt/epics/epics-base/bin/linux-aarch64/makeTestfile.pl linux-aarch64 linux-aarch64 testtlswithcms.t testtlswithcms</span>
+<span class="go">make[2]: Leaving directory &#39;/opt/epics/pvxs/test/O.linux-aarch64&#39;</span>
+<span class="go">make[1]: Leaving directory &#39;/opt/epics/pvxs/test&#39;</span>
+</pre></div>
+</div>
+</section>
+<section id="configure-jwt-issuer-and-validator">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Configure JWT Issuer and Validator<a class="headerlink" href="#configure-jwt-issuer-and-validator" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>configure the JWT Issuer and Validator</p>
+<ul>
+<li><p>create application</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/opt/epics/app.py<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">import base64</span>
+<span class="s">import os</span>
+<span class="s">import uuid</span>
+<span class="s">from datetime import datetime, timedelta, timezone</span>
+<span class="s">from pathlib import Path</span>
+
+<span class="s">from flask import Flask, request, jsonify, Response</span>
+<span class="s">import jwt</span>
+<span class="s">from cryptography.hazmat.primitives import serialization</span>
+<span class="s">from cryptography.hazmat.primitives.asymmetric import rsa</span>
+
+<span class="s">app = Flask(__name__)</span>
+
+<span class="s"># --- Config (env overridable) ---</span>
+<span class="s">PORT = int(os.getenv(&quot;PORT&quot;, &quot;8080&quot;))</span>
+<span class="s">DEFAULT_ISS = os.getenv(&quot;ISSUER&quot;, &quot;http://localhost:8080/default&quot;)</span>
+<span class="s">DEFAULT_AUD = os.getenv(&quot;DEFAULT_AUDIENCE&quot;, &quot;default&quot;)</span>
+<span class="s">DEFAULT_EXP_SECS = int(os.getenv(&quot;DEFAULT_EXP_SECS&quot;, &quot;3600&quot;))</span>
+<span class="s">ALGO = os.getenv(&quot;ALGO&quot;, &quot;RS256&quot;)  # RS256 (default) or HS256</span>
+<span class="s">KEY_DIR = Path(os.getenv(&quot;KEY_DIR&quot;, &quot;/data/keys&quot;))</span>
+<span class="s">KID = os.getenv(&quot;KID&quot;, &quot;demo-key-1&quot;)</span>
+<span class="s">HS_SECRET = os.getenv(&quot;HS_SECRET&quot;, &quot;dev-secret-change-me&quot;)  # only used if ALGO=HS256</span>
+
+<span class="s"># --- Keys (ephemeral by default; files used only if writable and present) ---</span>
+<span class="s">_priv_key = None</span>
+<span class="s">_pub_key = None</span>
+
+<span class="s">def _b64u(data: bytes) -&gt; str:</span>
+<span class="s">    return base64.urlsafe_b64encode(data).rstrip(b&quot;=&quot;).decode(&quot;ascii&quot;)</span>
+
+<span class="s">def _ensure_keys():</span>
+<span class="s">    &quot;&quot;&quot;Generate or load RSA keys for RS256. HS256 uses HS_SECRET.&quot;&quot;&quot;</span>
+<span class="s">    global _priv_key, _pub_key</span>
+<span class="s">    if ALGO.upper() == &quot;HS256&quot;:</span>
+<span class="s">        return  # nothing to do</span>
+
+<span class="s">    KEY_DIR.mkdir(parents=True, exist_ok=True)</span>
+<span class="s">    priv_path = KEY_DIR / &quot;id_rsa.pem&quot;</span>
+<span class="s">    pub_path = KEY_DIR / &quot;id_rsa.pub&quot;</span>
+
+<span class="s">    if priv_path.exists() and pub_path.exists():</span>
+<span class="s">        _priv_key = serialization.load_pem_private_key(priv_path.read_bytes(), password=None)</span>
+<span class="s">        _pub_key = serialization.load_pem_public_key(pub_path.read_bytes())</span>
+<span class="s">        return</span>
+
+<span class="s">    # Generate ephemeral RSA keypair</span>
+<span class="s">    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)</span>
+<span class="s">    pub = key.public_key()</span>
+
+<span class="s">    _priv_key = key</span>
+<span class="s">    _pub_key = pub</span>
+
+<span class="s">    # Best-effort write (ok if it fails; we remain in-memory)</span>
+<span class="s">    try:</span>
+<span class="s">        priv_bytes = key.private_bytes(</span>
+<span class="s">            encoding=serialization.Encoding.PEM,</span>
+<span class="s">            format=serialization.PrivateFormat.PKCS8,</span>
+<span class="s">            encryption_algorithm=serialization.NoEncryption(),</span>
+<span class="s">        )</span>
+<span class="s">        pub_bytes = pub.public_bytes(</span>
+<span class="s">            encoding=serialization.Encoding.PEM,</span>
+<span class="s">            format=serialization.PublicFormat.SubjectPublicKeyInfo,</span>
+<span class="s">        )</span>
+<span class="s">        priv_path.write_bytes(priv_bytes)</span>
+<span class="s">        pub_path.write_bytes(pub_bytes)</span>
+<span class="s">    except Exception:</span>
+<span class="s">        pass</span>
+
+<span class="s">def _current_priv_key():</span>
+<span class="s">    return HS_SECRET if ALGO.upper() == &quot;HS256&quot; else _priv_key</span>
+
+<span class="s">def _current_pub_key():</span>
+<span class="s">    return HS_SECRET if ALGO.upper() == &quot;HS256&quot; else _pub_key</span>
+
+<span class="s">def _rsa_jwk():</span>
+<span class="s">    if ALGO.upper() == &quot;HS256&quot; or _pub_key is None:</span>
+<span class="s">        return []</span>
+<span class="s">    nums = _pub_key.public_numbers()</span>
+<span class="s">    n = _b64u(nums.n.to_bytes((nums.n.bit_length() + 7) // 8, &quot;big&quot;))</span>
+<span class="s">    e = _b64u(nums.e.to_bytes((nums.e.bit_length() + 7) // 8, &quot;big&quot;))</span>
+<span class="s">    return [{</span>
+<span class="s">        &quot;kty&quot;: &quot;RSA&quot;,</span>
+<span class="s">        &quot;kid&quot;: KID,</span>
+<span class="s">        &quot;alg&quot;: &quot;RS256&quot;,</span>
+<span class="s">        &quot;use&quot;: &quot;sig&quot;,</span>
+<span class="s">        &quot;n&quot;: n,</span>
+<span class="s">        &quot;e&quot;: e,</span>
+<span class="s">    }]</span>
+
+<span class="s"># Initialize keys at import</span>
+<span class="s">_ensure_keys()</span>
+
+<span class="s">@app.get(&quot;/healthz&quot;)</span>
+<span class="s">def healthz():</span>
+<span class="s">    return {&quot;status&quot;: &quot;ok&quot;}</span>
+
+<span class="s"># Issue: GET /default/token?sub=client&amp;password=secret[&amp;aud=...&amp;iss=...&amp;exp_secs=...]</span>
+<span class="s">@app.get(&quot;/default/token&quot;)</span>
+<span class="s">def issue_token():</span>
+<span class="s">    sub = request.args.get(&quot;sub&quot;)</span>
+<span class="s">    pwd = request.args.get(&quot;password&quot;)</span>
+<span class="s">    if not sub:</span>
+<span class="s">        return jsonify(error=&quot;missing &#39;sub&#39;&quot;), 400</span>
+<span class="s">    if pwd != &quot;secret&quot;:</span>
+<span class="s">        return &quot;Forbidden&quot;, 403</span>
+
+<span class="s">    aud = request.args.get(&quot;aud&quot;, DEFAULT_AUD)</span>
+<span class="s">    iss = request.args.get(&quot;iss&quot;, DEFAULT_ISS)</span>
+<span class="s">    exp_secs = int(request.args.get(&quot;exp_secs&quot;, DEFAULT_EXP_SECS))</span>
+
+<span class="s">    now = datetime.now(timezone.utc)</span>
+<span class="s">    claims = {</span>
+<span class="s">        &quot;sub&quot;: sub,</span>
+<span class="s">        &quot;iss&quot;: iss,</span>
+<span class="s">        &quot;aud&quot;: aud,</span>
+<span class="s">        &quot;iat&quot;: int(now.timestamp()),</span>
+<span class="s">        &quot;nbf&quot;: int(now.timestamp()),</span>
+<span class="s">        &quot;exp&quot;: int((now + timedelta(seconds=exp_secs)).timestamp()),</span>
+<span class="s">        &quot;jti&quot;: str(uuid.uuid4()),</span>
+<span class="s">    }</span>
+
+<span class="s">    headers = {&quot;kid&quot;: KID, &quot;typ&quot;: &quot;JWT&quot;}</span>
+<span class="s">    token = jwt.encode(</span>
+<span class="s">        claims,</span>
+<span class="s">        _current_priv_key(),</span>
+<span class="s">        algorithm=ALGO,</span>
+<span class="s">        headers=headers,</span>
+<span class="s">    )</span>
+<span class="s">    # Return RAW token (text/plain), not JSON</span>
+<span class="s">    return Response(token, mimetype=&quot;text/plain&quot;)</span>
+
+<span class="s"># Verify: GET /default/verify?token=... [&amp;expected_iss=...][&amp;expected_aud=...]</span>
+<span class="s">@app.get(&quot;/default/verify&quot;)</span>
+<span class="s">def verify_token():</span>
+<span class="s">    token = request.args.get(&quot;token&quot;)</span>
+<span class="s">    if not token:</span>
+<span class="s">        return jsonify(valid=False, error=&quot;missing &#39;token&#39;&quot;), 400</span>
+
+<span class="s">    expected_iss = request.args.get(&quot;expected_iss&quot;, DEFAULT_ISS)</span>
+<span class="s">    expected_aud = request.args.get(&quot;expected_aud&quot;)  # optional</span>
+
+<span class="s">    options = {</span>
+<span class="s">        &quot;require&quot;: [&quot;exp&quot;, &quot;iat&quot;, &quot;nbf&quot;, &quot;iss&quot;, &quot;sub&quot;],</span>
+<span class="s">        &quot;verify_aud&quot;: bool(expected_aud),</span>
+<span class="s">    }</span>
+
+<span class="s">    try:</span>
+<span class="s">        decoded = jwt.decode(</span>
+<span class="s">            token,</span>
+<span class="s">            _current_pub_key(),</span>
+<span class="s">            algorithms=[ALGO],</span>
+<span class="s">            issuer=expected_iss,</span>
+<span class="s">            audience=expected_aud if expected_aud else None,</span>
+<span class="s">            options=options,</span>
+<span class="s">        )</span>
+<span class="s">        header = jwt.get_unverified_header(token)</span>
+<span class="s">        return jsonify(valid=True, header=header, claims=decoded)</span>
+<span class="s">    except Exception as e:</span>
+<span class="s">        return jsonify(valid=False, error=str(e))</span>
+
+<span class="s"># JWKS</span>
+<span class="s">@app.get(&quot;/.well-known/jwks.json&quot;)</span>
+<span class="s">@app.get(&quot;/default/jwks&quot;)</span>
+<span class="s">def jwks():</span>
+<span class="s">    return jsonify({&quot;keys&quot;: _rsa_jwk()})</span>
+
+<span class="s">if __name__ == &quot;__main__&quot;:</span>
+<span class="s">    app.run(host=&quot;0.0.0.0&quot;, port=PORT)</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+</section>
+<section id="configure-pvacms-for-java-web-token-jwt-authenticator">
+<span id="spva-qs-jwt-pvacms"></span><h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Configure PVACMS for Java Web Token (JWT) Authenticator<a class="headerlink" href="#configure-pvacms-for-java-web-token-jwt-authenticator" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>set up environment for pvacms
+- request contains just token, no JSON
+- use HTTP GET with parameter = <code class="docutils literal notranslate"><span class="pre">token</span></code> set to token value.
+- the response will be any valid JSON with a tag <code class="docutils literal notranslate"><span class="pre">valid</span></code> whose value will indicate whether the token is valid
+- specify the url to use to verify tokens <a class="reference external" href="http://localhost:8080/default/verify">http://localhost:8080/default/verify</a>.
+- for verification token is URL encoded as parameter <code class="docutils literal notranslate"><span class="pre">token</span></code></p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;&gt;<span class="w"> </span>/home/pvacms/.spva_jwt_bashrc<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">export EPICS_AUTH_JWT_REQUEST_FORMAT=&#39;#token#&#39;</span>
+<span class="s">export EPICS_AUTH_JWT_REQUEST_METHOD=&#39;GET&#39;</span>
+<span class="s">export EPICS_AUTH_JWT_RESPONSE_FORMAT=&#39;{ *, &quot;valid&quot;: &quot;#response#&quot; }&#39;</span>
+<span class="s">export EPICS_AUTH_JWT_TRUSTED_URI=&#39;http://localhost:8080/default/verify&#39;</span>
+<span class="s">#export EPICS_AUTH_JWT_USE_RESPONSE_CODE=NO</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>set up pvacms to run this new config</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;source ~/.spva_jwt_bashrc&quot;</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>/home/pvacms/.bashrc
+</pre></div>
+</div>
+</section>
+<section id="configure-supervisor-to-run-the-jwt-authenticator">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Configure Supervisor to run the JWT authenticator<a class="headerlink" href="#configure-supervisor-to-run-the-jwt-authenticator" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>configure jwt_issuer supervisord</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;<span class="w"> </span>/etc/supervisor/conf.d/jwt_issuer.conf<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">[program:jwt-issuer]</span>
+<span class="s">command=python3 /opt/epics/app.py</span>
+<span class="s">autostart=true</span>
+<span class="s">autorestart=true</span>
+<span class="s">stdout_logfile=/var/log/supervisor/jwt-issuer.out.log</span>
+<span class="s">stderr_logfile=/var/log/supervisor/jwt-issuer.err.log</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+</section>
+<section id="start-services">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_6</i> Start Services<a class="headerlink" href="#start-services" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>update pvacms supervisor config to include Java Web Token (JWT) Authenticator configuration</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>&gt;&gt;<span class="w"> </span>/etc/supervisor/conf.d/pvacms.conf<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<span class="s">environment=EPICS_AUTH_JWT_RESPONSE_FORMAT=&#39;{ *, &quot;valid&quot;: &quot;#response#&quot; }&#39;,EPICS_AUTH_JWT_TRUSTED_URI=&quot;http://localhost:8080/default/verify&quot;</span>
+<span class="s">EOF</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>start jwt_issuer, and pvacms with Java Web Token (JWT) Authenticator support</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>/usr/bin/supervisord<span class="w"> </span>-c<span class="w"> </span>/etc/supervisor/supervisord.conf
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">2025-08-14 05:38:25,124 INFO Included extra file &quot;/etc/supervisor/conf.d/jwt_issuer.conf&quot; during parsing</span>
+<span class="go">2025-08-14 05:38:25,124 INFO Included extra file &quot;/etc/supervisor/conf.d/pvacms.conf&quot; during parsing</span>
+<span class="go">2025-08-14 05:38:25,124 INFO Set uid to user 0 succeeded</span>
+<span class="go">2025-08-14 05:38:25,125 INFO supervisord started with pid 2774</span>
+<span class="go">2025-08-14 05:38:26,136 INFO spawned: &#39;jwt-issuer&#39; with pid 2775</span>
+<span class="go">2025-08-14 05:38:26,138 INFO spawned: &#39;pvacms&#39; with pid 2776</span>
+<span class="go">2025-08-14 05:38:27,493 INFO success: jwt-issuer entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+<span class="go">2025-08-14 05:38:27,493 INFO success: pvacms entered RUNNING state, process has stayed up for &gt; than 1 seconds (startsecs)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-run-softioc">
+<span id="spva-qs-jwt-server"></span><h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run SoftIOC<a class="headerlink" href="#step-run-softioc" title="Link to this heading">¶</a></h3>
+<section id="login-as-softioc-in-a-new-shell">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Login as softioc in a new shell<a class="headerlink" href="#login-as-softioc-in-a-new-shell" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>²</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>softioc<span class="w"> </span>spva_jwt<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+<section id="get-jwt-token">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Get JWT (token)<a class="headerlink" href="#get-jwt-token" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>get a token.  Use “secret” as the password</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nv">TOKEN</span><span class="o">=</span><span class="k">$(</span>curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:8080/default/token?sub=softioc&amp;password=secret&quot;</span><span class="k">)</span>
+<span class="nb">echo</span><span class="w"> </span><span class="si">${</span><span class="nv">TOKEN</span><span class="si">}</span><span class="w"> </span>&gt;<span class="w"> </span>token_file
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">curl -sG --data-urlencode &quot;token=$TOKEN&quot; &quot;http://localhost:8080/default/verify&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">{&quot;claims&quot;:{&quot;aud&quot;:&quot;default&quot;,&quot;exp&quot;:1755150736,&quot;iat&quot;:1755147136,&quot;iss&quot;:&quot;http://localhost:8080/default&quot;,&quot;jti&quot;:&quot;c40d1fc2-40f2-4bf9-a84a-fff5fadea38a&quot;,&quot;nbf&quot;:1755147136,&quot;sub&quot;:&quot;softioc&quot;},&quot;header&quot;:{&quot;alg&quot;:&quot;RS256&quot;,&quot;kid&quot;:&quot;demo-key-1&quot;,&quot;typ&quot;:&quot;JWT&quot;},&quot;valid&quot;:true}</span>
+</pre></div>
+</div>
+</section>
+<section id="get-certificate">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Get Certificate<a class="headerlink" href="#get-certificate" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>create a client server certificate</p>
+<ul>
+<li><p>creates client server certificate</p></li>
+<li><p>at location specified by <code class="docutils literal notranslate"><span class="pre">EPICS_PVAS_TLS_KEYCHAIN</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_CONFIG_HOME}/pva/1.4/server.p12</span></code> by default</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnjwt<span class="w"> </span>-u<span class="w"> </span>server<span class="w"> </span>--token-file<span class="w"> </span>token_file
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/client/.config/pva/1.4/server.p12</span>
+<span class="go">Certificate identifier  : b271f07a:12421554925305118824</span>
+</pre></div>
+</div>
+</section>
+<section id="check-the-certificate-status-is-valid">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Check the certificate status is VALID<a class="headerlink" href="#check-the-certificate-status-is-valid" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>check that the generated certificate is <code class="docutils literal notranslate"><span class="pre">VALID</span></code></p></li>
+<li><p>note that the <em>name</em> is <code class="docutils literal notranslate"><span class="pre">softioc</span></code> - picked up from <code class="docutils literal notranslate"><span class="pre">sub</span></code> in the JWT</p></li>
+<li><p>note that the <em>organization</em> is <code class="docutils literal notranslate"><span class="pre">localhost</span></code> - picked up from the issuer domain</p></li>
+<li><p>note that the <em>expiration date</em> is the same as the <code class="docutils literal notranslate"><span class="pre">exp</span></code> of the JWT</p></li>
+<li><p>note that the <em>start date</em> is set to the <code class="docutils literal notranslate"><span class="pre">nbf</span></code> of the JWT</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-f<span class="w"> </span>~/.config/pva/1.4/server.p12
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Details:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID : 47530d89:3826361579604613180</span>
+<span class="go">Entity Subject : CN=softioc, O=localhost</span>
+<span class="go">Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority</span>
+<span class="go">Valid From     : Sat Mar 08 15:23:21 2025 UTC</span>
+<span class="go">Expires On     : Sun Mar 09 15:23:09 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+
+<span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: 47530d89:3826361579604613180</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Sat Mar 08 15:47:14 2025 UTC</span>
+<span class="go">Status Expires: Sat Mar 08 16:17:14 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="run-secure-pvaccess-service">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Run Secure PVAccess Service<a class="headerlink" href="#run-secure-pvaccess-service" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>start the service</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>softIocPVX<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-m<span class="w"> </span><span class="nv">user</span><span class="o">=</span>test,N<span class="o">=</span>tst,P<span class="o">=</span>tst<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testiocg.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-d<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-G<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/image.json<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-a<span class="w"> </span><span class="si">${</span><span class="nv">PROJECT_HOME</span><span class="si">}</span>/pvxs/test/testioc.tls.acf
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">INFO: PVXS QSRV2 is loaded, permitted, and ENABLED.</span>
+<span class="go">2025-03-10T03:28:17.264206926 WARN pvxs.tcp.init Server unable to bind TCP port 5075, falling back to [::]:46831</span>
+<span class="go">2025-03-10T03:28:17.264284426 WARN pvxs.tcp.init Server unable to bind TLS port 5076, falling back to [::]:37027</span>
+<span class="go">Starting iocInit</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="gp">#</span><span class="c1"># EPICS R7.0.8.2-DEV</span>
+<span class="gp">#</span><span class="c1"># Rev. R7.0.8.1-123-g48607a42586b1a316cd6</span>
+<span class="gp">#</span><span class="c1"># Rev. Date Git: 2024-11-29 17:08:28 +0000</span>
+<span class="gp">#</span><span class="c1">###########################################################################</span>
+<span class="go">iocRun: All initialization complete</span>
+<span class="go">epics&gt;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-spva-client">
+<span id="spva-qs-jwt-client"></span><h3><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> SPVA Client<a class="headerlink" href="#step-spva-client" title="Link to this heading">¶</a></h3>
+<section id="login-as-client-in-a-new-shell">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Login as client in a new shell<a class="headerlink" href="#login-as-client-in-a-new-shell" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><i class="material-icons" style="vertical-align: middle;">computer</i>³</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>--user<span class="w"> </span>client<span class="w"> </span>spva_jwt<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</section>
+<section id="id1">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Get JWT (token)<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>get a token.  Use “secret” as the password</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nv">TOKEN</span><span class="o">=</span><span class="k">$(</span>curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:8080/default/token?sub=client&amp;password=secret&quot;</span><span class="k">)</span>
+<span class="nb">echo</span><span class="w"> </span><span class="si">${</span><span class="nv">TOKEN</span><span class="si">}</span><span class="w"> </span>&gt;<span class="w"> </span>token_file
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">curl -sG --data-urlencode &quot;token=$TOKEN&quot; &quot;http://localhost:8080/default/verify&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">{&quot;claims&quot;:{&quot;aud&quot;:&quot;default&quot;,&quot;exp&quot;:1755150140,&quot;iat&quot;:1755146540,&quot;iss&quot;:&quot;http://localhost:8080/default&quot;,&quot;jti&quot;:&quot;c7cad85c-ae49-49cc-abf7-c3be923ce06b&quot;,&quot;nbf&quot;:1755146540,&quot;sub&quot;:&quot;client&quot;},&quot;header&quot;:{&quot;alg&quot;:&quot;RS256&quot;,&quot;kid&quot;:&quot;demo-key-1&quot;,&quot;typ&quot;:&quot;JWT&quot;},&quot;valid&quot;:true}</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">{ &quot;valid&quot;: true, &quot;claims&quot;: { &quot;sub&quot;: &quot;client&quot;, ... } }</span>
+</pre></div>
+</div>
+</section>
+<section id="id2">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Get Certificate<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>create a client certificate</p>
+<ul>
+<li><p>creates a client certificate</p></li>
+<li><p>at location specified by <code class="docutils literal notranslate"><span class="pre">EPICS_PVA_TLS_KEYCHAIN</span></code> or <code class="docutils literal notranslate"><span class="pre">${XDG_CONFIG_HOME}/pva/1.4/client.p12</span></code> by default</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>authnjwt<span class="w"> </span>--token-file<span class="w"> </span>token_file
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Keychain file created   : /home/client/.config/pva/1.4/client.p12</span>
+<span class="go">Certificate identifier  : b271f07a:1204731550645534180</span>
+</pre></div>
+</div>
+</section>
+<section id="id3">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Check the certificate status is VALID<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>check that the generated certificate is <code class="docutils literal notranslate"><span class="pre">VALID</span></code></p></li>
+<li><p>note that the <em>name</em> is <code class="docutils literal notranslate"><span class="pre">client</span></code> - picked up from <code class="docutils literal notranslate"><span class="pre">sub</span></code> in the JWT</p></li>
+<li><p>note that the <em>organization</em> is <code class="docutils literal notranslate"><span class="pre">localhost</span></code> - picked up from the issuer domain</p></li>
+<li><p>note that the <em>expiration date</em> is the same as the <code class="docutils literal notranslate"><span class="pre">exp</span></code> of the JWT</p></li>
+<li><p>note that the <em>start date</em> is set to the <code class="docutils literal notranslate"><span class="pre">nbf</span></code> of the JWT</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxcert<span class="w"> </span>-f<span class="w"> </span>~/.config/pva/1.4/client.p12
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Certificate Details:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID : b271f07a:1204731550645534180</span>
+<span class="go">Entity Subject : CN=client, O=localhost</span>
+<span class="go">Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority</span>
+<span class="go">Valid From     : Mon Mar 10 03:32:57 2025 UTC</span>
+<span class="go">Expires On     : Tue Mar 11 03:30:32 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+
+<span class="go">Certificate Status:</span>
+<span class="go">============================================</span>
+<span class="go">Certificate ID: b271f07a:1204731550645534180</span>
+<span class="go">Status        : VALID</span>
+<span class="go">Status Issued : Mon Mar 10 03:33:58 2025 UTC</span>
+<span class="go">Status Expires: Mon Mar 10 04:03:58 2025 UTC</span>
+<span class="go">--------------------------------------------</span>
+</pre></div>
+</div>
+</section>
+<section id="test-tls-client-operations">
+<h4><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Test TLS client operations<a class="headerlink" href="#test-tls-client-operations" title="Link to this heading">¶</a></h4>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxget<span class="w"> </span>-F<span class="w"> </span>tree<span class="w"> </span>test:structExample
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">test:structExample</span>
+<span class="go">...</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>show that TLS is being used</p></li>
+</ul>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pvxinfo<span class="w"> </span>-v<span class="w"> </span>test:enumExample
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Effective config</span>
+<span class="go">EPICS_PVA_AUTO_ADDR_LIST=YES</span>
+<span class="go">EPICS_PVA_BROADCAST_PORT=5076</span>
+<span class="go">EPICS_PVA_CONN_TMO=30</span>
+<span class="go">EPICS_PVA_SERVER_PORT=5075</span>
+<span class="go">EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.4/client.p12</span>
+<span class="go">EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp</span>
+<span class="go">EPICS_PVA_TLS_PORT=5076</span>
+<span class="go">XDG_CONFIG_HOME=/home/client/.config/pva/1.4</span>
+<span class="go">XDG_DATA_HOME=/home/client/.local/share/pva/1.4</span>
+<span class="gp"># </span>TLS<span class="w"> </span>x509:b271f07a:12421554925305118824:EPICS<span class="w"> </span>Root<span class="w"> </span>Certificate<span class="w"> </span>Authority/client@172.17.0.2:37027
+<span class="go">test:enumExample from 172.17.0.2:37027</span>
+<span class="go">struct &quot;epics:nt/NTEnum:1.0&quot; {</span>
+<span class="go">    struct &quot;enum_t&quot; {</span>
+<span class="go">        int32_t index</span>
+<span class="go">        string[] choices</span>
+<span class="go">    } value</span>
+<span class="go">    struct &quot;alarm_t&quot; {</span>
+<span class="go">        int32_t severity</span>
+<span class="go">        int32_t status</span>
+<span class="go">        string message</span>
+<span class="go">    } alarm</span>
+<span class="go">    struct &quot;time_t&quot; {</span>
+<span class="go">        int64_t secondsPastEpoch</span>
+<span class="go">        int32_t nanoseconds</span>
+<span class="go">        int32_t userTag</span>
+<span class="go">    } timeStamp</span>
+<span class="go">    struct {</span>
+<span class="go">        string description</span>
+<span class="go">    } display</span>
+<span class="go">}</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">TLS</span> <span class="pre">x509:b271f07a:12421554925305118824:EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority/client</span> <span class="pre">&#64;</span> <span class="pre">172.17.0.2</span></code> indicates that:</p>
+<ul>
+<li><p>The connection is <code class="docutils literal notranslate"><span class="pre">TLS</span></code>,</p></li>
+<li><p>The Server end of the channel has been authenticated by the Root Certificate Authority <code class="docutils literal notranslate"><span class="pre">EPICS</span> <span class="pre">Root</span> <span class="pre">Certificate</span> <span class="pre">Authority</span></code></p></li>
+<li><p>The Server end of the channel’s name has been authenticated as <code class="docutils literal notranslate"><span class="pre">client</span></code> and is connecting from host <code class="docutils literal notranslate"><span class="pre">172.17.0.2</span></code></p></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">PVXS</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="netconfig.html">PVA Network Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstart.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start PVXS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartstd.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start Std</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartkrb.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start KRB</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartldap.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start LDAP</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start JWT - OUT OF SCOPE!</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#learn-you-will-learn"><i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i> You will learn:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pre-packagedprepackaged"><i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>Prepackaged</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#load-image"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i> Load image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#service"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i> Service</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#client"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i> Client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#start-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i> Start SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#get-pv-value"><i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i> Get PV value</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#step-by-step-step-by-step"><i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i> Step-By-Step</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#step-docker-image"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Docker Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-jwt-issuer-validator"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> JWT Issuer &amp; Validator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-run-softioc"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> Run SoftIOC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-spva-client"><i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i> SPVA Client</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="spvaqstartgw.html"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start Gateway</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spva.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Secure PVAccess</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaauth.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> AuthN &amp; AuthZ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvacerts.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Cert Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building from Source</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html#including-pvxs-in-your-application">Including PVXS in your application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cli.html">Command Line Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="value.html">Value Container API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="client.html">Client API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server.html">Server API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html">IOC Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ioc.html#qsrv-2">QSRV 2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Misc</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spvaglossary.html"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> SPVA Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releasenotes.html">Release Notes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="spvaqstartldap.html" title="previous chapter"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start LDAP</a></li>
+      <li>Next: <a href="spvaqstartgw.html" title="next chapter"><i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i> Quick Start Gateway</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2026 Michael Davidsaver, George McIntyre, Osprey DCS LLC, and SLAC.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/spvaqstartjwt.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
