@@ -51,23 +51,6 @@ PERMANENTLY_VALID_STATUS(time_t)
 namespace pvxs {
 namespace certs {
 
-/**
- * @brief Make the config URI for a certificate
- *
- * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
- * @param issuer_id the issuer ID (first 8 hex digits of the hex SKID)
- * @param skid Subject Key Identifier based on a public key used to re-generate Cert
- * @return the config URI
- */
-inline std::string getConfigURI(const std::string &cert_pv_prefix, const std::string& issuer_id, const std::string& skid) {
-    std::string pv = cert_pv_prefix;
-    pv += ":CONFIG:";
-    pv += issuer_id;
-    pv += ":";
-    pv += skid;
-    return pv;
-}
-
 ///////////// OCSP RESPONSE ERRORS
 class OCSPParseException final : public std::runtime_error {
    public:
@@ -139,34 +122,6 @@ enum class cert_status_class_t : int {
 struct PVACertStatus;
 struct OCSPCertStatus;
 
-struct DbCert {
-    // The certificate's serial number
-    uint64_t serial{0};
-    // not before
-    time_t not_before{0};
-    // not after
-    time_t not_after{0};
-    // renew by
-    time_t renew_by{0};
-    // status
-    certstatus_t status;
-    // The certificate's issuer ID (first 8 hex digits of the hex SKID)
-    std::string issuer_id{};
-    // The certificate's SKID (subject key identifier)
-    std::string skid{};
-    // The certificate's subject CN
-    std::string cn{};
-    // The certificate's subject O
-    std::string o{};
-    // The certificate's subject OU
-    std::string ou{};
-    // The certificate's subject C
-    std::string c{};
-
-    DbCert(const uint64_t serial, const time_t not_after, const time_t renew_by, const certstatus_t status) : serial(serial), not_after(not_after), renew_by(renew_by), status(status) {};
-    DbCert() = default;
-};
-
 /**
  * @brief Base class for Certificate status values.  Contains the enum index `i`
  * and the string representation `s` of the value for logging and comparison
@@ -187,44 +142,6 @@ struct CertStatus {
     // Move comparison operators to protected
     bool operator==(const CertStatus& rhs) const { return i == rhs.i; }
     bool operator!=(const CertStatus& rhs) const { return !(*this == rhs); }
-
-    /**
-     * @brief The prototype of the data returned for a certificate status request
-     * Essentially an enum, a serial number and the ocsp response
-     *
-     * @return The prototype of the data returned for a certificate status request
-     */
-    static Value getStatusPrototype() {
-        using namespace members;
-
-        auto value = TypeDef(TypeCode::Struct, "epics:nt/NTEnum:1.0", {
-                        Struct("value", "enum_t", {
-                            Int32("index"),
-                            StringA("choices"),
-                        }),
-                        nt::Alarm{}.build().as("alarm"),
-                        nt::TimeStamp{}.build().as("timeStamp"),
-                        Struct("display", {
-                            String("description"),
-                        }),
-                        Member(TypeCode::UInt64, "serial"),
-                        Member(TypeCode::String, "state"),
-                        Member(TypeCode::UInt64, "renew_by"),
-                        Member(TypeCode::Bool, "renewal_due"),
-                        nt::NTEnum{}.build().as("ocsp_status"),
-                        Member(TypeCode::String, "ocsp_state"),
-                        Member(TypeCode::String, "ocsp_status_date"),
-                        Member(TypeCode::String, "ocsp_certified_until"),
-                        Member(TypeCode::String, "ocsp_revocation_date"),
-                        Member(TypeCode::UInt8A, "ocsp_response"),
-        }).create();
-
-        shared_array<const std::string> choices(CERT_STATES);
-        value["value.choices"] = choices.freeze();
-        shared_array<const std::string> ocsp_choices(OCSP_CERT_STATES);
-        value["ocsp_status.value.choices"] = ocsp_choices.freeze();
-        return value;
-    }
 
     /**
      * @brief  Get the first 8 hex digits of the hex SKID (subject key identifier)

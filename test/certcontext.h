@@ -197,7 +197,7 @@ struct CertCtx {
 
     std::string name;  // The name of this trait
     TestCert cert;
-    Value status_val{CertStatus::getStatusPrototype()};
+    Value status_val{getStatusPrototype()};
     std::string pv_name;
     PVACertificateStatus status{};
     std::vector<certstatus_t> pending{};
@@ -208,6 +208,44 @@ struct CertCtx {
         } catch (const CertStatusNoExtensionException &e) {
             testOk(name == "super_server", "Expected %s to not to have custom cert extension: %s", traits::file, e.what());
         }
+    }
+
+    /**
+     * @brief The prototype of the data returned for a certificate status request
+     * is Essentially an enum, a serial number, and the ocsp response
+     *
+     * @return The prototype of the data returned for a certificate status request
+     */
+    static Value getStatusPrototype() {
+        using namespace members;
+
+        auto value = TypeDef(TypeCode::Struct, "epics:nt/NTEnum:1.0", {
+                        Struct("value", "enum_t", {
+                            Int32("index"),
+                            StringA("choices"),
+                        }),
+                        nt::Alarm{}.build().as("alarm"),
+                        nt::TimeStamp{}.build().as("timeStamp"),
+                        Struct("display", {
+                            String("description"),
+                        }),
+                        Member(TypeCode::UInt64, "serial"),
+                        Member(TypeCode::String, "state"),
+                        Member(TypeCode::UInt64, "renew_by"),
+                        Member(TypeCode::Bool, "renewal_due"),
+                        nt::NTEnum{}.build().as("ocsp_status"),
+                        Member(TypeCode::String, "ocsp_state"),
+                        Member(TypeCode::String, "ocsp_status_date"),
+                        Member(TypeCode::String, "ocsp_certified_until"),
+                        Member(TypeCode::String, "ocsp_revocation_date"),
+                        Member(TypeCode::UInt8A, "ocsp_response"),
+        }).create();
+
+        shared_array<const std::string> choices(CERT_STATES);
+        value["value.choices"] = choices.freeze();
+        shared_array<const std::string> ocsp_choices(OCSP_CERT_STATES);
+        value["ocsp_status.value.choices"] = ocsp_choices.freeze();
+        return value;
     }
 
     static constexpr std::uint64_t serial() {
