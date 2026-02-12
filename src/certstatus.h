@@ -13,6 +13,7 @@
 #define PVXS_CERTSTATUS_H_
 
 #include <iomanip>
+#include <utility>
 
 #include <openssl/evp.h>
 #include <openssl/ocsp.h>
@@ -154,59 +155,6 @@ struct CertStatus {
     static std::string getSkId(const ossl_ptr<X509>& cert) { return getSkId(cert.get()); }
 
     /**
-     * @brief  Get the issuer ID which is SKID (subject key identifier) of the issuer certificate authority in the given chain
-     *
-     * First determine the issuer certificate authority certificate then get the SKID
-     *
-     * @return first 8 hex digits of the hex SKID (Subject Key Identifier)
-     */
-    static std::string getIssuerId(const ossl_shared_ptr<STACK_OF(X509)>& chain) { return getSkId(getIssuerCa(chain)); }
-
-    /**
-     * @brief Get root certificate authority from a certificate authority chain
-     * @param chain the certificate authority certificate chain
-     * @return the root certificate authority
-     */
-    static X509* getRootCa(const ossl_shared_ptr<STACK_OF(X509)>& chain) {
-        if (!chain || sk_X509_num(chain.get()) <= 0) {
-            throw std::runtime_error("Invalid certificate chain");
-        }
-
-        const auto root_ca = sk_X509_value(chain.get(), sk_X509_num(chain.get()) - 1);
-
-        if (root_ca == nullptr) {
-            throw std::runtime_error("Failed to retrieve root certificate");
-        }
-
-        return root_ca;
-    }
-
-    /**
-     * @brief Get issuer certificate authority from a certificate authority chain
-     * @param chain the certificate authority certificate chain
-     * @return the issuer certificate authority which is the second one or the first if only one
-     */
-    static X509* getIssuerCa(const ossl_shared_ptr<STACK_OF(X509)>& chain) {
-        if (!chain) {
-            throw std::runtime_error("Invalid certificate chain");
-        }
-
-        const auto N = sk_X509_num(chain.get());
-
-        if (N <= 0) {
-            throw std::runtime_error("Invalid certificate chain");
-        }
-
-        const auto issuer_ca = sk_X509_value(chain.get(), 0);
-
-        if (issuer_ca == nullptr) {
-            throw std::runtime_error("Failed to retrieve issuer certificate");
-        }
-
-        return issuer_ca;
-    }
-
-    /**
      * @brief Get the first 8 hex digits of the hex SKID (subject key identifier)
      *
      * Note that the given cert must contain the SKID extension in the first place
@@ -231,118 +179,6 @@ struct CertStatus {
         return ss.str();
     }
 
-    /**
-     * @brief Get the first 8 hex digits of the hex SKID (subject key identifier)
-     *
-     * Computes the SKID from the public key
-     *
-     * @param pub_key the public key to generate the skid from
-     * @return first 8 hex digits of the hex SKID (subject key identifier)
-     */
-    static std::string getSkId(const std::string& pub_key) { return getFullSkId(pub_key).substr(0, 8); }
-
-    /**
-     * @brief Get the full hex SKID (subject key identifier)
-     *
-     * Computes the SKID from the public key
-     *
-     * @param pub_key the public key to generate the skid from
-     * @return the full hex SKID (subject key identifier)
-     */
-    static std::string getFullSkId(const std::string& pub_key) {
-        const KeyPair key_pair{pub_key};
-
-        // First, DER encode the public key (SubjectPublicKeyInfo)
-        const int der_len = i2d_PUBKEY(key_pair.pkey.get(), nullptr);
-        if (der_len <= 0) {
-            throw std::runtime_error("Failed to DER encode public key");
-        }
-        std::vector<unsigned char> der_data(der_len);
-        unsigned char* der_ptr = der_data.data();
-        if (i2d_PUBKEY(key_pair.pkey.get(), &der_ptr) != der_len) {
-            throw std::runtime_error("DER encoding size mismatch");
-        }
-
-        // Parse the DER data into an X509_PUBKEY structure.
-        const unsigned char* der_data_ptr = der_data.data();
-        const ossl_ptr<X509_PUBKEY> pubkey_struct(d2i_X509_PUBKEY(nullptr, &der_data_ptr, der_len), false);
-        if (!pubkey_struct) {
-            throw std::runtime_error("Failed to parse X509_PUBKEY structure");
-        }
-
-        // Extract the raw public key BIT STRING (subjectPublicKey)
-        ASN1_OBJECT* alg = nullptr;
-        const unsigned char* pk_data = nullptr;
-        int pk_len = 0;
-        X509_ALGOR* algor = nullptr;
-        if (!X509_PUBKEY_get0_param(&alg, &pk_data, &pk_len, &algor, pubkey_struct.get())) {
-            throw std::runtime_error("Failed to extract public key parameter");
-        }
-
-        // Compute the SHA-1 hash of the BIT STRING.
-        unsigned char hash[SHA_DIGEST_LENGTH] = {0};
-        if (!SHA1(pk_data, pk_len, hash)) {
-            throw std::runtime_error("SHA1 computation failed");
-        }
-
-        // Convert into a hexadecimal string.
-        std::ostringstream oss;
-        oss << std::hex << std::setfill('0');
-        for (const unsigned char i : hash) {
-            oss << std::setw(2) << static_cast<unsigned int>(i);
-        }
-
-        return oss.str();
-    }
-
-    /**
-     * @brief Get the common name of the given certificate
-     * return the common name or an empty string if cert is null, or
-     * there are any problems retrieving the common name
-     *
-     * @param cert to retrieve the subject CN field
-     * @return the common name
-     */
-    static std::string getCommonName(const ossl_ptr<X509>& cert) {
-        if (!cert) return "";
-
-        // Get the subject name from the certificate
-        const X509_NAME* subject = X509_get_subject_name(cert.get());
-        if (!subject) {
-            return "";
-        }
-
-        // Find the position of the Common Name field within the subject name
-        const int idx = X509_NAME_get_index_by_NID(subject, NID_commonName, -1);
-        if (idx < 0) {
-            return "";
-        }
-
-        const X509_NAME_ENTRY* entry = X509_NAME_get_entry(subject, idx);
-        if (!entry) {
-            return "";
-        }
-
-        const ASN1_STRING* data = X509_NAME_ENTRY_get_data(entry);
-        if (!data) {
-            return "";
-        }
-
-        // Convert the ASN1_STRING to a UTF-8 C string
-        unsigned char* utf8 = nullptr;
-        const int length = ASN1_STRING_to_UTF8(&utf8, data);
-        if (length < 0 || !utf8) {
-            return "";
-        }
-
-        // Construct a string from the UTF-8 data
-        std::string cn(reinterpret_cast<char*>(utf8), length);
-        OPENSSL_free(utf8);
-
-        return cn;
-    }
-
-
    protected:
     /**
      * @brief Constructor for CertStatus only to be used by PVACertStatus and OCSPCertStatus
@@ -350,12 +186,16 @@ struct CertStatus {
      * @param status the enum index of the status
      * @param status_string the string representation of the status
      */
-    explicit CertStatus(const uint32_t status, const std::string& status_string) : i(status), s(status_string) {}
+    explicit CertStatus(const uint32_t status, std::string  status_string) : i(status), s(std::move(status_string)) {}
 
     // Friend declarations to allow cross-comparisons only between specific types
     friend struct PVACertStatus;
     friend struct OCSPCertStatus;
 };
+
+// Forward declarations of certificate status structures
+struct CertificateStatus;
+struct PVACertificateStatus;
 
 /**
  * @brief PVA Certificate status values enum and string
@@ -369,9 +209,9 @@ struct PVACertStatus : CertStatus {
     explicit PVACertStatus(const certstatus_t& status) : CertStatus(status, toString(status)) {}
 
     // Define the comparison operators
-    bool operator==(const PVACertStatus rhs) const { return this->i == rhs.i; }
+    bool operator==(const PVACertStatus& rhs) const { return this->i == rhs.i; }
     bool operator==(const certstatus_t rhs) const { return this->i == rhs; }
-    bool operator!=(const PVACertStatus rhs) const { return this->i != rhs.i; }
+    bool operator!=(const PVACertStatus& rhs) const { return this->i != rhs.i; }
     bool operator!=(const certstatus_t rhs) const { return this->i != rhs; }
 
    protected:
@@ -403,9 +243,9 @@ struct OCSPCertStatus : CertStatus {
     explicit OCSPCertStatus(const ocspcertstatus_t& status) : CertStatus(static_cast<uint32_t>(status), toString(status)) {}
 
     // Define the comparison operators
-    bool operator==(const OCSPCertStatus rhs) const { return this->i == rhs.i; }
+    bool operator==(const OCSPCertStatus& rhs) const { return this->i == rhs.i; }
     bool operator==(const ocspcertstatus_t rhs) const { return this->i == rhs; }
-    bool operator!=(const OCSPCertStatus rhs) const { return this->i != rhs.i; }
+    bool operator!=(const OCSPCertStatus& rhs) const { return this->i != rhs.i; }
     bool operator!=(const ocspcertstatus_t rhs) const { return this->i != rhs; }
 
    private:
@@ -425,7 +265,6 @@ struct OCSPCertStatus : CertStatus {
  * to store the serial number, the OCSP status, the status date, the status
  * valid-until date, and the revocation date.
  */
-struct CertificateStatus;
 struct ParsedOCSPStatus {
     // serial number of the certificate
     const uint64_t serial;
@@ -447,23 +286,21 @@ struct ParsedOCSPStatus {
      * @param status_valid_until_date the status `valid-until` date of the certificate
      * @param revocation_date the revocation date of the certificate if it is revoked
      */
-    ParsedOCSPStatus(const uint64_t& serial, const OCSPCertStatus& ocsp_status, const CertDate& status_date, const CertDate& status_valid_until_date,
-                     const CertDate& revocation_date)
+    ParsedOCSPStatus(const uint64_t& serial, OCSPCertStatus ocsp_status, CertDate  status_date, CertDate  status_valid_until_date,
+                     CertDate  revocation_date)
         : serial(serial),
-          ocsp_status(ocsp_status),
-          status_date(status_date),
-          status_valid_until_date(status_valid_until_date),
-          revocation_date(revocation_date) {}
+          ocsp_status(std::move(ocsp_status)),
+          status_date(std::move(status_date)),
+          status_valid_until_date(std::move(status_valid_until_date)),
+          revocation_date(std::move(revocation_date)) {}
 
     CertificateStatus status();
 };
 
 // Forward declarations of the certificate status structures
-struct CertificateStatus;
 struct CertifiedCertificateStatus;
 struct UnknownCertificateStatus;
 struct UnCertifiedCertificateStatus;
-struct PVACertificateStatus;
 
 /**
  * @brief Structure representing OCSP status.
@@ -891,14 +728,13 @@ class CertStatusManager {
     using StatusCallback = std::function<void(const PVACertificateStatus &)>;
 
     CertStatusManager() = delete;
-
     ~CertStatusManager() = default;
 
     /**
      * Parse OCSP responses from the provided ocsp_bytes response
      * and return the parsed out status of the certificate which is the subject of the ocsp byte array.
      *
-     * First Verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well formed.
+     * First, verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well-formed.
      *
      * Then parse it and read out the status and the status times
      *
@@ -911,12 +747,12 @@ class CertStatusManager {
      * Parse OCSP responses from the provided ocsp_bytes response
      * and return the parsed out status of the certificate which is the subject of the ocsp byte array.
      *
-     * First Verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well formed.
+     * First, verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well-formed.
      *
      * Then parse it and read out the status and the status times
      *
      * @param ocsp_bytes The input byte buffer pointer containing the OCSP responses data.
-     * @ocsp_bytes_len the length of the byte buffer
+     * @param ocsp_bytes_len the length of the byte buffer
      * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
      */
     static ParsedOCSPStatus parse(const uint8_t *ocsp_bytes, size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr);
@@ -1035,8 +871,6 @@ class CertStatusManager {
      */
     void unsubscribe();
 
-    bool waitedTooLong(double timeout = 5.0) const noexcept { return (manager_start_time_ + (time_t)timeout) < std::time(nullptr); }
-
    private:
     explicit CertStatusManager(const client::Context &client,
                                std::shared_ptr<client::Subscription> sub = std::shared_ptr<client::Subscription>())
@@ -1049,8 +883,6 @@ class CertStatusManager {
     client::Context client_;
     std::shared_ptr<client::Subscription> sub_;
     std::shared_ptr<CertificateStatus> status_;
-    std::shared_ptr<PVACertificateStatus> pva_status_;
-    time_t manager_start_time_{time(nullptr)};
 
     /**
      * @brief Get the custom status extension from the given certificate
@@ -1061,13 +893,13 @@ class CertStatusManager {
     static X509_EXTENSION *getStatusExtension(const X509 *certificate);
     static X509_EXTENSION *getConfigExtension(const X509 *certificate);
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t> &ocsp_bytes);
-    static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const uint8_t *ocsp_bytes, const size_t ocsp_bytes_len);
+    static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const uint8_t *ocsp_bytes, size_t ocsp_bytes_len);
     static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic_response, X509_STORE *trusted_store_ptr);
 };
 
 template <>
 struct cert_status_delete<CertStatusManager> {
-    void operator()(CertStatusManager *base_pointer) {
+    void operator()(CertStatusManager *base_pointer) const {
         if (base_pointer) {
             base_pointer->unsubscribe();  // Idempotent unsubscribe
             delete base_pointer;
