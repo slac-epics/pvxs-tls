@@ -506,6 +506,16 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
             tls_context->state = SSLContext::TlsReady;
             log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TlsReady", "commonSetup()", tls_context.get());
             log_info_printf(setup, "TLS server-only mode selected%s", "\n");
+
+            // Configure verification for server-only mode - we still need to verify the peer's certificate
+            {
+                int mode = SSL_VERIFY_PEER;
+                // Configure our custom verification function `ossl_verify` to be called by the TLS handshake
+                SSL_CTX_set_verify(tls_context->ctx.get(), mode, &ossl_verify);
+                // Configure the maximum depth of the certificate chain to verify
+                SSL_CTX_set_verify_depth(tls_context->ctx.get(), ossl_verify_depth);
+            }
+
             return tls_context;
         }
         log_debug_printf(setup, "No certificate found in keychain file but %s\n", "");

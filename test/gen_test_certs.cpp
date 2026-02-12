@@ -590,6 +590,125 @@ int main(int argc, char *argv[])
             p12.write(fname.c_str(), pw);
         }
 
+        // ============================================================
+        // Alternate certificate hierarchy for trust anchor mismatch tests
+        // This creates an independent root CA that doesn't link to the main root
+        // ============================================================
+
+        // Alternate root certificate authority (independent from main root)
+        pvxs::ossl_ptr<X509> alt_root_cert;
+        pvxs::ossl_ptr<EVP_PKEY> alt_root_key;
+        {
+            CertCreator cc;
+            cc.CN = "EPICS Alternate Root Certificate Authority";
+            cc.serial = serial++;
+            cc.isCA = true;
+            cc.key_usage = "cRLSign,keyCertSign";
+
+            std::tie(alt_root_key, alt_root_cert) = cc.create();
+
+            PKCS12Writer p12(outdir);
+            p12.friendlyName = cc.CN;
+
+            // alt_cert_auth.p12 - contains only the alternate root CA (no keys)
+            // Used for server-only auth tests where client trusts alternate root
+            MUST(1, sk_X509_push(p12.cacerts.get(), alt_root_cert.get()));
+            p12.write("alt_cert_auth.p12");
+        }
+
+        // Alternate intermediate certificate authority (signed by alt_root)
+        pvxs::ossl_ptr<X509> alt_i_cert;
+        pvxs::ossl_ptr<EVP_PKEY> alt_i_key;
+        {
+            CertCreator cc;
+            cc.root = alt_root_cert.get();
+            cc.CN = "alternateIntermediateCA";
+            cc.serial = serial++;
+            cc.issuer = alt_root_cert.get();
+            cc.ikey = alt_root_key.get();
+            cc.isCA = true;
+            cc.key_usage = "digitalSignature,cRLSign,keyCertSign";
+            cc.extended_key_usage = "serverAuth,clientAuth,OCSPSigning";
+
+            std::tie(alt_i_key, alt_i_cert) = cc.create();
+
+            PKCS12Writer p12(outdir);
+            p12.friendlyName = cc.CN;
+            p12.key = alt_i_key.get();
+            p12.cert = alt_i_cert.get();
+            MUST(1, sk_X509_push(p12.cacerts.get(), alt_root_cert.get()));
+            p12.write("alternateIntermediateCA.p12");
+        }
+
+        // Destroy alt root key - no longer needed, remaining certs signed by intermediate
+        alt_root_key.reset();
+
+        // Alternate server certificate (signed by alt_intermediate)
+        {
+            CertCreator cc;
+            cc.root = alt_root_cert.get();
+            cc.CN = "alt_server1";
+            cc.serial = serial++;
+            cc.key_usage = "digitalSignature";
+            cc.extended_key_usage = "serverAuth";
+            cc.issuer = alt_i_cert.get();
+            cc.ikey = alt_i_key.get();
+
+            pvxs::ossl_ptr<X509> cert;
+            pvxs::ossl_ptr<EVP_PKEY> key;
+            std::tie(key, cert) = cc.create();
+
+            PKCS12Writer p12(outdir);
+            p12.friendlyName = cc.CN;
+            p12.key = key.get();
+            p12.cert = cert.get();
+            // Chain: alt_server1 -> alt_intermediate -> alt_root
+            MUST(1, sk_X509_push(p12.cacerts.get(), alt_i_cert.get()));
+            MUST(2, sk_X509_push(p12.cacerts.get(), alt_root_cert.get()));
+            p12.write("alt_server1.p12");
+        }
+
+        // Alternate client certificate (signed by alt_intermediate)
+        {
+            CertCreator cc;
+            cc.root = alt_root_cert.get();
+            cc.CN = "alt_client1";
+            cc.serial = serial++;
+            cc.key_usage = "digitalSignature";
+            cc.extended_key_usage = "clientAuth";
+            cc.issuer = alt_i_cert.get();
+            cc.ikey = alt_i_key.get();
+
+            pvxs::ossl_ptr<X509> cert;
+            pvxs::ossl_ptr<EVP_PKEY> key;
+            std::tie(key, cert) = cc.create();
+
+            PKCS12Writer p12(outdir);
+            p12.friendlyName = cc.CN;
+            p12.key = key.get();
+            p12.cert = cert.get();
+            // Chain: alt_client1 -> alt_intermediate -> alt_root
+            MUST(1, sk_X509_push(p12.cacerts.get(), alt_i_cert.get()));
+            MUST(2, sk_X509_push(p12.cacerts.get(), alt_root_cert.get()));
+            p12.write("alt_client1.p12");
+
+            // alt_client1_with_main_root.p12 - entity cert with mismatched trust anchor
+            // Used for testing "server rejects client" scenario:
+            // - Client entity: alt_client1 (signed by alt_root)
+            // - Client trust store: main_root (so client trusts server with main_root cert)
+            // - Server rejects because its trust store (main_root) doesn't link to alt_client1's chain
+            {
+                PKCS12Writer p12_alt(outdir);
+                p12_alt.friendlyName = cc.CN;
+                p12_alt.key = key.get();
+                p12_alt.cert = cert.get();
+                // Client's trust store will be main_root
+                // But entity cert is signed by alt_root, so server won't find a trust path
+                MUST(1, sk_X509_push(p12_alt.cacerts.get(), root_cert.get()));
+                p12_alt.write("alt_client1_with_main_root.p12");
+            }
+        }
+
         return 0;
     }catch(std::exception& e){
         std::cerr<<"Error: "<<typeid(e).name()<<" : "<<e.what()<<"\n";

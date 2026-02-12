@@ -63,6 +63,16 @@
 #define CLIENT3_KEYCHAIN_FILE "client3.p12"
 #define CLIENT3_KEYCHAIN_FILE_PWD ""
 
+/* Alternate certificate hierarchy for trust anchor mismatch tests */
+#define ALT_SERVER1_KEYCHAIN_FILE "alt_server1.p12"
+#define ALT_SERVER1_KEYCHAIN_FILE_PWD ""
+#define ALT_CLIENT1_KEYCHAIN_FILE "alt_client1.p12"
+#define ALT_CLIENT1_KEYCHAIN_FILE_PWD ""
+#define ALT_CLIENT1_WITH_MAIN_ROOT_KEYCHAIN_FILE "alt_client1_with_main_root.p12"
+#define ALT_CLIENT1_WITH_MAIN_ROOT_KEYCHAIN_FILE_PWD ""
+#define ALT_CERT_AUTH_KEYCHAIN_FILE "alt_cert_auth.p12"
+#define ALT_CERT_AUTH_KEYCHAIN_FILE_PWD ""
+
 #define WHO_AM_I_PV "whoami"
 #define TLS_METHOD_STRING "x509"
 #define TCP_METHOD_STRING "ca"
