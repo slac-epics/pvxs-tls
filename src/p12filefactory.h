@@ -37,22 +37,9 @@ class P12FileFactory final : public IdFileFactory {
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, const std::string &pem_string)
         : IdFileFactory(filename, password, key_pair, nullptr, nullptr, pem_string) {}
 
-    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, PKCS12 *p12_ptr)
-        : IdFileFactory(filename, password, key_pair, nullptr, nullptr, ""), p12_ptr_(p12_ptr) {}
-
-    PVXS_API void writePKCS12File();
-
-    void writeIdentityFile() override { writePKCS12File(); }
-
     CertData getCertDataFromFile() override;
     std::shared_ptr<KeyPair> getKeyFromFile() override;
 
-   private:
-    PKCS12 *p12_ptr_{};
-
-    static ossl_ptr<PKCS12> pemStringToP12(const std::string &password, EVP_PKEY *keys_ptr, const std::string &pem_string);
-
-    static ossl_ptr<PKCS12> toP12(const std::string &password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) *cert_chain_ptr = nullptr);
 
 #ifdef NID_oracle_jdk_trustedkeyusage
     static int jdkTrust(PKCS12_SAFEBAG *bag, void *) noexcept;

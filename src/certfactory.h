@@ -171,27 +171,7 @@ class PVXS_API CertFactory {
           initial_status_(initial_status),
           allow_duplicates_(allow_duplicates) {}
 
-    static time_t getNotAfterTimeFromCert(const ossl_ptr<X509> &cert);
-
-    /**
-     * @brief Get the error string from the error queue
-     * @return the error string
-     */
-    static std::string getError() {
-        unsigned long err;
-        std::string error_string;
-        std::string sep;
-        while ((err = ERR_get_error()))  // get all error codes from the error queue
-        {
-            char buffer[256];
-            ERR_error_string_n(err, buffer, sizeof(buffer));
-            error_string += sep + buffer;
-            sep = ", ";
-        }
-        return error_string;
-    }
-
-   private:
+    private:
     /**
      * @brief Convert a NID to a string
      * @param nid the NID
@@ -214,12 +194,6 @@ class PVXS_API CertFactory {
         }
     }
 
-
-    static void writeCertToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<X509> &cert);
-
-    static void writeCertsToBio(const ossl_ptr<BIO> &bio, const STACK_OF(X509) * certs);
-
-    static ossl_ptr<BIO> newBio();
 
     void set_skid(const ossl_ptr<X509> &certificate);
 };

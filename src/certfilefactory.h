@@ -61,16 +61,6 @@ class PVXS_API IdFileFactory {
     virtual ~IdFileFactory() = default;
 
     /**
-     * @brief Writes the credentials file.
-     *
-     * This method writes an identity file which is a file containing both:
-     *   - the private key and
-     *   - the X.509 certificate and certificate authority chain
-     * The format (PKCS#12, or Base64-encoded ASCII) is determined by the filename extension.
-     */
-    virtual void writeIdentityFile() = 0;
-
-    /**
      * @brief Gets the certificate data from the file.
      *
      * This method gets the certificate data including the key from the file.
