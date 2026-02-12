@@ -16,7 +16,6 @@
 
 #include <pvxs/client.h>
 
-#include "configcms.h"
 #include "openssl.h"
 
 namespace pvxs {

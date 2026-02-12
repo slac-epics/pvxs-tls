@@ -117,20 +117,17 @@ TESTS += testudpfwd
 
 ifdef BASE_3_15
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
-USR_CPPFLAGS += -I$(TOP)/certs -I$(TOP)/bundle/CLI11/include
- ifeq (WIN32,$(OS_CLASS))
- # test/ builds some PVXS implementation sources directly.
- # Avoid PVXS_API resolving to dllimport for these definitions.
- USR_CPPFLAGS += -DPVXS_API_BUILDING
- endif
- SRC_DIRS += $(TOP)/certs
- SRC_DIRS += $(TOP)/certs/authn
- SRC_DIRS += $(TOP)/certs/authn/std
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
+
+ifneq (WIN32,$(OS_CLASS))
+# test/ builds some PVXS implementation sources directly.
+# Avoid PVXS_API resolving to dllimport for these definitions.
+USR_CPPFLAGS += -DPVXS_API_BUILDING
+endif
+
 SRC_DIRS += $(TOP)/src
 SRC_DIRS += $(TOP)/src/pvxs
-SRCS += configcms.cpp
 
-USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 TESTPROD_HOST += gen_test_certs
 gen_test_certs_SRCS += gen_test_certs.cpp
 gen_test_certs_SRCS += certfactory.cpp
@@ -143,35 +140,9 @@ testtls_SRCS += certstatus.cpp
 TESTS += testtls
 TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
 
-TESTPROD_HOST += testtlswithcms
-testtlswithcms_SRCS += testtlswithcms.cpp
-testtlswithcms_SRCS += certstatusfactory.cpp
-testtlswithcms_SRCS += certstatusmanager.cpp
-testtlswithcms_SRCS += certstatus.cpp
-testtlswithcms_SRCS += configcerts.cpp
-TESTS += testtlswithcms
-TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
-
-TESTPROD_HOST += testtlswithcmsandstapling
-testtlswithcmsandstapling_SRCS += testtlswithcmsandstapling.cpp
-testtlswithcmsandstapling_SRCS += certstatusfactory.cpp
-testtlswithcmsandstapling_SRCS += certstatusmanager.cpp
-testtlswithcmsandstapling_SRCS += certstatus.cpp
-testtlswithcmsandstapling_SRCS += configcerts.cpp
-TESTS += testtlswithcmsandstapling
-TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
-
 TESTPROD_HOST += testtlstime
 testtlstime_SRCS += testtlstime.cpp
 TESTS += testtlstime
-
-TESTPROD_HOST += testtlsstatus
-testtlsstatus_SRCS += testtlsstatus.cpp
-testtlsstatus_SRCS += certstatusfactory.cpp
-testtlsstatus_SRCS += certstatusmanager.cpp
-testtlsstatus_SRCS += certstatus.cpp
-testtlsstatus_SRCS += configcerts.cpp
-TESTS += testtlsstatus
 endif # EVENT2_HAS_OPENSSL
 endif
 

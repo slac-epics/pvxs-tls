@@ -58,12 +58,6 @@ GENVERSIONMACRO = PVXS_VCS_VERSION
 
 SHRLIB_VERSION = $(PVXS_MAJOR_VERSION).$(PVXS_MINOR_VERSION)
 
-# Access to certs specific headers
-ifeq ($(EVENT2_HAS_OPENSSL),YES)
-USR_CPPFLAGS += -I$(TOP)/certs
-SRC_DIRS += $(TOP)/certs
-endif # EVENT2_HAS_OPENSSL
-
 INC += pvxs/client.h
 INC += pvxs/config.h
 INC += pvxs/data.h
@@ -117,15 +111,14 @@ LIB_SRCS += unittest.cpp
 LIB_SRCS += util.cpp
 
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
-LIB_SRCS += configcerts.cpp
 LIB_SRCS += certfactory.cpp
 LIB_SRCS += certfilefactory.cpp
+LIB_SRCS += certstatusfactory.cpp
 LIB_SRCS += certstatus.cpp
 LIB_SRCS += certstatusmanager.cpp
 LIB_SRCS += openssl.cpp
 LIB_SRCS += opensslgbl.cpp
 LIB_SRCS += p12filefactory.cpp
-LIB_SRCS += serverev.cpp
 LIB_SRCS += wildcardpv.cpp
 endif # EVENT2_HAS_OPENSSL
 
