@@ -34,8 +34,6 @@ struct ssl_delete;
 template <typename T>
 struct ssl_delete_all;
 
-template <typename T>
-struct sqlite_delete;
 #endif
 
 template <typename T>
@@ -75,14 +73,6 @@ struct regular_delete;
         inline void operator()(TYPE *base_pointer) {         \
             if (base_pointer) TYPE##_free_all(base_pointer); \
         }                                                    \
-    }
-
-#define DEFINE_SQLITE_DELETER_FOR_(TYPE)                   \
-    template <>                                            \
-    struct sqlite_delete<TYPE> {                           \
-        inline void operator()(TYPE *base_pointer) {       \
-            if (base_pointer) sqlite3_close(base_pointer); \
-        }                                                  \
     }
 
 #define DEFINE_SSL_STACK_DELETER_FOR_(TYPE)                     \
@@ -158,7 +148,6 @@ DEFINE_SSL_STACK_DELETER_FOR_(X509_ATTRIBUTE);
 #ifdef PVXS_ENABLE_OPENSSL
 #undef DEFINE_SSL_DELETER_FOR_
 #undef DEFINE_SSL_DELETER_ALL_FOR_
-#undef DEFINE_SQLITE_DELETER_FOR_
 #undef DEFINE_SSL_STACK_DELETER_FOR_
 #undef DEFINE_OPENSSL_DELETER_FOR_
 #endif

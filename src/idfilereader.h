@@ -14,7 +14,6 @@
 #include <openssl/x509.h>
 
 #include "ownedptr.h"
-#include "security.h"
 
 namespace pvxs {
 namespace certs {
@@ -28,6 +27,29 @@ template <typename T, typename... Args>
 std::unique_ptr<T> make_factory_ptr(Args&&... args) {
     return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
+
+struct KeyPair final {
+    std::string public_key;
+    ossl_ptr<EVP_PKEY> pkey;
+
+    // Default constructor
+    KeyPair() = default;
+
+    explicit KeyPair(ossl_ptr<EVP_PKEY> new_pkey) : pkey(std::move(new_pkey)) {
+        const ossl_ptr<BIO> bio(BIO_new(BIO_s_mem()));
+
+        if (!PEM_write_bio_PUBKEY(bio.get(), pkey.get())) {
+            throw std::runtime_error("Failed to write public key to BIO");
+        }
+
+        BUF_MEM *bptr;                      // to hold a pointer to data in the BIO object.
+        BIO_get_mem_ptr(bio.get(), &bptr);  // set to point into a BIO object
+
+        // Create a string from the BIO
+        const std::string result(bptr->data, bptr->length);
+        public_key = result;
+    }
+};
 
 // CertData structure definition
 struct CertData {
