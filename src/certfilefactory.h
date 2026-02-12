@@ -53,7 +53,7 @@ class PVXS_API IdFileFactory {
      *
      * This method creates a new CertFileFactory object.
      */
-    static cert_factory_ptr create(const std::string& filename, const std::string& password = "", const std::shared_ptr<KeyPair>& key_pair = nullptr,
+    static cert_factory_ptr create(const std::string& filename, const std::string& password = "",
                                    X509* cert_ptr = nullptr, STACK_OF(X509) * certs_ptr = nullptr, const std::string& pem_string = "");
 
     static cert_factory_ptr createReader(const std::string& filename, const std::string& password = "") { return create(filename, password); }
@@ -86,19 +86,16 @@ class PVXS_API IdFileFactory {
     CertData getCertData(const std::shared_ptr<KeyPair>& key_pair) const;
 
    protected:
-    IdFileFactory(const std::string& filename, const std::string& password = "", const std::shared_ptr<KeyPair>& key_pair = nullptr, X509* cert_ptr = nullptr,
+    IdFileFactory(const std::string& filename, const std::string& password = "", X509* cert_ptr = nullptr,
                   STACK_OF(X509) * certs_ptr = nullptr, const std::string& pem_string = "")
-        : filename_(filename), password_(password), key_pair_(key_pair), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), pem_string_(pem_string) {}
+        : filename_(filename), password_(password), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), pem_string_(pem_string) {}
 
     std::string filename_{};
     std::string password_{};
-    const std::shared_ptr<KeyPair> key_pair_;
     X509* cert_ptr_{nullptr};
     STACK_OF(X509) * certs_ptr_ { nullptr };
     const std::string pem_string_{};
 
-    static void backupFileIfExists(const std::string& filename);
-    static void chainFromRootCertPtr(STACK_OF(X509) * &chain, X509* root_cert_ptr);
     static std::string getExtension(const std::string& filename) {
         auto pos = filename.find_last_of('.');
         if (pos == std::string::npos) {

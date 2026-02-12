@@ -31,26 +31,14 @@ namespace certs {
  */
 class P12FileFactory final : public IdFileFactory {
    public:
-    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, X509 *cert_ptr, stack_st_X509 *certs_ptr)
-        : IdFileFactory(filename, password, key_pair, cert_ptr, certs_ptr, "") {}
+    P12FileFactory(const std::string &filename, const std::string &password, X509 *cert_ptr, stack_st_X509 *certs_ptr)
+        : IdFileFactory(filename, password, cert_ptr, certs_ptr, "") {}
 
-    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, const std::string &pem_string)
-        : IdFileFactory(filename, password, key_pair, nullptr, nullptr, pem_string) {}
+    P12FileFactory(const std::string &filename, const std::string &password, const std::string &pem_string)
+        : IdFileFactory(filename, password, nullptr, nullptr, pem_string) {}
 
     CertData getCertDataFromFile() override;
     std::shared_ptr<KeyPair> getKeyFromFile() override;
-
-
-#ifdef NID_oracle_jdk_trustedkeyusage
-    static int jdkTrust(PKCS12_SAFEBAG *bag, void *) noexcept;
-#else
-    static int jdkTrust(PKCS12_SAFEBAG *bag, void *cbarg) noexcept { return 0; }
-    static inline PKCS12 *PKCS12_create_ex2(const char *pass, const char *name, EVP_PKEY *pkey, X509 *cert, STACK_OF(X509) * cert_auth_chain_ptr, int nid_key, int nid_cert,
-                                            int iter, int mac_iter, int keytype, OSSL_LIB_CTX *ctx, const char *propq,
-                                            int (*cb)(PKCS12_SAFEBAG *bag, void *cbarg), void *cbarg) {
-        return PKCS12_create_ex(pass, name, pkey, cert, cert_auth_chain_ptr, nid_key, nid_cert, iter, mac_iter, keytype, ctx, propq);
-    }
-#endif
 };
 
 }  // namespace certs
