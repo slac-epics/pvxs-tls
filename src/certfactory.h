@@ -171,15 +171,7 @@ class PVXS_API CertFactory {
           initial_status_(initial_status),
           allow_duplicates_(allow_duplicates) {}
 
-    ossl_ptr<X509> PVXS_API create();
-
     static time_t getNotAfterTimeFromCert(const ossl_ptr<X509> &cert);
-
-    static std::string PVXS_API certAndCasToPemString(const ossl_ptr<X509> &cert, const STACK_OF(X509) * cert_auth_chain_ptr);
-
-    //    static bool PVXS_API verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data, const std::string &signature);
-
-    //    static std::string sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data);
 
     /**
      * @brief Get the error string from the error queue
@@ -198,13 +190,6 @@ class PVXS_API CertFactory {
         }
         return error_string;
     }
-
-    static std::string bioToString(const ossl_ptr<BIO> &bio);
-    static void addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, const std::string &value);
-    static void addCustomTimeExtensionByNid(const ossl_ptr<X509> &certificate, int nid, time_t value);
-
-    static std::string sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data);
-    static bool verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data, const std::string &signature);
 
    private:
     /**
@@ -229,15 +214,6 @@ class PVXS_API CertFactory {
         }
     }
 
-    void setSubject(const ossl_ptr<X509> &certificate) const;
-
-    void setValidity(const ossl_ptr<X509> &certificate) const;
-
-    void setSerialNumber(const ossl_ptr<X509> &certificate) const;
-
-    void addExtensions(const ossl_ptr<X509> &certificate) const;
-
-    void addExtension(const ossl_ptr<X509> &certificate, int nid, const char *value, const X509 *subject = nullptr) const;
 
     static void writeCertToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<X509> &cert);
 
