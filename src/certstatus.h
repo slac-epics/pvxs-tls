@@ -52,162 +52,6 @@ namespace pvxs {
 namespace certs {
 
 /**
- * @brief Get the Certificate Status PV base.
- * e.g., CERT:STATUS
- *
- * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
- * @return the Certificate Status PV base string
- */
-inline std::string getCertStatusPvBase(const std::string &cert_pv_prefix) {
-    std::string pv = cert_pv_prefix;
-    pv += ":STATUS";
-    return pv;
-}
-
-/**
- * @brief Get the Certificate Status PV name for configuring the PVACMS listener
- * e.g., CERT:STATUS:0192faeb:*
- * Note that the PVACMS only listens for requests for certificates
- *
- * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
- * @param issuer_id the issuer ID that this PVACMS is serving
- * @return the Certificate Status PV name
- */
-inline std::string getCertStatusPv(const std::string &cert_pv_prefix, const std::string& issuer_id) {
-    std::string pv = getCertStatusPvBase(cert_pv_prefix);
-    pv += ":";
-    pv += issuer_id;
-    pv += ":*";
-    return pv;
-}
-
-/**
- * @brief Get the Certificate Issuer PV name
- *
- * This is suitable for networks where there is only one certificate authority.  Clients will
- * not need to specify the issuer they are interested in
- *
- * e.g., CERT:ISSUER
- *
- * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
- * @return the generic Certificate Issuer PV name
- */
-inline std::string getCertIssuerPv(const std::string &cert_pv_prefix) {
-    std::string pv = cert_pv_prefix;
-    pv += ":ISSUER";
-    return pv;
-}
-
-/**
- * @brief get the Certificate Issuer PV name
-*
- * This is suitable for networks where there are multiple certificate authorities.  Clients will
- * need to specify the issuer they are interested in
- *
- * e.g., CERT:ISSUER:0192faeb
- *
- * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
- * @param issuer_id the issuer ID that this PVACMS is serving
- * @return the generic Certificate Issuer PV name
- */
-inline std::string getCertIssuerPv(const std::string &cert_pv_prefix, const std::string& issuer_id) {
-    std::string pv = getCertIssuerPv(cert_pv_prefix);
-    pv += ":";
-    pv += issuer_id;
-    return pv;
-}
-
-/**
- * @brief Get the Certificate Root Authority PV name
- *
- * This is suitable for networks where there is only one certificate authority.  Clients will
- * not need to specify the issuer they are interested in
- *
- * e.g., CERT:ROOT
- *
- * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
- * @return the generic Certificate Root Authority PV name
- */
-inline std::string getCertAuthRootPv(const std::string &cert_pv_prefix) {
-    std::string pv = cert_pv_prefix;
-    pv += ":ROOT";
-    return pv;
-}
-
-/**
- * @brief get the Certificate Root Authority PV name
-*
- * This is suitable for networks where there are multiple certificate authorities.  Clients will
- * need to specify the issuer they are interested in
- *
- * e.g., CERT:ROOT:0192faeb
- *
- * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
- * @param issuer_id the issuer ID that this PVACMS is serving
- * @return the generic Certificate Root Authority PV name
- */
-inline std::string getCertAuthRootPv(const std::string &cert_pv_prefix, const std::string& issuer_id) {
-    std::string pv = getCertAuthRootPv(cert_pv_prefix);
-    pv += ":";
-    pv += issuer_id;
-    return pv;
-}
-
-/**
- * @brief Get the Certificate Create PV name
- *
- * This is suitable for networks where there is only one certificate authority.  Clients will
- * not need to specify the issuer they are interested in
- *
- * e.g., CERT:CREATE
- *
- * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
- * @return the generic Certificate Create PV name
- */
-inline std::string getCertCreatePv(const std::string &cert_pv_prefix) {
-    std::string pv = cert_pv_prefix;
-    pv += ":CREATE";
-    return pv;
-}
-
-/**
- * @brief get the Certificate Create PV name
-*
- * This is suitable for networks where there are multiple certificate authorities.  Clients will
- * need to specify the issuer they are interested in
- *
- * e.g., CERT:CREATE:0192faeb
- *
- * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
- * @param issuer_id the issuer ID that this PVACMS is serving
- * @return the generic Certificate Create PV name
- */
-inline std::string getCertCreatePv(const std::string &cert_pv_prefix, const std::string& issuer_id) {
-    std::string pv = getCertCreatePv(cert_pv_prefix);
-    pv += ":";
-    pv += issuer_id;
-    return pv;
-}
-
-/**
- * @brief Returns the certificate URI.
- *
- * This function takes a prefix and a certificate ID as input parameters and returns the certificate URI.
- * The certificate URI is constructed by concatenating the prefix and the certificate ID using a colon `:` as a separator.
- * The serial number is left padded with zero's to make it 19 characters long
- *
- * e.g., CERT:STATUS:0192faeb:0095472510025972592
- *
- * @param prefix The prefix string for the certificate URI.
- * @param cert_id The certificate ID string.
- * @return The certificate URI string.
- */
-inline std::string getCertStatusURI(const std::string &prefix, const std::string &cert_id) {
-    const std::string pv_name(SB() << prefix << ":" << cert_id);
-    return pv_name;
-}
-
-/**
  * @brief Make the config URI for a certificate
  *
  * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
@@ -222,60 +66,6 @@ inline std::string getConfigURI(const std::string &cert_pv_prefix, const std::st
     pv += ":";
     pv += skid;
     return pv;
-}
-
-/**
- * @brief Generates a serial number string as used in a certificate ID.
- *
- * Left pad with zeros in 20 characters
- *
- * @param serial The serial number of the certificate.
- * @return The the serial number string.
- *
- * @see SB
- */
-inline std::string getSerialString(const uint64_t &serial) {
-    std::ostringstream oss;
-    oss << std::setw(20)
-        << std::setfill('0')
-        << serial;
-    return oss.str();
-}
-
-/**
- * @brief Generates a unique certificate ID based on the issuer ID and serial number.
- *
- * This function takes the issuer ID and serial number as input and combines them
- * into a unique certificate ID. The certificate ID is generated by concatenating
- * the issuer ID and serial number with a ":" separator.
- *
- * @param issuer_id The issuer ID of the certificate.
- * @param serial The serial number of the certificate.
- * @return The unique certificate ID.
- *
- * @see SB
- */
-inline std::string getCertId(const std::string &issuer_id, const uint64_t &serial) {
-    std::ostringstream oss;
-    oss << issuer_id
-        << ":"
-        << getSerialString(serial);
-    return oss.str();
-}
-
-/**
- * @brief Generates the Certificate URI to write into the certificate given the configuration to determine the prefix, the issuer and the serial number
- *
- * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
- * @param issuer_id the issuer id
- * @param serial the certificate's serial number
- * @return the certificate URI to write into the certificate
- */
-inline std::string getCertStatusURI(const std::string &cert_pv_prefix, const std::string &issuer_id, const uint64_t &serial) {
-    auto cert_uri = getCertStatusPvBase(cert_pv_prefix);
-    cert_uri += ":";
-    cert_uri += getCertId(issuer_id, serial);
-    return cert_uri;
 }
 
 ///////////// OCSP RESPONSE ERRORS
@@ -1331,12 +1121,12 @@ class CertStatusManager {
     bool waitedTooLong(double timeout = 5.0) const noexcept { return (manager_start_time_ + (time_t)timeout) < std::time(nullptr); }
 
    private:
-    CertStatusManager(const client::Context &client,
-                      std::shared_ptr<client::Subscription> sub = std::shared_ptr<client::Subscription>())
-        : client_(client), sub_(sub)
+    explicit CertStatusManager(const client::Context &client,
+                               std::shared_ptr<client::Subscription> sub = std::shared_ptr<client::Subscription>())
+        : client_(client), sub_(std::move(sub))
     {};
 
-    void subscribe(std::shared_ptr<client::Subscription> &sub) { sub_ = sub; }
+    void subscribe(const std::shared_ptr<client::Subscription> &sub) { sub_ = sub; }
 
     std::shared_ptr<StatusCallback> callback_ref{};  // Option placeholder for ref to callback if used
     client::Context client_;
