@@ -111,7 +111,6 @@ LIB_SRCS += unittest.cpp
 LIB_SRCS += util.cpp
 
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
-LIB_SRCS += certfactory.cpp
 LIB_SRCS += certfilefactory.cpp
 LIB_SRCS += certstatusfactory.cpp
 LIB_SRCS += certstatus.cpp

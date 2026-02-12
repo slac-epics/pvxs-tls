@@ -130,7 +130,6 @@ SRC_DIRS += $(TOP)/src/pvxs
 
 TESTPROD_HOST += gen_test_certs
 gen_test_certs_SRCS += gen_test_certs.cpp
-gen_test_certs_SRCS += certfactory.cpp
 
 TESTPROD_HOST += testtls
 testtls_SRCS += testtls.cpp

@@ -27,7 +27,6 @@
 
 #include <epicsGetopt.h>
 
-#include "certfactory.h"
 #include "ownedptr.h"
 #include "openssl.h"
 #include "opensslgbl.h"

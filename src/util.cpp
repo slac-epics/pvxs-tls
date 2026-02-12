@@ -62,10 +62,6 @@
 #include "udp_collector.h"
 #include "pvxsVCS.h"
 
-#ifdef PVXS_ENABLE_OPENSSL
-#include "certfactory.h"
-#endif
-
 extern "C" {
 // unofficial helpers for dynamic loading
 PVXS_API
@@ -877,6 +873,12 @@ bool parseTo<bool>(const std::string &s) {
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
+enum CertStatusSubscription {
+    DEFAULT=-1,  // Use the no_status flag from the client request
+    YES=1,       // Always require status subscription
+    NO=0         // Never require status subscription
+};
+
 /**
  * @brief create a CertStatusSubscription flag based on a string parameter value
  *
@@ -895,9 +897,9 @@ int8_t parseTo<int8_t>(const std::string& input) {
     std::transform(lower.begin(), lower.end(), lower.begin(),
                   [](const unsigned char c) { return std::tolower(c); });
 
-    if (lower == "yes" || lower == "true" || lower == "enabled" || lower == "on" || lower == "1") return certs::YES;
-    if (lower == "no" || lower == "false" || lower == "disabled" || lower == "off" || lower == "0") return certs::NO;
-    if (lower == "default") return certs::DEFAULT;
+    if (lower == "yes" || lower == "true" || lower == "enabled" || lower == "on" || lower == "1") return YES;
+    if (lower == "no" || lower == "false" || lower == "disabled" || lower == "off" || lower == "0") return NO;
+    if (lower == "default") return DEFAULT;
 
     // No match found - throw an exception
     throw NoConvert(SB() << "Invalid value: must be 'yes'/'true'/'enabled'/'on'/'1', 'no'/'false'/'disabled'/'off'/'0', or 'default': " << input);
