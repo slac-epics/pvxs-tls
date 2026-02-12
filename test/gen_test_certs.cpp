@@ -709,6 +709,164 @@ int main(int argc, char *argv[])
             }
         }
 
+        // ============================================================
+        // Fake certificate hierarchy for name-matching attack tests
+        // These certificates have the SAME CNs as the real certificates
+        // but are signed by different (fake) CAs.
+        // This tests that TLS verification is cryptographic, not just CN-based.
+        // ============================================================
+
+        // Fake root CA (completely independent, not trusted by real CAs)
+        pvxs::ossl_ptr<X509> fake_root_cert;
+        pvxs::ossl_ptr<EVP_PKEY> fake_root_key;
+        {
+            CertCreator cc;
+            // Same CN as real root CA
+            cc.CN = "EPICS Root Certificate Authority";
+            cc.serial = serial++;
+            cc.isCA = true;
+            cc.key_usage = "cRLSign,keyCertSign";
+
+            std::tie(fake_root_key, fake_root_cert) = cc.create();
+
+            PKCS12Writer p12(outdir);
+            static const char FAKE_PREFIX[] = "FAKE - ";
+            static char fake_name[256];
+            snprintf(fake_name, sizeof(fake_name), "%s%s", FAKE_PREFIX, cc.CN);
+            p12.friendlyName = fake_name;
+            p12.key = fake_root_key.get();
+            p12.cert = fake_root_cert.get();
+
+            // fake_cert_auth.p12 - contains only the fake root CA (no keys)
+            // Used for testing that clients with fake CAs don't authenticate
+            MUST(1, sk_X509_push(p12.cacerts.get(), fake_root_cert.get()));
+            p12.write("fake_cert_auth.p12");
+        }
+
+        // Fake intermediate CA (signed by fake root, same CN as real intermediate)
+        pvxs::ossl_ptr<X509> fake_i_cert;
+        pvxs::ossl_ptr<EVP_PKEY> fake_i_key;
+        {
+            CertCreator cc;
+            cc.root = fake_root_cert.get();
+            // Same CN as real intermediate CA
+            cc.CN = "intermediateCA";
+            cc.serial = serial++;
+            cc.issuer = fake_root_cert.get();
+            cc.ikey = fake_root_key.get();
+            cc.isCA = true;
+            cc.key_usage = "digitalSignature,cRLSign,keyCertSign";
+            cc.extended_key_usage = "serverAuth,clientAuth,OCSPSigning";
+
+            std::tie(fake_i_key, fake_i_cert) = cc.create();
+
+            PKCS12Writer p12(outdir);
+            static const char FAKE_PREFIX[] = "FAKE - ";
+            static char fake_name[256];
+            snprintf(fake_name, sizeof(fake_name), "%s%s", FAKE_PREFIX, cc.CN);
+            p12.friendlyName = fake_name;
+            p12.key = fake_root_key.get();
+            p12.cert = fake_root_cert.get();
+            p12.key = fake_i_key.get();
+            p12.cert = fake_i_cert.get();
+            MUST(1, sk_X509_push(p12.cacerts.get(), fake_root_cert.get()));
+            p12.write("fake_intermediateCA.p12");
+        }
+
+        // Destroy fake root key - remaining certs signed by fake intermediate
+        fake_root_key.reset();
+
+        // Fake superserver certificate (signed by fake intermediate, same CN as real superserver)
+        {
+            CertCreator cc;
+            cc.root = fake_root_cert.get();
+            // Same CN as real superserver
+            cc.CN = "superserver1";
+            cc.serial = serial++;
+            cc.key_usage = "digitalSignature";
+            cc.extended_key_usage = "serverAuth";
+            cc.issuer = fake_i_cert.get();
+            cc.ikey = fake_i_key.get();
+
+            pvxs::ossl_ptr<X509> cert;
+            pvxs::ossl_ptr<EVP_PKEY> key;
+            std::tie(key, cert) = cc.create();
+
+            PKCS12Writer p12(outdir);
+            static const char FAKE_PREFIX[] = "FAKE - ";
+            static char fake_name[256];
+            snprintf(fake_name, sizeof(fake_name), "%s%s", FAKE_PREFIX, cc.CN);
+            p12.friendlyName = fake_name;
+            p12.key = fake_root_key.get();
+            p12.cert = fake_root_cert.get();
+            p12.key = key.get();
+            p12.cert = cert.get();
+            // Chain: fake_superserver1 -> fake_intermediate -> fake_root
+            MUST(1, sk_X509_push(p12.cacerts.get(), fake_i_cert.get()));
+            MUST(2, sk_X509_push(p12.cacerts.get(), fake_root_cert.get()));
+            p12.write("fake_superserver1.p12");
+        }
+
+        // Fake server1 certificate (signed by fake intermediate, same CN as real server1)
+        {
+            CertCreator cc;
+            cc.root = fake_root_cert.get();
+            // Same CN as real server1
+            cc.CN = "server1";
+            cc.serial = serial++;
+            cc.key_usage = "digitalSignature";
+            cc.extended_key_usage = "serverAuth";
+            cc.issuer = fake_i_cert.get();
+            cc.ikey = fake_i_key.get();
+
+            pvxs::ossl_ptr<X509> cert;
+            pvxs::ossl_ptr<EVP_PKEY> key;
+            std::tie(key, cert) = cc.create();
+
+            PKCS12Writer p12(outdir);
+            static const char FAKE_PREFIX[] = "FAKE - ";
+            static char fake_name[256];
+            snprintf(fake_name, sizeof(fake_name), "%s%s", FAKE_PREFIX, cc.CN);
+            p12.friendlyName = fake_name;
+            p12.key = fake_root_key.get();
+            p12.cert = fake_root_cert.get();
+            p12.key = key.get();
+            p12.cert = cert.get();
+            MUST(1, sk_X509_push(p12.cacerts.get(), fake_i_cert.get()));
+            MUST(2, sk_X509_push(p12.cacerts.get(), fake_root_cert.get()));
+            p12.write("fake_server1.p12");
+        }
+
+        // Fake client1 certificate (signed by fake intermediate, same CN as real client1)
+        {
+            CertCreator cc;
+            cc.root = fake_root_cert.get();
+            // Same CN as real client1
+            cc.CN = "client1";
+            cc.serial = serial++;
+            cc.key_usage = "digitalSignature";
+            cc.extended_key_usage = "clientAuth";
+            cc.issuer = fake_i_cert.get();
+            cc.ikey = fake_i_key.get();
+
+            pvxs::ossl_ptr<X509> cert;
+            pvxs::ossl_ptr<EVP_PKEY> key;
+            std::tie(key, cert) = cc.create();
+
+            PKCS12Writer p12(outdir);
+            static const char FAKE_PREFIX[] = "FAKE - ";
+            static char fake_name[256];
+            snprintf(fake_name, sizeof(fake_name), "%s%s", FAKE_PREFIX, cc.CN);
+            p12.friendlyName = fake_name;
+            p12.key = fake_root_key.get();
+            p12.cert = fake_root_cert.get();
+            p12.key = key.get();
+            p12.cert = cert.get();
+            MUST(1, sk_X509_push(p12.cacerts.get(), fake_i_cert.get()));
+            MUST(2, sk_X509_push(p12.cacerts.get(), fake_root_cert.get()));
+            p12.write("fake_client1.p12");
+        }
+
         return 0;
     }catch(std::exception& e){
         std::cerr<<"Error: "<<typeid(e).name()<<" : "<<e.what()<<"\n";

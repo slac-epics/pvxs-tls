@@ -73,6 +73,19 @@
 #define ALT_CERT_AUTH_KEYCHAIN_FILE "alt_cert_auth.p12"
 #define ALT_CERT_AUTH_KEYCHAIN_FILE_PWD ""
 
+/* Fake certificate hierarchy for name-matching attack tests */
+/* These have the SAME CNs as real certs but are signed by different (fake) CAs */
+#define FAKE_CERT_AUTH_KEYCHAIN_FILE "fake_cert_auth.p12"
+#define FAKE_CERT_AUTH_KEYCHAIN_FILE_PWD ""
+#define FAKE_INTERMEDIATE_KEYCHAIN_FILE "fake_intermediateCA.p12"
+#define FAKE_INTERMEDIATE_KEYCHAIN_FILE_PWD ""
+#define FAKE_SUPERSERVER_KEYCHAIN_FILE "fake_superserver1.p12"
+#define FAKE_SUPERSERVER_KEYCHAIN_FILE_PWD ""
+#define FAKE_SERVER1_KEYCHAIN_FILE "fake_server1.p12"
+#define FAKE_SERVER1_KEYCHAIN_FILE_PWD ""
+#define FAKE_CLIENT1_KEYCHAIN_FILE "fake_client1.p12"
+#define FAKE_CLIENT1_KEYCHAIN_FILE_PWD ""
+
 #define WHO_AM_I_PV "whoami"
 #define TLS_METHOD_STRING "x509"
 #define TCP_METHOD_STRING "ca"

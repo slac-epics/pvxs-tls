@@ -577,14 +577,11 @@ void testServerOnlyAuthWithMismatchedTrustAnchor() {
         testFail("Unexpected reply received - connection should have failed");
     } catch (std::exception& e) {
         testDiag("Caught exception: %s", e.what());
-        // Expected: connection timeout or authentication/certificate failure
         if (!got_callback) {
             testPass("Connection failed before onConnect callback (expected)");
         } else if (!connection_succeeded) {
             testPass("Connection succeeded but without TLS (unexpected but non-TLS connection)");
         } else {
-            // Connection succeeded with TLS - this is the bug or behavior we need to understand
-            // For now, mark as known issue
             testFail("Connection succeeded with TLS when it should have failed");
         }
     }
@@ -718,10 +715,158 @@ void testClientWithMismatchedChainFallback() {
     conn.reset();
 }
 
+/**
+ * @brief testFakeCertificateNameMatchingAttack tests that TLS authentication
+ * is based on cryptographic verification, not just CN name matching.
+ *
+ * This test creates fake certificates with the SAME CNs as the real certificates
+ * but signed by different (fake) Certificate Authorities. The test verifies that:
+ * - Having the same CN is NOT sufficient for authentication
+ * - The certificate must chain cryptographically to a trusted root
+ * - Fake CAs that share CNs with real CAs are NOT trusted
+ *
+ * Test scenarios (all combinations of real/fake server and client certs):
+ * 1. Real server + Real client → TLS succeeds (baseline)
+ * 2. Fake server + Real client → TLS fails (fake server not trusted by real CA)
+ * 3. Real server + Fake client → TLS fails (fake client not trusted by real CA)
+ * 4. Fake server + Fake client → TLS succeeds (both share the same fake CA)
+ *    This is expected - they authenticate each other, but this is NOT secure
+ *    because neither chain traces back to a REAL trusted root.
+ */
+void testFakeCertificateNameMatchingAttack() {
+    // Test 1: Real server + Real client (baseline - should succeed)
+    {
+        testShow() << __func__ << ": === Test 1: Real server + Real client (baseline) ===";
+        auto initial(nt::NTScalar{TypeCode::Int32}.create());
+        auto mbox(server::SharedPV::buildReadonly());
+
+        auto serv_conf(server::Config::isolated());
+        serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+        auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+        auto cli_conf(serv.clientConfig());
+        cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+        auto cli(cli_conf.build());
+
+        mbox.open(initial.update(TEST_PV_FIELD, 42));
+        serv.start();
+
+        bool is_tls{false};
+        auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) {
+            is_tls = c.cred && c.cred->isTLS;
+        }).exec());
+
+        auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+        testTrue(is_tls);
+        testDiag("Real server + Real client: TLS should succeed");
+        testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+        conn.reset();
+    }
+
+    // Test 2: Fake server + Real client (should FAIL - fake server not trusted)
+    {
+        testShow() << __func__ << ":=== Test 2: Fake server + Real client ===";
+        auto initial(nt::NTScalar{TypeCode::Int32}.create());
+        auto mbox(server::SharedPV::buildReadonly());
+
+        auto serv_conf(server::Config::isolated());
+        serv_conf.tls_keychain_file = FAKE_SUPERSERVER_KEYCHAIN_FILE;
+
+        auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+        auto cli_conf(serv.clientConfig());
+        cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+        auto cli(cli_conf.build());
+
+        mbox.open(initial.update(TEST_PV_FIELD, 42));
+        serv.start();
+
+        try {
+            auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected&) {
+                // Should not reach here
+            }).exec());
+
+            auto reply(cli.get(TEST_PV).exec()->wait(3.0));
+            testFail("Fake server + Real client: Connection should have failed");
+        } catch (std::exception& e) {
+            testPass("Fake server + Real client: TLS correctly rejected fake server");
+        }
+    }
+
+    // Test 3: Real server + Fake client (should FAIL - fake client not trusted)
+    {
+        testShow() << __func__ << ": === Test 3: Real server + Fake client ===";
+        auto initial(nt::NTScalar{TypeCode::Int32}.create());
+        auto mbox(server::SharedPV::buildReadonly());
+
+        auto serv_conf(server::Config::isolated());
+        serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+        auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+        auto cli_conf(serv.clientConfig());
+        cli_conf.tls_keychain_file = FAKE_CLIENT1_KEYCHAIN_FILE;
+
+        auto cli(cli_conf.build());
+
+        mbox.open(initial.update(TEST_PV_FIELD, 42));
+        serv.start();
+
+        try {
+            auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected&) {
+                // Should not reach here
+            }).exec());
+
+            auto reply(cli.get(TEST_PV).exec()->wait(3.0));
+            testFail("Real server + Fake client: Connection should have failed");
+        } catch (std::exception& e) {
+            testPass("Real server + Fake client: TLS correctly rejected fake client");
+        }
+    }
+
+    // Test 4: Fake server + Fake client (both share same fake CA - succeeds but insecure!)
+    {
+        testShow() << __func__ << ": === Test 4: Fake server + Fake client ===";
+        auto initial(nt::NTScalar{TypeCode::Int32}.create());
+        auto mbox(server::SharedPV::buildReadonly());
+
+        auto serv_conf(server::Config::isolated());
+        serv_conf.tls_keychain_file = FAKE_SUPERSERVER_KEYCHAIN_FILE;
+
+        auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+        auto cli_conf(serv.clientConfig());
+        cli_conf.tls_keychain_file = FAKE_CLIENT1_KEYCHAIN_FILE;
+
+        auto cli(cli_conf.build());
+
+        mbox.open(initial.update(TEST_PV_FIELD, 42));
+        serv.start();
+
+        bool is_tls{false};
+        try {
+            auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) {
+                is_tls = c.cred && c.cred->isTLS;
+            }).exec());
+
+            auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+            testTrue(is_tls);
+            testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+            conn.reset();
+            testDiag("Fake+Fake: Connection succeeded (expected - both share fake CA)");
+        } catch (std::exception& e) {
+            testFail("Fake server + Fake client: Should have succeeded (both share fake CA)");
+        }
+    }
+}
+
 }  // namespace
 
 MAIN(testtls) {
-    testPlan(41);
+    testPlan(47);
     testSetup();
     logger_config_env();
     testLegacyMode();
@@ -739,6 +884,7 @@ MAIN(testtls) {
     testServerOnlyAuthWithMatchingTrustAnchor();
     testMutualTLSWithMatchingTrustAnchors();
     testClientWithMismatchedChainFallback();
+    testFakeCertificateNameMatchingAttack();
     cleanup_for_valgrind();
     return testDone();
 }
