@@ -25,7 +25,7 @@
 
 #include "openssl.h"
 #include "ownedptr.h"
-#include "p12filefactory.h"
+#include "p12filereader.h"
 #include "security.h"
 #include "utilpvt.h"
 
@@ -43,7 +43,7 @@ DEFINE_LOGGER(filelogger, "pvxs.p12");
  * @return a CertData object
  * @throw std::runtime_error if the file cannot be opened or parsed
  */
-CertData P12FileFactory::getCertDataFromFile() {
+CertData P12FileReader::getCertDataFromFile() {
     ossl_ptr<X509> cert;
     ossl_ptr<STACK_OF(X509)> chain(sk_X509_new_null(), false);
     std::shared_ptr<KeyPair> key_pair;

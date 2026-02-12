@@ -982,9 +982,9 @@ done:
     }
 }
 
-FLock::FLock(FILE *fp, bool writing)
+FLock::FLock(FILE *fp, bool for_writing)
     :fp(fp)
-    ,writing(writing)
+    ,writing(for_writing)
 {
 #ifdef USE_POSIX_FLOCK
     if(flock(fileno(fp), writing ? LOCK_EX : LOCK_SH)) {

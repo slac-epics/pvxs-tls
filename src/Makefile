@@ -111,13 +111,13 @@ LIB_SRCS += unittest.cpp
 LIB_SRCS += util.cpp
 
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
-LIB_SRCS += certfilefactory.cpp
+LIB_SRCS += idfilereader.cpp
 LIB_SRCS += certstatusfactory.cpp
 LIB_SRCS += certstatus.cpp
 LIB_SRCS += certstatusmanager.cpp
 LIB_SRCS += openssl.cpp
 LIB_SRCS += opensslgbl.cpp
-LIB_SRCS += p12filefactory.cpp
+LIB_SRCS += p12filereader.cpp
 endif # EVENT2_HAS_OPENSSL
 
 LIB_LIBS += Com

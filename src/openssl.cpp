@@ -21,12 +21,12 @@
 
 #include <pvxs/log.h>
 
-#include "certfilefactory.h"
 #include "certstatus.h"
 #include "certstatusmanager.h"
 #include "evhelper.h"
-#include "ownedptr.h"
+#include "idfilereader.h"
 #include "opensslgbl.h"
+#include "ownedptr.h"
 #include "serverconn.h"
 #include "utilpvt.h"
 
@@ -486,7 +486,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     // Get the key and certificate from the file or files
     log_debug_printf(setup, "Getting private key and certificate from configured keychain file: %s\n", conf.tls_keychain_file.c_str());
     const std::string &filename = conf.tls_keychain_file, &password = conf.tls_keychain_pwd;
-    auto cert_data = certs::IdFileFactory::createReader(filename, password)->getCertDataFromFile();
+    auto cert_data = certs::IdFileReader::createReader(filename, password)->getCertDataFromFile();
 
     log_debug_printf(setup, "Getting trusted root from certificate chain. %s\n", "");
     const ossl_ptr<X509> trusted_root_ca(extractCAs(tls_context, cert_data.cert_auth_chain));

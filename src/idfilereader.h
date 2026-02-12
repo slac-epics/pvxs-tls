@@ -4,16 +4,14 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#ifndef PVXS_CERT_FILE_FACTORY_H
-#define PVXS_CERT_FILE_FACTORY_H
+#ifndef PVXS_ID_FILE_READER_H
+#define PVXS_ID_FILE_READER_H
 
 #include <memory>
 #include <string>
 #include <utility>
 
 #include <openssl/x509.h>
-
-#include <pvxs/log.h>
 
 #include "ownedptr.h"
 #include "security.h"
@@ -22,8 +20,8 @@ namespace pvxs {
 namespace certs {
 
 // Forward declarations
-class P12FileFactory;
-class IdFileFactory;
+class P12FileReader;
+class IdFileReader;
 
 // C++11 implementation of make_unique
 template <typename T, typename... Args>
@@ -44,21 +42,18 @@ struct CertData {
     CertData() = default;
 };
 
-typedef std::unique_ptr<IdFileFactory> cert_factory_ptr;
+typedef std::unique_ptr<IdFileReader> cert_factory_ptr;
 
-class PVXS_API IdFileFactory {
+class PVXS_API IdFileReader {
    public:
     /**
-     * @brief Creates a new CertFileFactory object.
+     * @brief Creates a new IdFile Reader object.
      *
      * This method creates a new CertFileFactory object.
      */
-    static cert_factory_ptr create(const std::string& filename, const std::string& password = "",
-                                   X509* cert_ptr = nullptr, STACK_OF(X509) * certs_ptr = nullptr, const std::string& pem_string = "");
+    static cert_factory_ptr createReader(const std::string& filename, const std::string& password = "");
 
-    static cert_factory_ptr createReader(const std::string& filename, const std::string& password = "") { return create(filename, password); }
-
-    virtual ~IdFileFactory() = default;
+    virtual ~IdFileReader() = default;
 
     /**
      * @brief Gets the certificate data from the file.
@@ -69,15 +64,11 @@ class PVXS_API IdFileFactory {
     virtual CertData getCertDataFromFile() = 0;
 
    protected:
-    IdFileFactory(const std::string& filename, const std::string& password = "", X509* cert_ptr = nullptr,
-                  STACK_OF(X509) * certs_ptr = nullptr, const std::string& pem_string = "")
-        : filename_(filename), password_(password), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), pem_string_(pem_string) {}
+    IdFileReader(const std::string& filename, const std::string& password = "")
+        : filename_(filename), password_(password) {}
 
     std::string filename_{};
     std::string password_{};
-    X509* cert_ptr_{nullptr};
-    STACK_OF(X509) * certs_ptr_ { nullptr };
-    const std::string pem_string_{};
 
     static std::string getExtension(const std::string& filename) {
         auto pos = filename.find_last_of('.');
@@ -91,4 +82,4 @@ class PVXS_API IdFileFactory {
 }  // namespace certs
 }  // namespace pvxs
 
-#endif
+#endif // PVXS_ID_FILE_READER_H
