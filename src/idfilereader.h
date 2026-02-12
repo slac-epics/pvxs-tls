@@ -36,9 +36,9 @@ struct CertData {
     std::shared_ptr<KeyPair> key_pair;
     time_t renew_by{0};
 
-    CertData(ossl_ptr<X509>& newCert, ossl_shared_ptr<STACK_OF(X509)>& newCa) : cert(std::move(newCert)), cert_auth_chain(newCa) {}
-    CertData(ossl_ptr<X509>& newCert, ossl_shared_ptr<STACK_OF(X509)>& newCa, std::shared_ptr<KeyPair> key_pair)
-        : cert(std::move(newCert)), cert_auth_chain(newCa), key_pair(key_pair) {}
+    CertData(ossl_ptr<X509>& new_cert, const ossl_shared_ptr<STACK_OF(X509)>& new_ca) : cert(std::move(new_cert)), cert_auth_chain(new_ca) {}
+    CertData(ossl_ptr<X509>& new_cert, const ossl_shared_ptr<STACK_OF(X509)>& new_ca, std::shared_ptr<KeyPair> key_pair)
+        : cert(std::move(new_cert)), cert_auth_chain(new_ca), key_pair(std::move(key_pair)) {}
     CertData() = default;
 };
 
@@ -64,14 +64,14 @@ class PVXS_API IdFileReader {
     virtual CertData getCertDataFromFile() = 0;
 
    protected:
-    IdFileReader(const std::string& filename, const std::string& password = "")
-        : filename_(filename), password_(password) {}
+    explicit IdFileReader(std::string  filename, std::string  password = "")
+        : filename_(std::move(filename)), password_(std::move(password)) {}
 
     std::string filename_{};
     std::string password_{};
 
     static std::string getExtension(const std::string& filename) {
-        auto pos = filename.find_last_of('.');
+        const auto pos = filename.find_last_of('.');
         if (pos == std::string::npos) {
             return "";
         }
@@ -91,8 +91,6 @@ class P12FileReader final : public IdFileReader {
 
         CertData getCertDataFromFile() override;
 };
-
-
 
 }  // namespace certs
 }  // namespace pvxs
