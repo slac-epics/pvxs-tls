@@ -38,7 +38,6 @@ class P12FileFactory final : public IdFileFactory {
         : IdFileFactory(filename, password, nullptr, nullptr, pem_string) {}
 
     CertData getCertDataFromFile() override;
-    std::shared_ptr<KeyPair> getKeyFromFile() override;
 };
 
 }  // namespace certs

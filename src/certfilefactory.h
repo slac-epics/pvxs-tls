@@ -68,23 +68,6 @@ class PVXS_API IdFileFactory {
      */
     virtual CertData getCertDataFromFile() = 0;
 
-    /**
-     * @brief Gets the key only from the file.
-     *
-     * This method gets the key from the file.
-     * The format (PKCS#12, or Base64-encoded ASCII) is determined by the filename extension.
-     */
-    virtual std::shared_ptr<KeyPair> getKeyFromFile() = 0;
-
-    /**
-     * @brief Creates a key pair.
-     *
-     * This method creates a key pair.  Private key is generated and public key is extracted from the private key.
-     */
-    static std::shared_ptr<KeyPair> createKeyPair();
-
-    CertData getCertData(const std::shared_ptr<KeyPair>& key_pair) const;
-
    protected:
     IdFileFactory(const std::string& filename, const std::string& password = "", X509* cert_ptr = nullptr,
                   STACK_OF(X509) * certs_ptr = nullptr, const std::string& pem_string = "")

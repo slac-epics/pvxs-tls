@@ -35,32 +35,6 @@ namespace certs {
 DEFINE_LOGGER(filelogger, "pvxs.p12");
 
 /**
- * @brief Get a key pair from a P12 file
- *
- * @return a shared pointer to the KeyPair object
- * @throw std::runtime_error if the file cannot be opened
- * @throw ossl::SSLError if file cannot be parsed
- */
-std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile() {
-    const file_ptr fp(fopen(filename_.c_str(), "rb"), false);
-    if (!fp) {
-        throw std::runtime_error(SB() << "Error getting private key from file: \"" << filename_ << "\": " << strerror(errno));
-    }
-
-    const ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), nullptr), false);
-    if (!p12) {
-        throw std::runtime_error(SB() << "Error opening private key file as a PKCS#12 object: " << filename_);
-    }
-
-    ossl_ptr<EVP_PKEY> pkey;
-    if (!PKCS12_parse(p12.get(), password_.c_str(), pkey.acquire(), nullptr, nullptr)) {
-        throw ossl::SSLError(SB() << "Error parsing private key file: " << filename_);
-    }
-
-    return std::make_shared<KeyPair>(std::move(pkey));
-}
-
-/**
  * @brief Get the certificate data from a P12 file
  *
  * The P12 file is parsed to extract the certificate and chain.
