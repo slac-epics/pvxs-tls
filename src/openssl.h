@@ -77,7 +77,7 @@ constexpr uint16_t kAnyServer = kForCMS | kForServer;
 struct PeerCredentials;
 namespace ossl {
 
-PVXS_API int ossl_verify(int preverify_ok, X509_STORE_CTX* x509_ctx);
+int ossl_verify(int preverify_ok, X509_STORE_CTX* x509_ctx);
 
 struct PVXS_API SSLError : public std::runtime_error {
     explicit SSLError(const std::string& msg);
@@ -318,7 +318,7 @@ struct ShowX509 {
     const X509* cert;
 };
 
-PVXS_API std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
+std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
 
 /**
  * @brief SSL context for TLS communication
@@ -436,7 +436,7 @@ struct SSLContext {
     void restartStatusValidityTimerFromCertStatus() const;
 };
 
-PVXS_API void configureServerOCSPCallback(void* server_ptr, SSL* ssl);
+void configureServerOCSPCallback(void* server_ptr, SSL* ssl);
 
 struct OCSPStapleData {
     size_t size;

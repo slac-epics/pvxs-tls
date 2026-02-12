@@ -106,16 +106,16 @@ void strDiff(std::ostream& out,
              const char *lhs,
              const char *rhs);
 
-PVXS_API std::string convertPath(std::string &path);
-PVXS_API void ensureDirectoryExists(std::string &filepath, bool convert_path = true);
+std::string convertPath(std::string &path);
+void ensureDirectoryExists(std::string &filepath, bool convert_path = true);
 std::string versionString();
-PVXS_API std::string getHomeDir();
-PVXS_API std::string getFileContents(const std::string &file_name);
+std::string getHomeDir();
+std::string getFileContents(const std::string &file_name);
 
-PVXS_API std::string getXdgDataHome();
-PVXS_API std::string getXdgConfigHome();
-PVXS_API std::string getXdgPvaDataHome();
-PVXS_API std::string getXdgPvaConfigHome();
+std::string getXdgDataHome();
+std::string getXdgConfigHome();
+std::string getXdgPvaDataHome();
+std::string getXdgPvaConfigHome();
 
 struct threadOnceInfo {
     epicsThreadOnceId id = EPICS_THREAD_ONCE_INIT;

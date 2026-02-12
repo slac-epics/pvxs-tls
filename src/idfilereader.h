@@ -66,7 +66,7 @@ struct CertData {
 
 typedef std::unique_ptr<IdFileReader> cert_factory_ptr;
 
-class PVXS_API IdFileReader {
+class IdFileReader {
    public:
     /**
      * @brief Creates a new IdFile Reader object.
