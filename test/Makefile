@@ -133,7 +133,6 @@ gen_test_certs_SRCS += gen_test_certs.cpp
 
 TESTPROD_HOST += testtls
 testtls_SRCS += testtls.cpp
-testtls_SRCS += certstatusfactory.cpp
 testtls_SRCS += certstatusmanager.cpp
 testtls_SRCS += certstatus.cpp
 TESTS += testtls

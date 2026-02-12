@@ -21,7 +21,6 @@
 #include <pvxs/log.h>
 
 #include "certstatus.h"
-#include "certstatusfactory.h"
 #include "evhelper.h"
 #include "opensslgbl.h"
 #include "ownedptr.h"
@@ -106,6 +105,19 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
 }
 
 /**
+ * @brief Convert ASN1_INTEGER to a 64-bit unsigned integer
+ * @param asn1_number
+ * @return
+ */
+uint64_t ASN1ToUint64(const ASN1_INTEGER* asn1_number) {
+    uint64_t uint64_number = 0;
+    for (int i = 0; i < asn1_number->length; ++i) {
+        uint64_number = uint64_number << 8 | asn1_number->data[i];
+    }
+    return uint64_number;
+}
+
+/**
  * Parse OCSP responses from the provided OCSP response object
  * and return the parsed out status of the certificate which is the subject of the OCSP response.
  *
@@ -153,7 +165,7 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE>
         throw OCSPParseException("Revocation time not set when status is REVOKED");
     }
 
-    return {CertStatusFactory::ASN1ToUint64(serial), OCSPCertStatus(ocsp_status), this_update, next_update, revocation_time};
+    return {ASN1ToUint64(serial), OCSPCertStatus(ocsp_status), this_update, next_update, revocation_time};
 }
 
 /**
