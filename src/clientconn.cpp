@@ -9,7 +9,7 @@
 #include <pvxs/log.h>
 
 #ifdef PVXS_ENABLE_OPENSSL
-#include "certstatusmanager.h"
+#include "certstatus.h"
 #endif
 
 #include "clientimpl.h"

@@ -28,7 +28,7 @@
 #include "utilpvt.h"
 
 #ifdef PVXS_ENABLE_OPENSSL
-#include "certstatusmanager.h"
+#include "certstatus.h"
 #endif
 
 namespace pvxs {

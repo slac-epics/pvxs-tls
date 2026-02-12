@@ -22,7 +22,6 @@
 #include <pvxs/log.h>
 
 #include "certstatus.h"
-#include "certstatusmanager.h"
 #include "evhelper.h"
 #include "idfilereader.h"
 #include "opensslgbl.h"

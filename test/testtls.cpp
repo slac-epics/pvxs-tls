@@ -20,7 +20,7 @@
 #include <pvxs/unittest.h>
 
 #include "certcontext.h"
-#include "certstatusmanager.h"
+#include "certstatus.h"
 #include "utilpvt.h"
 
 using namespace pvxs;

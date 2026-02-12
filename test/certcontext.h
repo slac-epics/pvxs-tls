@@ -26,7 +26,7 @@
 #include <pvxs/client.h>
 #include <pvxs/source.h>
 
-#include "certstatusmanager.h"
+#include "certstatus.h"
 #include "ownedptr.h"
 #include "opensslgbl.h"
 

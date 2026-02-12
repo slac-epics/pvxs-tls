@@ -22,7 +22,7 @@
 
 #include <pvxs/log.h>
 
-#include "certstatusmanager.h"
+#include "certstatus.h"
 #include "evhelper.h"
 #include "openssl.h"
 
