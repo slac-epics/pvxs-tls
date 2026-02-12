@@ -147,6 +147,23 @@ void SSLContext::statusValidityTimerCallback(evutil_socket_t fd, short evt, void
     ctx->setTlsOrTcpMode();
 }
 
+void SSLContext::restartStatusValidityTimerFromCertStatus() const {
+    if (!status_validity_timer.get()) {
+        return; // Timer is not initialized
+    }
+
+    // Calculate the remaining time from the status validity date
+    if (cert_status.status_valid_until_date.t > 0) {
+        const time_t now = time(nullptr);
+        if (cert_status.status_valid_until_date.t > now) {
+            timeval delay{};
+            delay.tv_sec = cert_status.status_valid_until_date.t - now;
+            delay.tv_usec = 0;
+            event_add(status_validity_timer.get(), &delay);
+        }
+    }
+}
+
 /**
  * @brief Set degraded mode
  *
@@ -267,23 +284,6 @@ SSLContext::SSLContext(SSLContext &o) noexcept
         event_del(o.status_validity_timer.get());
     }
 
-}
-
-void SSLContext::restartStatusValidityTimerFromCertStatus() const {
-    if (!status_validity_timer.get()) {
-        return; // Timer is not initialized
-    }
-
-    // Calculate the remaining time from the status validity date
-    if (cert_status.status_valid_until_date.t > 0) {
-        const time_t now = time(nullptr);
-        if (cert_status.status_valid_until_date.t > now) {
-            timeval delay{};
-            delay.tv_sec = cert_status.status_valid_until_date.t - now;
-            delay.tv_usec = 0;
-            event_add(status_validity_timer.get(), &delay);
-        }
-    }
 }
 
 SSLContext::~SSLContext() {

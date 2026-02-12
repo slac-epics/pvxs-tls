@@ -436,7 +436,7 @@ struct SSLContext {
     void restartStatusValidityTimerFromCertStatus() const;
 };
 
-PVXS_API void configureServerOCSPCallback(void* server, SSL* ssl);
+PVXS_API void configureServerOCSPCallback(void* server_ptr, SSL* ssl);
 
 struct OCSPStapleData {
     size_t size;
