@@ -12,17 +12,7 @@ include $(TOP)/configure/CONFIG
 USR_CPPFLAGS += -I$(TOP)/src
 
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
-SRC_DIRS += $(TOP)/src
 USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
-
-ifneq (WIN32,$(OS_CLASS))
-# Some PVXS sources are compiled into tools.
-# Ensure PVXS_API is not seen as dllimport while defining these symbols.
-USR_CPPFLAGS += -DPVXS_API_BUILDING
-endif
-
-SRCS += certstatus.cpp
-
 endif # EVENT2_HAS_OPENSSL
 
 PROD_LIBS += pvxs Com

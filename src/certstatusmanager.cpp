@@ -83,7 +83,7 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const uint8_t *ocsp_b
  * @param ocsp_bytes_len the length of the byte buffer
  * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(const uint8_t *ocsp_bytes, const size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr) {
+ParsedOCSPStatus CertStatusManager::parse(const uint8_t *ocsp_bytes, const size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr) {
     auto ocsp_response = getOCSPResponse(ocsp_bytes, ocsp_bytes_len);
     return parse(ocsp_response, trusted_store_ptr);
 }
@@ -99,7 +99,7 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const uint8_t *ocsp_bytes, co
  * @param ocsp_bytes The input byte array containing the OCSP responses data.
  * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> &ocsp_bytes, X509_STORE *trusted_store_ptr) {
+ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> &ocsp_bytes, X509_STORE *trusted_store_ptr) {
     const auto ocsp_response = getOCSPResponse(ocsp_bytes);
     return parse(ocsp_response, trusted_store_ptr);
 }
@@ -128,7 +128,7 @@ uint64_t ASN1ToUint64(const ASN1_INTEGER* asn1_number) {
  * @param ocsp_response An OCSP response object.
  * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_response, X509_STORE *trusted_store_ptr) {
+ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_response, X509_STORE *trusted_store_ptr) {
     // Get the response status
     const int response_status = OCSP_response_status(ocsp_response.get());
     if (response_status != OCSP_RESPONSE_STATUS_SUCCESSFUL) {

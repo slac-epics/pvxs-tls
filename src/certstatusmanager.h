@@ -48,7 +48,7 @@ using cert_status_ptr = ossl_shared_ptr<T, cert_status_delete<T>>;
  *
  * Parsing OCSP responses is carried out by providing the OCSP response buffer
  * to the static `parse()` function. This function will verify the response comes
- * from a trusted source, is well formed, and then will return the `OCSPStatus`
+ * from a trusted source, is well-formed, and then will return the `OCSPStatus`
  * it indicates.
  * @code
  *  auto ocsp_status(CertStatusManager::parse(ocsp_response);
@@ -58,7 +58,7 @@ using cert_status_ptr = ossl_shared_ptr<T, cert_status_delete<T>>;
  * the certificate you want to get status for.  It will make a request
  * to the PVACMS to get certificate status for the certificate. After verifying the
  * authenticity of the response and checking that it is from a trusted
- * source it will return `CertificateStatus`.
+ * source, it will return `CertificateStatus`.
  * @code
  *  auto cert_status(CertStatusManager::getStatus(cert);
  * @endcode
@@ -152,29 +152,68 @@ class CertStatusManager {
 
 
     /**
+     * @brief Get the certificate issuer from a Cert.
+     * This function gets the certificate issuer from the certificate
+     * @param cert_ptr the certificate to check
+     * @return the certificate issuer
+     */
+    static std::string getIssuerIdFromCert(const X509* cert_ptr);
+
+    /**
+     * @brief Get the certificate serial number from a Cert.
+     * This function gets the certificate serial number from the certificate
+     * @param cert_ptr the certificate to check
+     * @return the certificate serial number
+     */
+    static std::string getSerialFromCert(const X509* cert_ptr);
+
+    /**
+     * @brief Get the certificate ID string from a Cert.
+     * This function gets the certificate ID string from a certificate
+     * @param cert_ptr the certificate ID string, made up of the issuer id and the serial number separated with a colon
+     *         e.g. 0293823f:098294739483904875
+     */
+    static std::string getCertIdFromCert(const X509 *cert_ptr);
+
+    /**
      * @brief Get the status PV from a Cert.
-     * This function gets the PVA extension that stores the status PV in the certificate
-     * if the certificate must be used in conjunction with a status monitor to check for
-     * revoked status.
-     * @param cert the certificate to check for the status PV extension
+     * This function gets the PVA certificate extension that holds the status PV
+     * @param cert_ptr the certificate to check
      * @return a blank string if no extension exists, otherwise contains the status PV
      *         e.g. CERT:STATUS:0293823f:098294739483904875
      */
-    static std::string getIssuerIdFromCert(const X509* cert_ptr);
-    static std::string getSerialFromCert(const X509* cert_ptr);
-    static std::string getCertIdFromCert(const X509 *cert);
-    static std::string getStatusPvFromCert(const X509 *cert);
-    static std::string getConfigPvFromCert(const X509 *cert);
+    static std::string getStatusPvFromCert(const X509 *cert_ptr);
 
+    /**
+     * @brief Get the certificate configuration PV from a Cert.
+     * This function gets the PVA certificate extension that holds the certificate configuration PV
+     * @param cert_ptr the certificate to check
+     * @return a blank string if no extension exists, otherwise contains the certificate configuration PV
+     *         e.g. CERT:CONFIG:0293823f:098294739483904875
+     */
+    static std::string getConfigPvFromCert(const X509 *cert_ptr);
+
+    /**
+     * @brief Get the expiration date from a Cert.
+     * This function gets the certificate expiration date
+     * @param cert the certificate to check
+     * @return the certificate expiration date
+     */
     static time_t getExpirationDateFromCert(const ossl_ptr<X509> &cert);
 
-    static time_t getExpirationDateFromCert(const X509 *cert);
+    /**
+     * @brief Get the expiration date from a Cert.
+     * This function gets the certificate expiration date
+     * @param cert_ptr the certificate to check
+     * @return the certificate expiration date
+     */
+    static time_t getExpirationDateFromCert(const X509 *cert_ptr);
 
     /**
      * @brief Used to create a helper that you can use to subscribe to certificate status with
      * Subsequently call subscribe() to subscribe
      *
-     * @param client_config the client config to use to create the subscription client
+     * @param client the client to use for the subscription
      * @param trusted_store_ptr the trusted store that we'll use to verify the OCSP responses received
      * @param status_pv the status PV to subscribe to
      * @param callback the callback to call when a status change has appeared
