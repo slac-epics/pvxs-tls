@@ -79,6 +79,21 @@ class PVXS_API IdFileReader {
     }
 };
 
+/**
+ * @class P12FileReader
+ *
+ * @brief Manages certificate file operations.
+ */
+class P12FileReader final : public IdFileReader {
+    public:
+        P12FileReader(const std::string &filename, const std::string &password)
+            : IdFileReader(filename, password) {}
+
+        CertData getCertDataFromFile() override;
+};
+
+
+
 }  // namespace certs
 }  // namespace pvxs
 

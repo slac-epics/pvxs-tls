@@ -117,7 +117,6 @@ LIB_SRCS += certstatus.cpp
 LIB_SRCS += certstatusmanager.cpp
 LIB_SRCS += openssl.cpp
 LIB_SRCS += opensslgbl.cpp
-LIB_SRCS += p12filereader.cpp
 endif # EVENT2_HAS_OPENSSL
 
 LIB_LIBS += Com
