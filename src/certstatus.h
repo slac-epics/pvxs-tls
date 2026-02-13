@@ -321,19 +321,38 @@ struct OCSPStatus {
     CertDate revocation_date{};
 
     // Constructor from a PKCS#7 OCSP response that must be signed by the given trusted store.
-    explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param, X509_STORE* trusted_store_ptr) : ocsp_bytes(ocsp_bytes_param) {
+    explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param, X509_STORE* trusted_store_ptr, const std::string& cert_id)
+        : ocsp_bytes(ocsp_bytes_param) {
         if (!trusted_store_ptr) {
             throw std::invalid_argument("Trusted store pointer is null");
         }
-        init(trusted_store_ptr);
+        init(trusted_store_ptr, cert_id);
     }
 
-    explicit OCSPStatus(const uint8_t* ocsp_bytes_ptr, const size_t ocsp_bytes_len, X509_STORE* trusted_store_ptr)
+    explicit OCSPStatus(const uint8_t* ocsp_bytes_ptr, const size_t ocsp_bytes_len, X509_STORE* trusted_store_ptr, const std::string& cert_id)
         : ocsp_bytes(ocsp_bytes_ptr, ocsp_bytes_len) {
         if (!trusted_store_ptr) {
             throw std::invalid_argument("Trusted store pointer is null");
         }
-        init(trusted_store_ptr);
+        init(trusted_store_ptr, cert_id);
+    }
+
+    explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param, X509_STORE* trusted_store_ptr,
+                        const std::string& issuer_id, const uint64_t serial)
+        : ocsp_bytes(ocsp_bytes_param) {
+        if (!trusted_store_ptr) {
+            throw std::invalid_argument("Trusted store pointer is null");
+        }
+        init(trusted_store_ptr, issuer_id, serial);
+    }
+
+    explicit OCSPStatus(const uint8_t* ocsp_bytes_ptr, const size_t ocsp_bytes_len, X509_STORE* trusted_store_ptr,
+                        const std::string& issuer_id, const uint64_t serial)
+        : ocsp_bytes(ocsp_bytes_ptr, ocsp_bytes_len) {
+        if (!trusted_store_ptr) {
+            throw std::invalid_argument("Trusted store pointer is null");
+        }
+        init(trusted_store_ptr, issuer_id, serial);
     }
 
     // To set an OCSP UNKNOWN status to indicate errors
@@ -390,7 +409,8 @@ struct OCSPStatus {
     explicit OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, CertDate status_date, CertDate status_valid_until_time,
                         CertDate revocation_time);
 
-    void init(X509_STORE* trusted_store_ptr);
+    void init(X509_STORE* trusted_store_ptr, const std::string& cert_id);
+    void init(X509_STORE* trusted_store_ptr, const std::string& issuer_id, uint64_t serial);
 };
 
 bool operator==(ocspcertstatus_t& lhs, OCSPStatus& rhs);
@@ -431,12 +451,17 @@ struct PVACertificateStatus final : OCSPStatus {
     bool operator==(const CertificateStatus& rhs) const override;
     bool operator!=(const CertificateStatus& rhs) const override { return !(*this == rhs); }
 
-    explicit PVACertificateStatus(const certstatus_t status, const shared_array<const uint8_t>& ocsp_bytes, X509_STORE* trusted_store_ptr)
-        : OCSPStatus(ocsp_bytes, trusted_store_ptr), status(status) {}
+    explicit PVACertificateStatus(const certstatus_t status, const shared_array<const uint8_t>& ocsp_bytes, X509_STORE* trusted_store_ptr,
+                                 const std::string& cert_id)
+        : OCSPStatus(ocsp_bytes, trusted_store_ptr, cert_id), status(status) {}
 
-    explicit PVACertificateStatus(const Value& status_value, X509_STORE* trusted_store_ptr)
+    explicit PVACertificateStatus(const certstatus_t status, const shared_array<const uint8_t>& ocsp_bytes, X509_STORE* trusted_store_ptr,
+                                 const std::string& issuer_id, const uint64_t serial)
+        : OCSPStatus(ocsp_bytes, trusted_store_ptr, issuer_id, serial), status(status) {}
+
+    explicit PVACertificateStatus(const Value& status_value, X509_STORE* trusted_store_ptr, const std::string& cert_id)
         : PVACertificateStatus(status_value["value.index"].as<certstatus_t>(), status_value["ocsp_response"].as<shared_array<const uint8_t>>(),
-                               trusted_store_ptr) {
+                               trusted_store_ptr, cert_id) {
         if (ocsp_bytes.empty()) return;
         log_debug_printf(status_setup, "Value Status: %s\n", (SB() << status_value).str().c_str());
         log_debug_printf(status_setup, "Status Date: %s\n", this->status_date.s.c_str());
@@ -735,12 +760,13 @@ class CertStatusManager {
      *
      * First, verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well-formed.
      *
-     * Then parse it and read out the status and the status times
+     * Then parse it, cerify that it refers to the same certificate, and read out the status and the status times
      *
      * @param ocsp_bytes The input byte array containing the OCSP responses data.
      * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
+     * @param cert_id the certificate ID that the status is referring to
      */
-    static ParsedOCSPStatus parse(const shared_array<const uint8_t> &ocsp_bytes, X509_STORE *trusted_store_ptr);
+    static ParsedOCSPStatus parse(const shared_array<const uint8_t> &ocsp_bytes, X509_STORE *trusted_store_ptr, const std::string& cert_id);
 
     /**
      * Parse OCSP responses from the provided ocsp_bytes response
@@ -748,26 +774,28 @@ class CertStatusManager {
      *
      * First, verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well-formed.
      *
-     * Then parse it and read out the status and the status times
+     * Then parse it, cerify that it refers to the same certificate, and read out the status and the status times
      *
      * @param ocsp_bytes The input byte buffer pointer containing the OCSP responses data.
      * @param ocsp_bytes_len the length of the byte buffer
      * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
+     * @param cert_id the certificate ID that the status is referring to
      */
-    static ParsedOCSPStatus parse(const uint8_t *ocsp_bytes, size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr);
+    static ParsedOCSPStatus parse(const uint8_t *ocsp_bytes, size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr, const std::string& cert_id);
 
     /**
      * Parse OCSP responses from the provided OCSP response object
      * and return the parsed out status of the certificate which is the subject of the OCSP response.
      *
-     * First verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well formed.
+     * First, verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well-formed.
      *
-     * Then parse it and read out the status and the status times
+     * Then parse it, cerify that it refers to the same certificate, and read out the status and the status times
      *
      * @param ocsp_response An OCSP response object.
      * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
+     * @param cert_id the certificate ID that the status is referring to
      */
-    static ParsedOCSPStatus parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_response, X509_STORE *trusted_store_ptr);
+    static ParsedOCSPStatus parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_response, X509_STORE *trusted_store_ptr, const std::string& cert_id);
 
     /**
      * @brief Get the status PV from a Cert.
@@ -815,6 +843,8 @@ class CertStatusManager {
      *         e.g. 0293823f:098294739483904875
      */
     static std::string getCertIdFromCert(const X509 *cert_ptr);
+    static std::string getCertIdFromSerialAndIssuer(const std::string &issuer_id, const std::string &serial);
+    static std::string getCertIdFromStatusPv(const std::string &status_pv);
 
     /**
      * @brief Get the status PV from a Cert.
@@ -857,11 +887,13 @@ class CertStatusManager {
      * @param client the client to use for the subscription
      * @param trusted_store_ptr the trusted store that we'll use to verify the OCSP responses received
      * @param status_pv the status PV to subscribe to
+     * @param cert_id the certificate ID that we're subscribing to
      * @param callback the callback to call when a status change has appeared
      *
      * @see unsubscribe()
      */
-    static cert_status_ptr<CertStatusManager> subscribe(const client::Context& client, X509_STORE *trusted_store_ptr, const std::string &status_pv, StatusCallback &&callback);
+    static cert_status_ptr<CertStatusManager> subscribe(const client::Context& client, X509_STORE *trusted_store_ptr, const std::string &status_pv,
+                                                        const std::string& cert_id, StatusCallback &&callback);
 
     /**
      * @brief Unsubscribe from listening to certificate status

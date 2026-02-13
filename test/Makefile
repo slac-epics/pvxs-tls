@@ -140,6 +140,11 @@ TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediat
 TESTPROD_HOST += testtlstime
 testtlstime_SRCS += testtlstime.cpp
 TESTS += testtlstime
+
+TESTPROD_HOST += testasn1uint64
+testasn1uint64_SRCS += testasn1uint64.cpp
+testasn1uint64_SRCS += certstatus.cpp
+TESTS += testasn1uint64
 endif # EVENT2_HAS_OPENSSL
 endif
 

@@ -170,7 +170,7 @@ std::string getCertStatusPvBase(const std::string &cert_pv_prefix) {
  * Left pad with zeros in 20 characters
  *
  * @param serial The serial number of the certificate.
- * @return The the serial number string.
+ * @return The serial number string.
  *
  * @see SB
  */
