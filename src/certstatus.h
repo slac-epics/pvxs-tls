@@ -760,7 +760,7 @@ class CertStatusManager {
      *
      * First, verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well-formed.
      *
-     * Then parse it, cerify that it refers to the same certificate, and read out the status and the status times
+     * Then parse it, certify that it refers to the same certificate, and read out the status and the status times
      *
      * @param ocsp_bytes The input byte array containing the OCSP responses data.
      * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
@@ -774,7 +774,7 @@ class CertStatusManager {
      *
      * First, verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well-formed.
      *
-     * Then parse it, cerify that it refers to the same certificate, and read out the status and the status times
+     * Then parse it, certify that it refers to the same certificate, and read out the status and the status times
      *
      * @param ocsp_bytes The input byte buffer pointer containing the OCSP responses data.
      * @param ocsp_bytes_len the length of the byte buffer
@@ -789,7 +789,7 @@ class CertStatusManager {
      *
      * First, verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well-formed.
      *
-     * Then parse it, cerify that it refers to the same certificate, and read out the status and the status times
+     * Then parse it, certify that it refers to the same certificate, and read out the status and the status times
      *
      * @param ocsp_response An OCSP response object.
      * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
