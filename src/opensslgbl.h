@@ -24,7 +24,7 @@ struct OSSLGbl {
 #endif
 };
 
-extern OSSLGbl* ossl_gbl;
+PVXS_API extern OSSLGbl* ossl_gbl;
 
 // Custom OIDs
 // TODO Register these unassigned OIDs for EPICS
