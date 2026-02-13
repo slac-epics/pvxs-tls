@@ -331,7 +331,7 @@ ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_re
  * subscriptions in the same context too.  The reference needs to remain valid until the subscription
  * is cancelled.
  *
- * @param client_config the client config to use to make the client connection for the subscription
+ * @param client the client to use for the client connection for the subscription
  * @param trusted_store_ptr the trusted store to verify the status response against
  * @param status_pv the status PV to subscribe to
  * @param callback the callback to call
