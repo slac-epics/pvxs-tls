@@ -360,8 +360,11 @@ ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_re
     }
 
     const auto ocsp_status = static_cast<ocspcertstatus_t>(OCSP_single_get0_status(single_response, &reason, &revocation_time, &this_update, &next_update));
-    // Check status validity: tolerate skew of 5 minutes and less than 30 minutes old
-    if (OCSP_check_validity(this_update, next_update, 300, 108000) != 1) {
+    int allowed_skew = 300;                           // Allow 5 minutes clock skew
+    int fallback_max_age = next_update ? -1 : 1800;   // only enforce a status validity age cap of 30 minutes if `next_update` is missing
+
+    // Check status validity: tolerate skew of 5 minutes and a maximum age provided in next_update or fall back to a max of 30 minutes
+    if (OCSP_check_validity(this_update, next_update, allowed_skew, fallback_max_age) != 1) {
         const unsigned long err = ERR_get_error();
         if(err) {
             char err_buf[256];
