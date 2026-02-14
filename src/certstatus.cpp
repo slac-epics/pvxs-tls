@@ -360,8 +360,8 @@ ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_re
     }
 
     const auto ocsp_status = static_cast<ocspcertstatus_t>(OCSP_single_get0_status(single_response, &reason, &revocation_time, &this_update, &next_update));
-    // Check status validity: less than 5 seconds old
-    if (OCSP_check_validity(this_update, next_update, 0, 5) != 1) {
+    // Check status validity: tolerate skew of 5 minutes and less than 30 minutes old
+    if (OCSP_check_validity(this_update, next_update, 300, 108000) != 1) {
         const unsigned long err = ERR_get_error();
         if(err) {
             char err_buf[256];
