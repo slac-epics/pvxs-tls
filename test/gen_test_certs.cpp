@@ -276,23 +276,6 @@ struct CertCreator {
     size_t keylen = 2048;
     const EVP_MD* sig = EVP_sha256();
 
-    static const char *nid2String(int nid) {
-        switch (nid) {
-            case NID_subject_key_identifier:
-                return LN_subject_key_identifier;
-            case NID_key_usage:
-                return LN_key_usage;
-            case NID_basic_constraints:
-                return LN_basic_constraints;
-            case NID_authority_key_identifier:
-                return LN_authority_key_identifier;
-            case NID_ext_key_usage:
-                return LN_ext_key_usage;
-            default:
-                return "unknown";
-        }
-    }
-
     /**
      * Add a string extension by NID to certificate.
      *
