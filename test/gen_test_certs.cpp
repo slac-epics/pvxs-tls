@@ -406,8 +406,7 @@ struct CertCreator {
 
         // store hash and name of issuer certificate (or issuer's issuer?)
         // RFC5280 mandates this for all certificates.
-        add_extension(cert.get(), NID_authority_key_identifier, "keyid:always,issuer:always",
-                      nullptr, issuer);
+        add_extension(cert.get(), NID_authority_key_identifier, "keyid:always,issuer:always", nullptr, issuer);
 
         // certificate usage constraints.
 
@@ -422,7 +421,7 @@ struct CertCreator {
             add_extension(cert.get(), NID_ext_key_usage, extended_key_usage);
 
         if ( add_status_extension) {
-            const auto issuer_id = pvxs::certs::CertStatus::getSkId(root ? root : issuer);
+            const auto issuer_id = pvxs::certs::CertStatus::getSkId(issuer);
             addCustomExtensionByNid(cert, pvxs::ossl::NID_SPvaCertStatusURI, getCertStatusURI("CERT", issuer_id, serial));
         }
 
