@@ -8,7 +8,6 @@ on:
         required: true
         type: choice
         options:
-          - epics-base
           - pvxs
   push:
     branches:
@@ -34,22 +33,14 @@ jobs:
               - 'test/**'
               - 'example/[!docker]/**'
 
-  build-epics-base:
-    if: |
-      github.event_name == 'workflow_dispatch' && 
-      github.event.inputs.build_target == 'epics-base'
-    uses: slac-epics/epics-base-tls/.github/workflows/docker-pub-epics-base.yml@7.0-secure-pvaccess
-
-
   build-pvxs:
-    needs: [check_docker_changes, build-epics-base]
+    needs: [check_docker_changes]
     if: |
       always() && 
       (github.event_name == 'workflow_dispatch' && 
        github.event.inputs.build_target == 'pvxs') || 
       (github.event_name == 'push' && 
-       needs.check_docker_changes.outputs.non_docker_changed == 'true') ||
-      needs.build-epics-base.result == 'success'
+       needs.check_docker_changes.outputs.non_docker_changed == 'true')
     runs-on: ubuntu-22.04
     outputs:
       status: ${{ job.status }}
