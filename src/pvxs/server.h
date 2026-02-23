@@ -109,6 +109,9 @@ public:
     //! Create a client configuration which can communicate with this Server.
     //! Suitable for use in self-contained unit-tests.
     client::Config clientConfig() const;
+    //! Create a client configuration which can communicate with the given Server.
+    //! Suitable for creating inner client context for certificate status monitoring.
+    //! @since UNRELEASED
     static client::Config clientConfig(const Config &server_config);
 
     //! Add a SharedPV to the "__builtin" StaticSource
@@ -236,6 +239,8 @@ public:
     }
     inline bool shareUDP() const { return UDP; }
 #endif
+    //! From definitions
+    //! @since UNRELEASED
     void fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv);
 
     Config()
