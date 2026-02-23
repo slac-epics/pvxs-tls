@@ -604,8 +604,9 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
                        }, std::move(temp)));
     });
 
-    context->tcp_loop.dispatch([context, internal, name, server]() {
+    context->tcp_loop.dispatch([internal, context, name, server]() {
         // on worker
+
         try {
             internal->chan = Channel::build(context, name, server);
 
@@ -615,7 +616,6 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
             internal->result = Result(std::current_exception());
             internal->notify();
         }
-        // on worker
     });
 
     return external;

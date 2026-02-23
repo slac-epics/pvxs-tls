@@ -1105,6 +1105,8 @@ public:
     inline bool shareUDP() const { return UDP; }
 #endif
 
+    //! Config from definitions
+    //! @since UNRELEASED
     void fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv);
 };
 

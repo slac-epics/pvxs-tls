@@ -46,7 +46,7 @@ struct ResultWaiter {
     } outcome = Busy;
 
     Value wait(double timeout=-1.0);
-    void complete(Result&& res, bool interrupt);
+    void complete(Result&& result, bool interrupt);
 };
 
 // internal actions on an Operation

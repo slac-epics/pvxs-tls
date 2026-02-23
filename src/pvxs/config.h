@@ -46,10 +46,10 @@ struct PVXS_API ConfigCommon {
     //! @since UNRELEASED
     unsigned short tls_port = 5076;
 
-    /**
-     * @brief Set to true to disable TLS.  This will override the environment TLS configuration
-     * settings and will also override config TLS configuration fields.  Suitable for testing.
-     * server
+    /** @brief Set to true to disable TLS.  This will override the environment TLS configuration
+     *  settings and will also override config TLS configuration fields.  Suitable for testing.
+     *  server
+     *  @since UNRELEASED
      */
     bool tls_disabled = false;
 
@@ -80,13 +80,13 @@ struct PVXS_API ConfigCommon {
         Require,
     } tls_client_cert_required = Default;
 
-    /**
-     * @brief Behaviour of server and client if the certificate expires
-     * during the long-running session.
-     *  - FallbackToTCP.  Only for clients, this will reinitialise the
-     * connection but in server-only authentication mode.
-     *  - Shutdown.       This will stop the process immediately
-     *  - Standby.        For servers, this will keep the server running but will reject all connections until the certificate has been renewed.
+    /**@brief Behaviour of server and client if the certificate expires
+     *  during the long-running session.
+     *   - FallbackToTCP.  Only for clients, this will reinitialise the
+     *  connection but in server-only authentication mode.
+     *   - Shutdown.       This will stop the process immediately
+     *   - Standby.        For servers, this will keep the server running but will reject all connections until the certificate has been renewed.
+     *  @since UNRELEASED
      */
     enum OnExpirationBehaviour {
         FallbackToTCP,
@@ -94,8 +94,8 @@ struct PVXS_API ConfigCommon {
         Standby,
     } expiration_behaviour = FallbackToTCP;
 
-    /**
-     * @brief True if status checking from the PVACMS is disabled irrespective of whether configured in the certificate
+    /** @brief True if status checking from the PVACMS is disabled irrespective of whether configured in the certificate
+     *  @since UNRELEASED
      */
     bool tls_disable_status_check{false};
 
