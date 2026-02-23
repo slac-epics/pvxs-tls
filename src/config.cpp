@@ -57,6 +57,11 @@ bool ConfigCommon::isTlsConfigured() const {
 #endif
 }
 
+#ifdef PVXS_EXPERT_API_ENABLED
+void ConfigCommon::disableStatusCheck(const bool disable) {tls_disable_status_check = disable;}
+bool ConfigCommon::isStatusCheckDisabled() const {return tls_disable_status_check;}
+#endif
+
 SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint16_t defdefport) {
     uint16_t defport = conf ? conf->tcp_port : defdefport;
     // look for URI-ish prefix
@@ -439,7 +444,7 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
             }
         } else if (key == "no_revocation_check") {
             if ( val.empty())
-                conf.tls_disable_status_check = true;
+                conf.disableStatusCheck();
             else
                 log_warn_printf(config, "Ignore unknown TLS option `no_revocation_check` value %s.  no value expected\n", opt.c_str());
         } else if (key == "no_stapling") {
@@ -476,7 +481,7 @@ std::string printTLSOptions(const ConfigCommon& conf) {
             opts.push_back("on_expiration=standby");
             break;
     }
-    if ( conf.tls_disable_status_check)
+    if ( conf.isStatusCheckDisabled())
         opts.push_back("no_revocation_check");
     if ( conf.tls_disable_stapling)
         opts.push_back("no_stapling");
@@ -602,7 +607,7 @@ Config Config::isolated(int family) {
 
 #ifdef PVXS_ENABLE_OPENSSL
     // For testing purposes disable status checking and stapling when using isolated config
-    ret.tls_disable_status_check = true;
+    ret.disableStatusCheck();
     ret.tls_disable_stapling = true;
 #endif
 

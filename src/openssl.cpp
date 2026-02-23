@@ -448,7 +448,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     log_debug_printf(tls_context->is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "Init", "commonSetup()", tls_context.get());
     assert(tls_context && "TLS context is null");
 
-    tls_context->status_check_disabled = conf.tls_disable_status_check;
+    tls_context->status_check_disabled = conf.isStatusCheckDisabled();
     tls_context->stapling_disabled = conf.tls_disable_stapling;
     tls_context->ctx = ossl_shared_ptr<SSL_CTX>(SSL_CTX_new_ex(ossl_gbl->libctx.get(), nullptr, method));
     if (!tls_context->ctx) throw SSLError("Unable to allocate SSL_CTX");
