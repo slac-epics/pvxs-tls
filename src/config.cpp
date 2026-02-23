@@ -57,11 +57,6 @@ bool ConfigCommon::isTlsConfigured() const {
 #endif
 }
 
-#ifdef PVXS_EXPERT_API_ENABLED
-void ConfigCommon::disableStatusCheck(const bool disable) {tls_disable_status_check = disable;}
-bool ConfigCommon::isStatusCheckDisabled() const {return tls_disable_status_check;}
-#endif
-
 SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint16_t defdefport) {
     uint16_t defport = conf ? conf->tcp_port : defdefport;
     // look for URI-ish prefix

@@ -94,31 +94,12 @@ struct PVXS_API ConfigCommon {
         Standby,
     } expiration_behaviour = FallbackToTCP;
 
-#ifdef PVXS_EXPERT_API_ENABLED
-    /** @brief Disable status checking
-     *  @param disable disable status checking - defaults to true
-     *  @since UNRELEASED
-     */
-    void disableStatusCheck(const bool disable = true);
-#else
-    void disableStatusCheck(const bool disable = true){ throw std::logic_error("ConfigCommon::disableStatusCheck() called but PVXS_EXPERT_API_ENABLED not defined");};
-#endif
-#ifdef PVXS_EXPERT_API_ENABLED
-    /** @brief Is status checking disabled?
-     *  @since UNRELEASED
-     */
-    bool isStatusCheckDisabled() const ;
-#else
-    bool isStatusCheckDisabled() const{ throw std::logic_error("ConfigCommon::isStatusCheckDisabled() called but PVXS_EXPERT_API_ENABLED not defined");};
-#endif
-#ifdef PVXS_EXPERT_API_ENABLED
     private:
     /** @brief True if status checking from the PVACMS is disabled irrespective of whether configured in the certificate
      *  @since UNRELEASED
      */
     bool tls_disable_status_check{false};
   public:
-#endif
 
     // TODO: review for removal
     /**
@@ -151,6 +132,15 @@ struct PVXS_API ConfigCommon {
      * false otherwise
      */
     bool isTlsConfigured() const ;
+#ifdef PVXS_EXPERT_API_ENABLED
+        /** @brief Disable status checking
+         *  @param disable disable status checking - defaults to true
+         */
+        void disableStatusCheck(const bool disable = true) {tls_disable_status_check = disable;}
+        /** @brief Is status checking disabled?
+         */
+        bool isStatusCheckDisabled() const {return tls_disable_status_check;}
+#endif
 };
 }  // namespace impl
 }  // namespace pvxs
