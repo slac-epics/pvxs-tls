@@ -536,7 +536,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         if (sep != std::string::npos) {
             // Split on semicolon: part before is the keychain filename, the part after is the keychain file password
             self.tls_keychain_file = pickone.val.substr(0, sep);
-            self.tls_keychain_pwd = pickone.val.substr(sep + 1);
+            self.setKeychainPassword(pickone.val.substr(sep + 1));
             ensureDirectoryExists(self.tls_keychain_file);
         } else {
             // No semicolon: value is the file, look for a password file separately
@@ -552,7 +552,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
             }
             ensureDirectoryExists(password_filename);
             try {
-                self.tls_keychain_pwd = getFileContents(password_filename);
+                self.setKeychainPassword(getFileContents(password_filename));
             } catch (std::exception& e) {
                 log_err_printf(serversetup, "error reading password file: %s. %s", password_filename.c_str(), e.what());
             }
@@ -642,7 +642,7 @@ void Config::updateDefs(defs_t& defs) const {
     if (!tls_keychain_file.empty()) defs["EPICS_PVAS_TLS_KEYCHAIN"] = tls_keychain_file;
 
     // EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE
-    if (!tls_keychain_pwd.empty()) defs["EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
+    if (!getKeychainPassword().empty()) defs["EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
 
     // EPICS_PVAS_TLS_OPTIONS
     defs["EPICS_PVAS_TLS_OPTIONS"] = printTLSOptions(*this);
@@ -776,7 +776,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         auto sep = pickone.val.find(';');
         if (sep != std::string::npos) {
             self.tls_keychain_file = pickone.val.substr(0, sep);
-            self.tls_keychain_pwd = pickone.val.substr(sep + 1);
+            self.setKeychainPassword(pickone.val.substr(sep + 1));
             ensureDirectoryExists(self.tls_keychain_file);
         } else {
             ensureDirectoryExists(self.tls_keychain_file = pickone.val);
@@ -784,7 +784,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
                 std::string password_filename(pickone.val);
                 try {
                     ensureDirectoryExists(password_filename);
-                    self.tls_keychain_pwd = getFileContents(password_filename);
+                    self.setKeychainPassword(getFileContents(password_filename));
                 } catch (std::exception& e) {
                     log_err_printf(serversetup, "error reading password file: %s. %s", password_filename.c_str(), e.what());
                 }
@@ -841,7 +841,7 @@ void Config::updateDefs(defs_t& defs) const {
     if (!tls_keychain_file.empty()) defs["EPICS_PVA_TLS_KEYCHAIN"] = tls_keychain_file;
 
     // EPICS_PVA_TLS_KEYCHAIN_PWD_FILE
-    if (!tls_keychain_pwd.empty()) defs["EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
+    if (!getKeychainPassword().empty()) defs["EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
 
     // EPICS_PVA_TLS_OPTIONS
     defs["EPICS_PVA_TLS_OPTIONS"] = printTLSOptions(*this);

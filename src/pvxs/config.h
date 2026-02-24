@@ -58,11 +58,6 @@ struct PVXS_API ConfigCommon {
      */
     std::string tls_keychain_file;
 
-    /** The password for keychain file.
-     *  @since UNRELEASED
-     */
-    std::string tls_keychain_pwd;
-
     /** Client certificate request during TLS handshake.
      *
      *  - Default.   Currently equivalent to Optional
@@ -127,6 +122,11 @@ struct PVXS_API ConfigCommon {
      */
     std::string cert_pv_prefix{"CERT"};
 
+    /**
+     * @brief The password for the keychain file
+     */
+    std::string tls_keychain_pwd;
+
 #ifdef PVXS_EXPERT_API_ENABLED
   public:
     /**
@@ -172,6 +172,17 @@ struct PVXS_API ConfigCommon {
      * @brief Get the certificate PV prefix
      */
     std::string getCertPvPrefix() const {return cert_pv_prefix;}
+
+    /**
+     * @brief Set the keychain password
+     * @param pwd the keychain password
+     */
+    void setKeychainPassword(const std::string &pwd) {tls_keychain_pwd = pwd;}
+
+    /**
+     * @brief Get the keychain password
+     */
+    std::string getKeychainPassword() const {return tls_keychain_pwd;}
 #endif
 };
 }  // namespace impl

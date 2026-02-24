@@ -487,7 +487,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
 
     // Get the key and certificate from the file or files
     log_debug_printf(setup, "Getting private key and certificate from configured keychain file: %s\n", conf.tls_keychain_file.c_str());
-    const std::string &filename = conf.tls_keychain_file, &password = conf.tls_keychain_pwd;
+    const std::string &filename = conf.tls_keychain_file, password = conf.getKeychainPassword();
     auto cert_data = certs::IdFileReader::createReader(filename, password)->getCertDataFromFile();
 
     log_debug_printf(setup, "Getting trusted root from certificate chain. %s\n", "");
