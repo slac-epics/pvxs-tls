@@ -444,7 +444,7 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
                 log_warn_printf(config, "Ignore unknown TLS option `no_revocation_check` value %s.  no value expected\n", opt.c_str());
         } else if (key == "no_stapling") {
             if ( val.empty())
-                conf.tls_disable_stapling = true;
+                conf.disableStapling();
             else
                 log_warn_printf(config, "Ignore unknown TLS option `no_stapling` value %s.  no value expected\n", opt.c_str());
         } else {
@@ -478,7 +478,7 @@ std::string printTLSOptions(const ConfigCommon& conf) {
     }
     if ( conf.isStatusCheckDisabled())
         opts.push_back("no_revocation_check");
-    if ( conf.tls_disable_stapling)
+    if ( conf.isStaplingDisabled())
         opts.push_back("no_stapling");
     return join_addr(opts);
 }
@@ -567,7 +567,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         }
     }
 
-    if (pickone({"EPICS_PVAS_CERT_PV_PREFIX", "EPICS_PVA_CERT_PV_PREFIX"})) cert_pv_prefix = pickone.val;
+    if (pickone({"EPICS_PVAS_CERT_PV_PREFIX", "EPICS_PVA_CERT_PV_PREFIX"})) self.setCertPvPrefix(pickone.val);
 #endif  // PVXS_ENABLE_OPENSSL
 }
 Config& Config::applyEnv() {
@@ -603,7 +603,7 @@ Config Config::isolated(int family) {
 #ifdef PVXS_ENABLE_OPENSSL
     // For testing purposes disable status checking and stapling when using isolated config
     ret.disableStatusCheck();
-    ret.tls_disable_stapling = true;
+    ret.disableStapling();
 #endif
 
     return ret;
@@ -641,7 +641,7 @@ void Config::updateDefs(defs_t& defs) const {
     defs["EPICS_PVA_TLS_PORT"] = defs["EPICS_PVAS_TLS_PORT"] = std::to_string(tls_port);
 
     // EPICS_PVAS_CERT_PV_PREFIX
-    if (!cert_pv_prefix.empty()) defs["EPICS_PVAS_CERT_PV_PREFIX"] = cert_pv_prefix;
+    if (!getCertPvPrefix().empty()) defs["EPICS_PVAS_CERT_PV_PREFIX"] = getCertPvPrefix();
 #endif  // PVXS_ENABLE_OPENSSL
 }
 
@@ -795,7 +795,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         }
     }
 
-    if (pickone({"EPICS_PVA_CERT_PV_PREFIX"})) cert_pv_prefix = pickone.val;
+    if (pickone({"EPICS_PVA_CERT_PV_PREFIX"})) self.setCertPvPrefix(pickone.val);
 #endif  // PVXS_ENABLE_OPENSSL
 }
 
@@ -835,7 +835,7 @@ void Config::updateDefs(defs_t& defs) const {
     defs["EPICS_PVA_TLS_PORT"] = std::to_string(tls_port);
 
     // EPICS_PVA_CERT_PV_PREFIX
-    if (!cert_pv_prefix.empty()) defs["EPICS_PVA_CERT_PV_PREFIX"] = cert_pv_prefix;
+    if (!getCertPvPrefix().empty()) defs["EPICS_PVA_CERT_PV_PREFIX"] = getCertPvPrefix();
 
 #endif  // PVXS_ENABLE_OPENSSL
 }
