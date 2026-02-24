@@ -93,9 +93,19 @@ struct PVXS_API ConfigCommon {
         Standby,
     } expiration_behaviour = FallbackToTCP;
 
-    private:
-    /** @brief True if status checking from the PVACMS is disabled irrespective of whether configured in the certificate
-     *  @since UNRELEASED
+    /**
+     * True if the environment is configured for TLS.  All this means is that
+     * the location of the keychain file has been specified in
+     * EPICS_PVA_TLS_KEYCHAIN.
+     *
+     * @return true if the location of the keychain file has been specified,
+     * false otherwise
+     */
+    bool isTlsConfigured() const ;
+
+  private:
+    /**
+     * @brief True if status checking from the PVACMS is disabled irrespective of whether configured in the certificate
      */
     bool tls_disable_status_check{false};
 
@@ -116,49 +126,52 @@ struct PVXS_API ConfigCommon {
      * default "CERT"
      */
     std::string cert_pv_prefix{"CERT"};
+
+#ifdef PVXS_EXPERT_API_ENABLED
   public:
+    /**
+     * @brief Disable status checking
+     * @param disable disable status checking - defaults to true
+     */
+    void disableStatusCheck(const bool disable = true) {tls_disable_status_check = disable;}
 
     /**
-     * True if the environment is configured for TLS.  All this means is that
-     * the location of the keychain file has been specified in
-     * EPICS_PVA_TLS_KEYCHAIN.
-     *
-     * @return true if the location of the keychain file has been specified,
-     * false otherwise
+     * @brief Is status checking disabled?
      */
-    bool isTlsConfigured() const ;
-#ifdef PVXS_EXPERT_API_ENABLED
-        /** @brief Disable status checking
-         *  @param disable disable status checking - defaults to true
-         */
-        void disableStatusCheck(const bool disable = true) {tls_disable_status_check = disable;}
-        /** @brief Is status checking disabled?
-         */
-        bool isStatusCheckDisabled() const {return tls_disable_status_check;}
+    bool isStatusCheckDisabled() const {return tls_disable_status_check;}
 
-        /** @brief Disable certificate stapling
-         *  @param disable disable stapling - defaults to true
-         */
-        void disableStapling(const bool disable = true) {tls_disable_stapling = disable;}
-        /** @brief Is stapling disabled?
-         */
-        bool isStaplingDisabled() const {return tls_disable_stapling;}
+    /**
+     * @brief Disable certificate stapling
+     * @param disable disable stapling - defaults to true
+     */
+    void disableStapling(const bool disable = true) {tls_disable_stapling = disable;}
 
-        /** @brief Set the request timeout
-         *  @param timeout the request timeout in seconds
-         */
-        void setRequestTimeout(const double timeout) {request_timeout_specified = timeout;}
-        /** @brief Get the request timeout
-         */
-        double getRequestTimeout() const {return request_timeout_specified;}
+    /**
+     * @brief Is stapling disabled?
+     */
+    bool isStaplingDisabled() const {return tls_disable_stapling;}
 
-        /** @brief Set the certificate PV prefix
-         *  @param prefix the certificate PV prefix
-         */
-        void setCertPvPrefix(const std::string &prefix) {cert_pv_prefix = prefix;}
-        /** @brief Get the certificate PV prefix
-         */
-        std::string getCertPvPrefix() const {return cert_pv_prefix;}
+    /**
+     * @brief Set the request timeout
+     * @param timeout the request timeout in seconds
+     */
+    void setRequestTimeout(const double timeout) {request_timeout_specified = timeout;}
+
+    /**
+     * @brief Get the request timeout
+     */
+    double getRequestTimeout() const {return request_timeout_specified;}
+
+    /**
+     * @brief Set the certificate PV prefix
+     * @param prefix the certificate PV prefix
+     */
+    void setCertPvPrefix(const std::string &prefix) {cert_pv_prefix = prefix;}
+
+    /**
+     * @brief Get the certificate PV prefix
+     */
+    std::string getCertPvPrefix() const {return cert_pv_prefix;}
 #endif
 };
 }  // namespace impl
