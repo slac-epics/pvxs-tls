@@ -58,7 +58,6 @@ struct PVXS_API ConfigCommon {
      */
     std::string tls_keychain_file;
 
-    // TODO: remove from public API
     /** The password for keychain file.
      *  @since UNRELEASED
      */
