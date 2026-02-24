@@ -179,8 +179,8 @@ client::Config Server::clientConfig(const Config &server_config) {
 
     ret.tls_port = server_config.tls_port;
     ret.tls_disabled = server_config.tls_disabled;
-    ret.tls_disable_status_check = server_config.tls_disable_status_check;
-    ret.tls_disable_stapling = server_config.tls_disable_stapling;
+    ret.disableStatusCheck(server_config.isStatusCheckDisabled());
+    ret.disableStapling(server_config.isStaplingDisabled());
 
     return ret;
 }
