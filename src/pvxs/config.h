@@ -100,13 +100,11 @@ struct PVXS_API ConfigCommon {
     bool tls_disable_status_check{false};
   public:
 
-    // TODO: review for removal
     /**
      * @brief True if stapling is disabled irrespective of whether TLS is configured
      */
     bool tls_disable_stapling{false};
 
-    // TODO: review for removal
     /**
      * @brief The request timeout specified in a user call
      * @note Cannot be set by an environment variable, but is passed in by commandline tools, or set programmatically
@@ -114,14 +112,12 @@ struct PVXS_API ConfigCommon {
     double request_timeout_specified{5.0};
 
 
-    // TODO: review for removal
     /**
      * @brief the prefix to append to the URI for CREATE, STATUS, ROOT, etc
      * default "CERT"
      */
     std::string cert_pv_prefix{"CERT"};
 
-    // TODO: review for removal
     /**
      * True if the environment is configured for TLS.  All this means is that
      * the location of the keychain file has been specified in
