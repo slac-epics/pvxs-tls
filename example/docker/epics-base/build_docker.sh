@@ -14,7 +14,7 @@ trap "popd" EXIT
 IMAGE_NAME="epics-base"
 IMAGE_TAG="latest"
 
-echo "--- Building ${IMAGE_NAME} Docker image ---"
+echo "--- Building ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_USERNAME:-slac-epics}/${IMAGE_NAME} Docker image ---"
 
 docker build \
   ${*} \

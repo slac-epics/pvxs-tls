@@ -50,14 +50,6 @@ jobs:
             extra: "CMD_CPPFLAGS=-Werror"
             doc: 1
 
-          - name: Native Linux (WError) + SPVA & PVACMS
-            os: ubuntu-latest
-            cmp: gcc
-            configuration: default
-            base: "7.0-secure-pvaccess"
-            extra: "CMD_CPPFLAGS=-Werror PVXS_ENABLE_PVACMS=YES"
-            doc: 1
-
           - name: Native Linux (libc++ debug)
             os: ubuntu-latest
             cmp: gcc

@@ -22,9 +22,6 @@
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
-#ifdef PVXS_ENABLE_PVACMS
-#include "sqlite3.h"
-#endif
 #endif
 #include "utilpvt.h"
 
@@ -37,8 +34,6 @@ struct ssl_delete;
 template <typename T>
 struct ssl_delete_all;
 
-template <typename T>
-struct sqlite_delete;
 #endif
 
 template <typename T>
@@ -78,14 +73,6 @@ struct regular_delete;
         inline void operator()(TYPE *base_pointer) {         \
             if (base_pointer) TYPE##_free_all(base_pointer); \
         }                                                    \
-    }
-
-#define DEFINE_SQLITE_DELETER_FOR_(TYPE)                   \
-    template <>                                            \
-    struct sqlite_delete<TYPE> {                           \
-        inline void operator()(TYPE *base_pointer) {       \
-            if (base_pointer) sqlite3_close(base_pointer); \
-        }                                                  \
     }
 
 #define DEFINE_SSL_STACK_DELETER_FOR_(TYPE)                     \
@@ -129,9 +116,6 @@ DEFINE_REGULAR_DELETER_FOR_(epicsMutex);
 DEFINE_BIGNUM_DELETER_FOR_(BIGNUM);
 DEFINE_OPENSSL_DELETER_FOR_(char);
 DEFINE_OPENSSL_DELETER_FOR_(unsigned char);
-#ifdef PVXS_ENABLE_PVACMS
-DEFINE_SQLITE_DELETER_FOR_(sqlite3);
-#endif
 DEFINE_SSL_DELETER_ALL_FOR_(BIO);
 DEFINE_SSL_DELETER_FOR_(AUTHORITY_KEYID);
 DEFINE_SSL_DELETER_FOR_(ASN1_OBJECT);
@@ -164,7 +148,6 @@ DEFINE_SSL_STACK_DELETER_FOR_(X509_ATTRIBUTE);
 #ifdef PVXS_ENABLE_OPENSSL
 #undef DEFINE_SSL_DELETER_FOR_
 #undef DEFINE_SSL_DELETER_ALL_FOR_
-#undef DEFINE_SQLITE_DELETER_FOR_
 #undef DEFINE_SSL_STACK_DELETER_FOR_
 #undef DEFINE_OPENSSL_DELETER_FOR_
 #endif
@@ -232,10 +215,6 @@ using ossl_ptr = OwnedPtr<T, ssl_delete<T>>;
 
 template <typename T>
 using ossl_ptr_all = OwnedPtr<T, ssl_delete_all<T>>;
-
-#ifdef PVXS_ENABLE_PVACMS
-using sql_ptr = OwnedPtr<sqlite3, sqlite_delete<sqlite3>>;
-#endif
 
 /**
  * An SSL Owned pointer.  This is a managed shared pointer that

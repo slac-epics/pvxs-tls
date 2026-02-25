@@ -26,8 +26,7 @@
 #include <pvxs/client.h>
 #include <pvxs/source.h>
 
-#include "certstatusfactory.h"
-#include "certstatusmanager.h"
+#include "certstatus.h"
 #include "ownedptr.h"
 #include "opensslgbl.h"
 
@@ -63,6 +62,29 @@
 #define CLIENT2_KEYCHAIN_FILE_PWD "oraclesucks"
 #define CLIENT3_KEYCHAIN_FILE "client3.p12"
 #define CLIENT3_KEYCHAIN_FILE_PWD ""
+
+/* Alternate certificate hierarchy for trust anchor mismatch tests */
+#define ALT_SERVER1_KEYCHAIN_FILE "alt_server1.p12"
+#define ALT_SERVER1_KEYCHAIN_FILE_PWD ""
+#define ALT_CLIENT1_KEYCHAIN_FILE "alt_client1.p12"
+#define ALT_CLIENT1_KEYCHAIN_FILE_PWD ""
+#define ALT_CLIENT1_WITH_MAIN_ROOT_KEYCHAIN_FILE "alt_client1_with_main_root.p12"
+#define ALT_CLIENT1_WITH_MAIN_ROOT_KEYCHAIN_FILE_PWD ""
+#define ALT_CERT_AUTH_KEYCHAIN_FILE "alt_cert_auth.p12"
+#define ALT_CERT_AUTH_KEYCHAIN_FILE_PWD ""
+
+/* Fake certificate hierarchy for name-matching attack tests */
+/* These have the SAME CNs as real certs but are signed by different (fake) CAs */
+#define FAKE_CERT_AUTH_KEYCHAIN_FILE "fake_cert_auth.p12"
+#define FAKE_CERT_AUTH_KEYCHAIN_FILE_PWD ""
+#define FAKE_INTERMEDIATE_KEYCHAIN_FILE "fake_intermediateCA.p12"
+#define FAKE_INTERMEDIATE_KEYCHAIN_FILE_PWD ""
+#define FAKE_SUPERSERVER_KEYCHAIN_FILE "fake_superserver1.p12"
+#define FAKE_SUPERSERVER_KEYCHAIN_FILE_PWD ""
+#define FAKE_SERVER1_KEYCHAIN_FILE "fake_server1.p12"
+#define FAKE_SERVER1_KEYCHAIN_FILE_PWD ""
+#define FAKE_CLIENT1_KEYCHAIN_FILE "fake_client1.p12"
+#define FAKE_CLIENT1_KEYCHAIN_FILE_PWD ""
 
 #define WHO_AM_I_PV "whoami"
 #define TLS_METHOD_STRING "x509"
@@ -198,7 +220,7 @@ struct CertCtx {
 
     std::string name;  // The name of this trait
     TestCert cert;
-    Value status_val{CertStatus::getStatusPrototype()};
+    Value status_val{getStatusPrototype()};
     std::string pv_name;
     PVACertificateStatus status{};
     std::vector<certstatus_t> pending{};
@@ -209,6 +231,44 @@ struct CertCtx {
         } catch (const CertStatusNoExtensionException &e) {
             testOk(name == "super_server", "Expected %s to not to have custom cert extension: %s", traits::file, e.what());
         }
+    }
+
+    /**
+     * @brief The prototype of the data returned for a certificate status request
+     * is Essentially an enum, a serial number, and the ocsp response
+     *
+     * @return The prototype of the data returned for a certificate status request
+     */
+    static Value getStatusPrototype() {
+        using namespace members;
+
+        auto value = TypeDef(TypeCode::Struct, "epics:nt/NTEnum:1.0", {
+                        Struct("value", "enum_t", {
+                            Int32("index"),
+                            StringA("choices"),
+                        }),
+                        nt::Alarm{}.build().as("alarm"),
+                        nt::TimeStamp{}.build().as("timeStamp"),
+                        Struct("display", {
+                            String("description"),
+                        }),
+                        Member(TypeCode::UInt64, "serial"),
+                        Member(TypeCode::String, "state"),
+                        Member(TypeCode::UInt64, "renew_by"),
+                        Member(TypeCode::Bool, "renewal_due"),
+                        nt::NTEnum{}.build().as("ocsp_status"),
+                        Member(TypeCode::String, "ocsp_state"),
+                        Member(TypeCode::String, "ocsp_status_date"),
+                        Member(TypeCode::String, "ocsp_certified_until"),
+                        Member(TypeCode::String, "ocsp_revocation_date"),
+                        Member(TypeCode::UInt8A, "ocsp_response"),
+        }).create();
+
+        shared_array<const std::string> choices(CERT_STATES);
+        value["value.choices"] = choices.freeze();
+        shared_array<const std::string> ocsp_choices(OCSP_CERT_STATES);
+        value["ocsp_status.value.choices"] = ocsp_choices.freeze();
+        return value;
     }
 
     static constexpr std::uint64_t serial() {
@@ -310,95 +370,6 @@ TestCert getTestCert() {
     return TestCert(std::move(cert), std::move(chain), std::move(pkey));
 }
 
-/**
- * @brief The template class to make responses
- * @tparam Tag
- * @param cert_context
- * @param cert_status_factory
- * @param now
- * @param revocation_date
- */
-template <typename Tag>
-void makeStatusResponse(CertCtx<Tag> &cert_context,
-                        const CertStatusFactory &cert_status_factory,
-                        const CertDate &now,
-                        const CertDate &revocation_date) {
-    try {
-        cert_context.status_val.unmark();
-
-        setValue(cert_context.status_val, "serial", cert_context.serial());
-        setValue(cert_context.status_val, "value.index", cert_context.status.status.i);
-        setValue(cert_context.status_val, "timeStamp.secondsPastEpoch", now.t - POSIX_TIME_AT_EPICS_EPOCH);
-        setValue(cert_context.status_val, "state", cert_context.status.status.s);
-        setValue(cert_context.status_val, "ocsp_status.value.index", cert_context.status.ocsp_status.i);
-        setValue(cert_context.status_val, "ocsp_status.timeStamp.secondsPastEpoch", now.t - POSIX_TIME_AT_EPICS_EPOCH);
-        setValue(cert_context.status_val,
-                 "ocsp_state",
-                 (SB() << "**UNCERTIFIED**: " << cert_context.status.ocsp_status.s).str());
-
-        if (!cert_context.status.ocsp_bytes.empty()) {
-            setValue<uint32_t>(cert_context.status_val, "ocsp_status.value.index", cert_context.status.ocsp_status.i);
-            setValue<std::string>(cert_context.status_val, "ocsp_state", cert_context.status.ocsp_status.s);
-            setValue<std::string>(cert_context.status_val, "ocsp_status_date", cert_context.status.status_date.s);
-            setValue<std::string>(cert_context.status_val,
-                                  "ocsp_certified_until",
-                                  cert_context.status.status_valid_until_date.s);
-            setValue<std::string>(cert_context.status_val,
-                                  "ocsp_revocation_date",
-                                  cert_context.status.revocation_date.s);
-            auto ocsp_bytes = shared_array<const uint8_t>(cert_context.status.ocsp_bytes.begin(),
-                                                          cert_context.status.ocsp_bytes.end());
-            cert_context.status_val["ocsp_response"] = ocsp_bytes.freeze();
-        }
-
-        testDiag("Set up: %s certificate status response", cert_context.name.c_str());
-
-        auto converted_response = PVACertificateStatus(cert_context.status_val, cert_context.cert.trusted_store.get());
-        testOk(converted_response == cert_context.status,
-               "Converted status response matches expected status response for %s",
-               cert_context.name.c_str());
-        const auto converted_ocsp_byte_len = converted_response.ocsp_bytes.size();
-        const auto expected_ocsp_byte_len = cert_context.status.ocsp_bytes.size();
-        testOk(converted_ocsp_byte_len == expected_ocsp_byte_len,
-               "Converted OCSP byte len (%lu) matches expected OCSP byte len (%zu)",
-               converted_ocsp_byte_len,
-               expected_ocsp_byte_len);
-
-        if (!cert_context.pending.empty()) {
-            cert_context.pending.erase(cert_context.pending.begin());
-            if (!cert_context.pending.empty()) {
-                auto status = cert_context.pending[0];
-                cert_context.status =
-                    (status == REVOKED)
-                        ? cert_status_factory.createPVACertificateStatus(cert_context.cert.cert,
-                                                                         status,
-                                                                         now,
-                                                                         revocation_date.t)
-                        : cert_status_factory.createPVACertificateStatus(cert_context.cert.cert, status, now);
-            }
-        }
-    } catch (std::exception &e) {
-        testFail("Failed to setup %s status response: %s", cert_context.name.c_str(), e.what());
-    }
-}
-
-template <typename Tag>
-void createCertStatus(CertCtx<Tag> &cert_context,
-                      std::vector<certstatus_t> desired,
-                      const CertStatusFactory &cert_status_factory,
-                      const CertDate &now,
-                      const CertDate &revocation_date) {
-    cert_context.pending = std::move(desired);
-    if (cert_context.pending.empty())
-        throw std::logic_error("empty status list");
-
-    const auto status = cert_context.pending.front();
-    cert_context.status =
-        (status == REVOKED)
-            ? cert_status_factory.createPVACertificateStatus(cert_context.cert.cert, status, now, revocation_date.t)
-            : cert_status_factory.createPVACertificateStatus(cert_context.cert.cert, status, now);
-}
-
 template <typename Tag, typename SPV>
 bool postValueCase(std::uint64_t requested_serial,
                    SPV &shared_pv,
@@ -412,128 +383,9 @@ bool postValueCase(std::uint64_t requested_serial,
     return true;
 }
 
-template <typename Tag>
-void testStatusRequest(CertCtx<Tag> &cert_context, client::Context &client, X509_STORE *trust_store) {
-    auto status_value = client.get(cert_context.pv_name).exec()->wait(5.0);
-    auto pva_certificate_status = PVACertificateStatus(status_value, trust_store);
-    testOk1(pva_certificate_status == cert_context.status);
-}
-
 typedef std::unordered_map<std::string, std::shared_ptr<std::atomic<uint32_t> > > CounterMap;
-
-template <typename Tag>
-void resetCounter(CounterMap &counters, const CertCtx<Tag> &cert_context) {
-    counters[cert_context.pv_name] = std::make_shared<std::atomic<uint32_t> >(0u);
-}
-
-template <typename Tag>
-void waitCounterAtLeast(const CounterMap &counters, epicsEvent &cert_status_evt, const CertCtx<Tag> &cert_context, const uint32_t expected, const double timeout = 0.5) {
-    const auto counter = counters.find(cert_context.pv_name);
-    if (counter == counters.end()) {
-        testAbort("No counter stored for PV \"%s\"", cert_context.pv_name.c_str());
-        return;
-    }
-    while (true) {
-        const auto count = counter->second->load();
-        if (count >= expected) {
-            testOk(count >= expected,
-               "Expected counter of subscriptions to %s's cert to be at least %u, got %u",
-               cert_context.name.c_str(),
-               expected,
-               count);
-            return;
-        }
-        if (!cert_status_evt.wait(timeout)) {
-            testAbort("timeout waiting for subscription(s)to %s's cert (wanted %u, have %u)",
-                      cert_context.pv_name.c_str(),
-                      expected,
-                      count);
-            return;
-        }
-    }
-}
 
 }  // namespace certs
 
-namespace server {
-
-class MockSource final : public Source {
-    std::shared_ptr<Source> next_;
-    std::function<void(const std::string &)> cert_status_subscribe_cb_;
-
-    struct WrapChan final : public ChannelControl {
-        std::unique_ptr<ChannelControl> inner_;
-        std::function<void(const std::string &)> cert_status_subscribe_cb_;
-
-        explicit WrapChan(std::unique_ptr<ChannelControl>&& inner,
-                          std::function<void(const std::string &)> cb)
-            : ChannelControl(inner->name(), inner->credentials(), inner->op())
-            , inner_(std::move(inner))
-            , cert_status_subscribe_cb_(std::move(cb))
-        {}
-
-        void onOp(std::function<void(std::unique_ptr<ConnectOp>&&)>&& fn) override {
-            inner_->onOp(std::move(fn));
-        }
-
-        void onRPC(std::function<void(std::unique_ptr<ExecOp>&&, Value&&)>&& fn) override {
-            inner_->onRPC(std::move(fn));
-        }
-
-        void onSubscribe(std::function<void(std::unique_ptr<MonitorSetupOp>&&)>&& fn) override {
-            auto cb = cert_status_subscribe_cb_;
-            auto fnptr = std::make_shared<std::function<void(std::unique_ptr<MonitorSetupOp>&&)>>(std::move(fn));
-            inner_->onSubscribe([cb, fnptr](std::unique_ptr<MonitorSetupOp>&& setup) mutable {
-                if (cb) {
-                    // setup->name() is the PV name being subscribed to
-                    cb(setup->name());
-                }
-                (*fnptr)(std::move(setup));
-            });
-        }
-
-        void onClose(std::function<void(const std::string&)>&& fn) override {
-            inner_->onClose(std::move(fn));
-        }
-
-        void close() override {
-            inner_->close();
-        }
-
-      private:
-        void _updateInfo(const std::shared_ptr<const ReportInfo>& info) override {
-#ifdef PVXS_EXPERT_API_ENABLED
-            inner_->updateInfo(info);
-#else
-            (void)info;
-#endif
-        }
-    };
-
- public:
-    explicit MockSource(
-        std::shared_ptr<Source> inner,
-        std::function<void(const std::string &)> cert_status_subscribe_cb = nullptr)
-        : next_(std::move(inner)), cert_status_subscribe_cb_(std::move(cert_status_subscribe_cb)) {}
-
-    void onSearch(Search &req) override {
-        next_->onSearch(req);
-    }
-
-    List onList() override {
-        return next_->onList();
-    }
-
-    void show(std::ostream &strm) override {
-        next_->show(strm);
-    }
-
-    void onCreate(std::unique_ptr<ChannelControl> &&chan) override {
-        std::unique_ptr<ChannelControl> wrapped(new WrapChan(std::move(chan), cert_status_subscribe_cb_));
-        next_->onCreate(std::move(wrapped));
-    }
-};
-
-}  // namespace server
 }  // namespace pvxs
 #endif  // CERT_CONTEXT_H

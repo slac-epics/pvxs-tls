@@ -40,15 +40,6 @@ See :ref:`relpolicy` for details.
 
    overview
    netconfig
-   spvaqstart
-   spvaqstartstd.rst
-   spvaqstartkrb
-   spvaqstartldap
-   spvaqstartjwt
-   spvaqstartgw
-   spva
-   spvaauth
-   spvacerts
    example
    building
    cli
@@ -58,7 +49,6 @@ See :ref:`relpolicy` for details.
    ioc
    util
    details
-   spvaglossary
    releasenotes
 
 

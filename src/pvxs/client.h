@@ -1040,8 +1040,6 @@ public:
 DiscoverBuilder Context::discover(std::function<void (const Discovered &)> && fn) { return DiscoverBuilder(pvt, std::move(fn)); }
 
 struct PVXS_API Config : public impl::ConfigCommon {
-    virtual ~Config() = default;
-
     /** List of unicast, multicast, and broadcast addresses to which search requests will be sent.
      *
      * Entries may take the forms:
@@ -1073,7 +1071,7 @@ public:
     //! Default configuration using process environment
     static inline Config fromEnv()  { return Config{}.applyEnv(); }
     //! update using defined EPICS_PVA* environment variables
-    virtual Config &applyEnv();
+    Config& applyEnv();
 
     typedef std::map<std::string, std::string> defs_t;
     //! update with definitions as with EPICS_PVA* environment variables
@@ -1081,7 +1079,7 @@ public:
     Config& applyDefs(const defs_t& defs);
 
     //! extract definitions with environment variable names as keys.
-    virtual void updateDefs(defs_t& defs) const;
+    void updateDefs(defs_t& defs) const;
 
     /** Apply rules to translate current requested configuration
      *  into one which can actually be loaded based on current host network configuration.
@@ -1107,6 +1105,8 @@ public:
     inline bool shareUDP() const { return UDP; }
 #endif
 
+    //! Config from definitions
+    //! @since UNRELEASED
     void fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv);
 };
 

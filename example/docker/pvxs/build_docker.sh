@@ -16,11 +16,13 @@ BASE_IMAGE_TAG="latest"
 TARGET_IMAGE_NAME="pvxs"
 TARGET_IMAGE_TAG="latest"
 
-echo "--- Building ${TARGET_IMAGE_NAME} Docker image ---"
+echo "--- Building ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_USERNAME:-slac-epics}/${TARGET_IMAGE_NAME} Docker image ---"
 
 docker build \
-  --build-arg BASE_IMAGE=${BASE_IMAGE_NAME} \
-  --build-arg BASE_IMAGE_TAG=${BASE_IMAGE_TAG} \
+  --build-arg DOCKER_REGISTRY="${DOCKER_REGISTRY:-ghcr.io}" \
+  --build-arg DOCKER_USERNAME="${DOCKER_USERNAME:-slac-epics}" \
+  --build-arg BASE_IMAGE="${BASE_IMAGE_NAME}" \
+  --build-arg BASE_IMAGE_TAG="${BASE_IMAGE_TAG}" \
   ${*} \
   -t "${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_USERNAME:-slac-epics}/${TARGET_IMAGE_NAME}:${TARGET_IMAGE_TAG}" \
   -f "${DOCKER_DIR}/Dockerfile" \

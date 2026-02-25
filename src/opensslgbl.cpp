@@ -22,7 +22,7 @@
 
 #include <pvxs/log.h>
 
-#include "certstatusmanager.h"
+#include "certstatus.h"
 #include "evhelper.h"
 #include "openssl.h"
 
@@ -130,7 +130,7 @@ static void osslInitImpl() {
     std::unique_ptr<OSSLGbl> gbl{new OSSLGbl};
     gbl->SSL_CTX_ex_idx = SSL_CTX_get_ex_new_index(0, nullptr, nullptr, nullptr, free_SSL_CTX_sidecar);
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE
-    auto keylog = getenv("SSLKEYLOGFILE");
+    const auto keylog = getenv("SSLKEYLOGFILE");
     if(keylog && keylog[0]) {
         epicsGuard<epicsMutex> G(gbl->keylock);
         gbl->keylog.reset(fopen(keylog, "a"));
