@@ -39,7 +39,7 @@ Secure PVAccess (SPVA) is the new version of the PVA protocol which supports TLS
 It maintains the same basic operations (Get, Put, Monitor, RPC) as PVA, but with the addition of :ref:`transport_layer_security`,
 and :ref:`certificate_management`.
 
-See :ref:`quick_start` to get started!
+See `Secure PVAccess Documentation <https://slac-epics.github.io/pvxs-docs/overview.html>`_ to get started!
 
 What is a PV?
 ^^^^^^^^^^^^^
@@ -98,7 +98,7 @@ the specific structure used.
 A user of the client API will interact with Value instances of these server specified structures.
 Conversely, a user of the server API will need to decide on which data structures to use.
 
-PVXS now supports :ref:`secure_pvaccess` for secure communication, enhancing the security of network operations.
+PVXS now supports `Secure PVAccess <https://slac-epics.github.io/pvxs-docs/overview.html>`_ for secure communication, enhancing the security of network operations.
 This includes integration with OpenSSL and new configuration options for TLS settings.
 
 Comparison with pvDataCPP
