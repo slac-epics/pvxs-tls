@@ -586,6 +586,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
             log_debug_printf(setup, "Created a client context for certificate status%s", "\n");
             tls_context = ossl::SSLContext::for_client(effective, inner, tcp_loop);
             log_debug_printf(setup, "Created TLS context for: %s\n", effective.tls_keychain_file.c_str());
+            tls_context->setOnTlsReady([this]() { onTlsReady(); });
         }catch(std::exception& e){
             log_debug_printf(setup, "Failed to configure TLS for client: %s\n", e.what());
             if (tls_context) {
@@ -1489,6 +1490,24 @@ void ContextImpl::certExpirationHandler() {
 
 #ifdef PVXS_ENABLE_OPENSSL
 /**
+ * @brief Called (on the event loop thread) when the client SSLContext transitions to TlsReady.
+ *
+ * Iterates all existing connections and re-evaluates channel creation readiness,
+ * in case Connection::ready was set to false because the TLS context wasn't ready
+ * at the time handle_CONNECTION_VALIDATED() ran.
+ */
+void ContextImpl::onTlsReady() {
+    log_debug_printf(setup, "SSLContext now TlsReady, re-evaluating %zu connection(s)\n", connByAddr.size());
+    for (auto& pair : connByAddr) {
+        if (auto conn = pair.second.lock()) {
+            conn->createChannels();
+        }
+    }
+}
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
+/**
  * @brief Enable TLS by reloading the same effective config
  */
 void ContextImpl::reloadTls() {
@@ -1520,6 +1539,7 @@ void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
         removePeer();
 
         tls_context = new_context;
+        tls_context->setOnTlsReady([this]() { onTlsReady(); });
         effective = new_config;
     } catch (std::exception& e) {
         log_debug_printf(setup, "Failed to reconfigure TLS for client: %s\n", e.what());
