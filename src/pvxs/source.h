@@ -185,6 +185,13 @@ struct PVXS_API ChannelControl : public OpBase {
     //! Reference to currently attached Handler is released.
     virtual void close() =0;
 
+    //! Feature flag advertising the presence of ChannelControl::signalRights() on
+    //! this pvxs ABI. Allows downstream wrappers that extend ChannelControl
+    //! (eg. test MockSource in pvxs-cms) to conditionally provide the override
+    //! and remain source-compatible with older pvxs versions that lack it.
+    //! @since UNRELEASED
+#define PVXS_HAS_SIGNAL_RIGHTS 1
+
     //! Push write-access rights to the connected client via CMD_ACL_CHANGE (0x06).
     //! Suppressed if the writable state has not changed since last sent.
     //! Safe to call from any thread.
