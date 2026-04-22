@@ -83,7 +83,7 @@ jobs:
             cmp: gcc
             configuration: default
             cross: "RTEMS-pc686-qemu@5"
- 
+
           - name: Native Linux with clang
             os: ubuntu-latest
             cmp: clang
@@ -151,8 +151,8 @@ jobs:
         sudo apt-get update
         sudo apt-get -y install libreadline-dev g++-mingw-w64-x86-64 cmake gdb qemu-system-x86 libssl-dev mingw-w64-x86-64-dev
       if: runner.os == 'Linux'
-    - name: mingw openssl
-      shell: bash
+
+    - name: Install OpenSSL for MinGW
       run: |
         wget https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
         tar xzf openssl-${OPENSSL_VERSION}.tar.gz
@@ -161,6 +161,8 @@ jobs:
         make -j$(nproc)
         sudo make install
 
+        # Ensure the default library search paths contain unversioned import/static libs.
+        # Some OpenSSL builds install only versioned names and/or to lib64.
         SYSROOT=/usr/x86_64-w64-mingw32
         for lib in ssl crypto; do
           for kind in dll.a a; do
@@ -177,6 +179,7 @@ jobs:
         cd ..
         rm -rf openssl-${OPENSSL_VERSION}*
       if: runner.os == 'Linux' && matrix.cross == 'windows-x64-mingw'
+
     - name: Host Info
       run: openssl version -a
     - name: Automatic core dumper analysis
