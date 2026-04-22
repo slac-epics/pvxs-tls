@@ -724,6 +724,59 @@ uint8_t level2mtype(Level lvl)
     return 3;
 }
 
+// Permissions bits for CMD_ACL_CHANGE payload (epics-docs/epics-docs#140)
+struct pva_acl_perm {
+    enum type_t : uint8_t {
+        None       = 0x00,
+        PUT        = 0x01,  // bit 0: client may write via PUT
+        PUT_GET    = 0x02,  // bit 1: client may perform PUT-GET
+        RPC        = 0x04,  // bit 2: client may call RPC
+    };
+};
+
+/** Compute the CMD_ACL_CHANGE permissions byte.
+ *  @param writable  Whether the client may write via PUT
+ *  @param has_rpc   Whether the channel supports RPC
+ *  @return          permissions byte suitable for CMD_ACL_CHANGE payload
+ */
+inline
+uint8_t acl_permissions_byte(bool writable, bool has_rpc=false)
+{
+    uint8_t perm = pva_acl_perm::None;
+    if(writable) perm |= pva_acl_perm::PUT;
+    if(has_rpc)  perm |= pva_acl_perm::RPC;
+    return perm;
+}
+
+/** Write a CMD_ACL_CHANGE message directly to an evbuffer.
+ *  @param tx       Destination evbuffer (connection TX output)
+ *  @param be       Whether to encode big-endian
+ *  @param cid      Client channel ID
+ *  @param perm     Permissions byte (use acl_permissions_byte())
+ */
+inline
+void to_evbuf_acl_change(evbuffer* tx, bool be, uint32_t cid, uint8_t perm)
+{
+    to_evbuf(tx, Header{CMD_ACL_CHANGE,
+                        pva_flags::Server,
+                        5u},
+             be);
+    uint8_t buf[5];
+    if(be) {
+        buf[0] = uint8_t(cid >> 24);
+        buf[1] = uint8_t(cid >> 16);
+        buf[2] = uint8_t(cid >>  8);
+        buf[3] = uint8_t(cid);
+    } else {
+        buf[0] = uint8_t(cid);
+        buf[1] = uint8_t(cid >>  8);
+        buf[2] = uint8_t(cid >> 16);
+        buf[3] = uint8_t(cid >> 24);
+    }
+    buf[4] = perm;
+    evbuffer_add(tx, buf, sizeof(buf));
+}
+
 }} // namespace pvxs::impl
 
 #endif // PVAPROTO_H

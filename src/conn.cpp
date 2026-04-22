@@ -128,6 +128,7 @@ void ConnBase::handle_CONNECTION_VALIDATION() {};
 void ConnBase::handle_CONNECTION_VALIDATED() {};
 void ConnBase::handle_AUTHNZ() {};
 
+void ConnBase::handle_ACL_CHANGE() {};
 void ConnBase::handle_CREATE_CHANNEL() {};
 void ConnBase::handle_DESTROY_CHANNEL() {};
 
@@ -315,6 +316,7 @@ void ConnBase::bevRead()
                     case CMD_CONNECTION_VALIDATED: handle_CONNECTION_VALIDATED(); break;
                     case CMD_AUTHNZ: handle_AUTHNZ(); break;
 
+                    case CMD_ACL_CHANGE: handle_ACL_CHANGE(); break;
                     case CMD_CREATE_CHANNEL: handle_CREATE_CHANNEL(); break;
                     case CMD_DESTROY_CHANNEL: handle_DESTROY_CHANNEL(); break;
 

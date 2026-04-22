@@ -77,11 +77,20 @@ GroupSource::GroupSource()
  *
  * @param channelControl channel control object provided by the pvxs framework
  */
+static void pvxsGroupAclCallback(ASCLIENTPVT asc, asClientStatus) {
+    auto* ctx = static_cast<AclNotifyCtx*>(asGetClientPvt(asc));
+    if(!ctx || !ctx->signal) return;
+    const bool writable = ctx->sc.canWrite();
+    if(ctx->lastWritable != writable) {
+        ctx->lastWritable = writable;
+        ctx->signal(writable);
+    }
+}
+
 void GroupSource::onCreate(std::unique_ptr<server::ChannelControl>&& channelControl) {
     auto& sourceName = channelControl->name();
     log_debug_printf(_logname, "Accepting channel for '%s'\n", sourceName.c_str());
 
-    // Create callbacks for handling requests and group subscriptions
     auto it(config.groupMap.find(sourceName));
     if(it != config.groupMap.end()) {
         auto& group(it->second);
@@ -91,11 +100,47 @@ void GroupSource::onCreate(std::unique_ptr<server::ChannelControl>&& channelCont
 
         channelControl
                 ->onSubscribe([this, &group](std::unique_ptr<server::MonitorSetupOp>&& subscriptionOperation) {
-                    // The group subscription must be kept alive
-                    // We accomplish this further on during the binding of the onStart()
                     auto subscriptionContext(std::make_shared<GroupSourceSubscriptionCtx>(group));
                     onSubscribe(subscriptionContext, std::move(subscriptionOperation));
                 });
+
+        {
+            Credentials cred(*channelControl->credentials());
+            auto aclCtx = std::make_shared<AclNotifyCtx>();
+
+            for(auto& field : group.fields) {
+                if(field.value) {
+                    SecurityClient sc;
+                    sc.update(field.value, cred);
+                    for(auto asc : sc.cli)
+                        aclCtx->sc.cli.push_back(asc);
+                    sc.cli.clear();
+                }
+            }
+
+            aclCtx->lastWritable = aclCtx->sc.canWrite();
+
+            aclCtx->ctrl = std::shared_ptr<server::ChannelControl>(std::move(channelControl));
+            aclCtx->signal = [aclCtx](bool writable) {
+                aclCtx->ctrl->signalRights(writable);
+            };
+
+            aclCtx->ctrl->onClose([aclCtx](const std::string&) {
+                aclCtx->signal = nullptr;
+                aclCtx->ctrl.reset();
+            });
+
+            for(auto asc : aclCtx->sc.cli) {
+                asPutClientPvt(asc, aclCtx.get());
+                (void)asRegisterClientCallback(asc, pvxsGroupAclCallback);
+            }
+
+            // Always push the initial asLib-derived rights so that the
+            // server's initial CMD_ACL_CHANGE reflects the real aggregated
+            // SecurityClient::canWrite() across group members. Runs inline on the
+            // acceptor loop so it latches before CMD_CREATE_CHANNEL.
+            aclCtx->ctrl->signalRights(aclCtx->lastWritable);
+        }
     }
 }
 

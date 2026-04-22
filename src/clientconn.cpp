@@ -611,6 +611,50 @@ void Connection::handle_CONNECTION_VALIDATED()
     }
 }
 
+void Connection::handle_ACL_CHANGE()
+{
+    EvInBuf M(peerBE, segBuf.get(), 16);
+
+    uint32_t cid = 0;
+    uint8_t permissions = 0;
+    from_wire(M, cid);
+    from_wire(M, permissions);
+
+    if(!M.good()) {
+        log_warn_printf(io, "%s:%d Server %s sends malformed CMD_ACL_CHANGE, ignoring\n",
+                        M.file(), M.line(), peerName.c_str());
+        return;
+    }
+
+    std::shared_ptr<Channel> chan;
+    for(auto& pair : chanBySID) {
+        if(auto ch = pair.second.lock()) {
+            if(ch->cid == cid) {
+                chan = ch;
+                break;
+            }
+        }
+    }
+
+    if(!chan) {
+        auto it = creatingByCID.find(cid);
+        if(it != creatingByCID.end())
+            chan = it->second.lock();
+    }
+
+    if(!chan) {
+        log_debug_printf(io, "Server %s CMD_ACL_CHANGE for unknown CID %u, ignoring\n",
+                         peerName.c_str(), unsigned(cid));
+        return;
+    }
+
+    const bool writable = (permissions & 0x01) != 0;
+    log_debug_printf(io, "Server %s CMD_ACL_CHANGE '%s' %s (0x%02x)\n",
+                     peerName.c_str(), chan->name.c_str(),
+                     writable ? "writable" : "read-only",
+                     unsigned(permissions));
+}
+
 void Connection::handle_CREATE_CHANNEL()
 {
     log_debug_printf(io, "PVA: %s ==> CREATE_CHANNEL\n", peerName.c_str());

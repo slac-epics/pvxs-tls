@@ -185,7 +185,19 @@ struct PVXS_API ChannelControl : public OpBase {
     //! Reference to currently attached Handler is released.
     virtual void close() =0;
 
-    // TODO: signal Rights?
+    //! Push write-access rights to the connected client via CMD_ACL_CHANGE (0x06).
+    //! Suppressed if the writable state has not changed since last sent.
+    //! Safe to call from any thread.
+    //! @since UNRELEASED
+    virtual void signalRights(bool writable) =0;
+
+//! Advertises that pvxs implements the PVAccess CMD_ACL_CHANGE (0x06) wire
+//! message and that ChannelControl::signalRights(bool) is available in this
+//! public header. Downstream consumers (notably pvxs-cms MockSource wrappers)
+//! use `#ifdef PVXS_HAS_ACL_CHANGE` to conditionally provide a signalRights
+//! override and remain source-compatible with older pvxs versions.
+//! @since UNRELEASED
+#define PVXS_HAS_ACL_CHANGE 1
 
 #ifdef PVXS_EXPERT_API_ENABLED
     // Store info struct which will be returned with Report::Channel

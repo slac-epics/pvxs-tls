@@ -414,6 +414,16 @@ SingleSource::SingleSource()
  * source.
  * @param channelControl
  */
+static void pvxsAclCallback(ASCLIENTPVT asc, asClientStatus) {
+    auto* ctx = static_cast<AclNotifyCtx*>(asGetClientPvt(asc));
+    if(!ctx || !ctx->signal) return;
+    const bool writable = ctx->sc.canWrite();
+    if(ctx->lastWritable != writable) {
+        ctx->lastWritable = writable;
+        ctx->signal(writable);
+    }
+}
+
 void SingleSource::onCreate(std::unique_ptr<server::ChannelControl>&& channelControl) {
     auto sourceName(channelControl->name().c_str());
     Channel pDbChannel;
@@ -428,25 +438,48 @@ void SingleSource::onCreate(std::unique_ptr<server::ChannelControl>&& channelCon
 
     auto sInfo(std::make_shared<SingleInfo>(std::move(pDbChannel)));
 
-    // Create callbacks for handling requests and channel subscriptions
     Value valuePrototype = getValuePrototype(sInfo);
 
-    // Get and Put requests
     channelControl
             ->onOp([sInfo, valuePrototype](std::unique_ptr<server::ConnectOp>&& channelConnectOperation) {
                 onOp(sInfo, valuePrototype, std::move(channelConnectOperation));
             });
 
-    // binding 'this' safe as Server shutdown will close connections before dropping Source
     channelControl
             ->onSubscribe([this, valuePrototype, sInfo](
                     std::unique_ptr<server::MonitorSetupOp>&& subscriptionOperation) {
-                // The subscription must be kept alive
-                // We accomplish this further on during the binding of the onStart()
                 auto subscriptionContext(std::make_shared<SingleSourceSubscriptionCtx>(sInfo));
                 subscriptionContext->currentValue = valuePrototype.cloneEmpty();
                 onSubscribe(subscriptionContext, eventContext, std::move(subscriptionOperation));
             });
+
+    {
+        Credentials cred(*channelControl->credentials());
+        auto aclCtx = std::make_shared<AclNotifyCtx>();
+        aclCtx->sc.update(sInfo->chan, cred);
+        aclCtx->lastWritable = aclCtx->sc.canWrite();
+
+        aclCtx->ctrl = std::shared_ptr<server::ChannelControl>(std::move(channelControl));
+        aclCtx->signal = [aclCtx](bool writable) {
+            aclCtx->ctrl->signalRights(writable);
+        };
+
+        aclCtx->ctrl->onClose([aclCtx](const std::string&) {
+            aclCtx->signal = nullptr;
+            aclCtx->ctrl.reset();
+        });
+
+        for(auto asc : aclCtx->sc.cli) {
+            asPutClientPvt(asc, aclCtx.get());
+            (void)asRegisterClientCallback(asc, pvxsAclCallback);
+        }
+
+        // Always push the initial asLib-derived rights so that the server's
+        // initial CMD_ACL_CHANGE reflects SecurityClient::canWrite() rather
+        // than the always-true bool(onOp) fallback. Runs inline on the
+        // acceptor loop so it latches before CMD_CREATE_CHANNEL is emitted.
+        aclCtx->ctrl->signalRights(aclCtx->lastWritable);
+    }
 }
 
 /**

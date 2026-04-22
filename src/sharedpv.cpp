@@ -301,6 +301,8 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
     bool first = impl->channels.empty();
     impl->channels.insert(ctrl);
 
+    ctrl->signalRights(bool(self->onPut));
+
     if(first)
         log_debug_printf(logshared, "%s on %s onFirstConnect()\n", ctrl->peerName().c_str(), ctrl->name().c_str());
 

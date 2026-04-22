@@ -9,6 +9,7 @@
 
 #include "pvxs/log.h"
 #include "serverconn.h"
+#include "pvaproto.h"
 
 namespace pvxs {namespace impl {
 
@@ -159,6 +160,49 @@ void ServerChannelControl::close()
         }
 
         ch->cleanup();
+    });
+}
+
+void ServerChannelControl::signalRights(bool writable)
+{
+    auto serv = server.lock();
+    if(!serv)
+        return;
+
+    auto wchan = chan;
+    // call() runs inline when already on the acceptor loop (the case during
+    // Source::onCreate()), otherwise posts and waits. Running inline is what
+    // allows the Creating-state latch below to be visible to the initial send
+    // in handle_CREATE_CHANNEL() before CMD_CREATE_CHANNEL is emitted.
+    serv->acceptor_loop.call([wchan, writable](){
+        auto ch = wchan.lock();
+        if(!ch)
+            return;
+
+        if(ch->state == ServerChan::Creating) {
+            // Initial rights: just latch. handle_CREATE_CHANNEL() will read
+            // this and emit CMD_ACL_CHANGE before CMD_CREATE_CHANNEL.
+            ch->pendingWritable = writable;
+            ch->pendingWritableValid = true;
+            return;
+        }
+
+        if(ch->state != ServerChan::Active)
+            return;
+        if(ch->lastSentWritable == writable)
+            return;
+        ch->lastSentWritable = writable;
+        auto conn = ch->conn.lock();
+        if(!conn || !conn->connection())
+            return;
+        auto tx = bufferevent_get_output(conn->connection());
+        const uint8_t perm = acl_permissions_byte(writable, bool(ch->onRPC));
+        to_evbuf_acl_change(tx, conn->sendBE, ch->cid, perm);
+        conn->statTx += 13u;
+        ch->statTx += 13u;
+        log_debug_printf(connio, "Client %s signalRights '%s' %s\n",
+                         conn->peerName.c_str(), ch->name.c_str(),
+                         writable ? "writable" : "read-only");
     });
 }
 
@@ -359,6 +403,28 @@ void ServerConn::handle_CREATE_CHANNEL()
                 chan->state = ServerChan::Active;
                 log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %s\n", "ServerChan::state", "Active", "ServerChan::handle_CREATE_CHANNEL()", chan->name.c_str());
 
+                {
+                    // Prefer the value latched by Source::onCreate() via
+                    // ChannelControl::signalRights() (QSRV2 consults asLib
+                    // via SecurityClient::canWrite(); SharedPV uses its
+                    // onPut handler presence). Fall back to handler-presence
+                    // only for sources that never called signalRights().
+                    const bool writable = chan->pendingWritableValid
+                                          ? chan->pendingWritable
+                                          : bool(chan->onOp);
+                    const bool has_rpc  = bool(chan->onRPC);
+                    const uint8_t perm  = acl_permissions_byte(writable, has_rpc);
+                    auto tx = bufferevent_get_output(bev.get());
+                    to_evbuf_acl_change(tx, sendBE, cid, perm);
+                    statTx += 13u;
+                    chan->statTx += 13u;
+                    chan->lastSentWritable = writable;
+                    chan->pendingWritableValid = false;
+                    log_debug_printf(connio, "Client %s CMD_ACL_CHANGE '%s' %s\n",
+                                     peerName.c_str(), chan->name.c_str(),
+                                     writable ? "writable" : "read-only");
+                }
+
             } else {
                 sts.code = Status::Fatal;
                 sts.msg = "Refused to create Channel";
@@ -380,7 +446,6 @@ void ServerConn::handle_CREATE_CHANNEL()
             to_wire(R, cid);
             to_wire(R, sid);
             to_wire(R, sts);
-            // "spec" calls for uint16_t Access Rights here, but pvAccessCPP don't include this (it's useless anyway)
             if(!R.good()) {
                 M.fault(__FILE__, __LINE__);
                 log_err_printf(connio, "%s:%d Client %s Encode error in CreateChan\n",

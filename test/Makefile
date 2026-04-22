@@ -78,6 +78,10 @@ TESTPROD_HOST += testget
 testget_SRCS += testget.cpp
 TESTS += testget
 
+TESTPROD_HOST += testacl
+testacl_SRCS += testacl.cpp
+TESTS += testacl
+
 TESTPROD_HOST += testmon
 testmon_SRCS += testmon.cpp
 TESTS += testmon

@@ -164,6 +164,7 @@ protected:
     virtual void handle_CONNECTION_VALIDATED();
     virtual void handle_AUTHNZ();
 
+    virtual void handle_ACL_CHANGE();
     virtual void handle_CREATE_CHANNEL();
     virtual void handle_DESTROY_CHANNEL();
 

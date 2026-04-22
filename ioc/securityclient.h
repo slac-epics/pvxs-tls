@@ -10,18 +10,40 @@
 #ifndef PVXS_SECURITYCLIENT_H
 #define PVXS_SECURITYCLIENT_H
 
+#include <functional>
+#include <memory>
 #include <vector>
 #include <asLib.h>
 #include <dbChannel.h>
 #include <dbNotify.h>
 
 #include <pvxs/credentials.h>
+#include <pvxs/source.h>
 
 #include "typeutils.h"
 #include "utilpvt.h"
 
 namespace pvxs {
 namespace ioc {
+
+/** Holds live AS-change notification state for one PVA channel connection.
+ *
+ *  Owns a SecurityClient (which owns the ASCLIENTPVT list) and a
+ *  std::function invoked whenever Access Security recomputes rights for
+ *  this client.  The function captures a weak signal path to
+ *  ChannelControl::signalRights() that is nulled on channel close.
+ *
+ *  Lifetime: created in Source::onCreate(), kept alive by a shared_ptr
+ *  stored in the onClose capture — destroyed when the channel closes.
+ */
+struct AclNotifyCtx {
+    SecurityClient sc;
+    std::function<void(bool writable)> signal;
+    bool lastWritable{true};
+    // Keeps the ChannelControl alive for the lifetime of this context so that
+    // the signalRights() callback never fires on a dangling pointer.
+    std::shared_ptr<server::ChannelControl> ctrl;
+};
 
 /**
  * Security objects that can be controlled

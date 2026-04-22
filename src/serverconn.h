@@ -94,6 +94,7 @@ struct ServerChannelControl : public server::ChannelControl
 
     virtual void onClose(std::function<void(const std::string&)>&& fn) override final;
     virtual void close() override final;
+    virtual void signalRights(bool writable) override final;
 
     virtual void _updateInfo(const std::shared_ptr<const ReportInfo>& info) override final;
 
@@ -118,6 +119,16 @@ struct ServerChan
 
     size_t statTx{}, statRx{};
     std::shared_ptr<const ReportInfo> reportInfo;
+
+    // Last writable state emitted in CMD_ACL_CHANGE (no-op suppression).
+    bool lastSentWritable{false};
+
+    // Writable value latched by signalRights() while state==Creating, consumed
+    // by handle_CREATE_CHANNEL() to emit the initial CMD_ACL_CHANGE before
+    // CMD_CREATE_CHANNEL. When !pendingWritableValid, the source did not
+    // call signalRights() during onCreate() and we fall back to bool(onOp).
+    bool pendingWritable{false};
+    bool pendingWritableValid{false};
 
     std::function<void(std::unique_ptr<server::ConnectOp>&&)> onOp;
     std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onRPC;

@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include <testMain.h>
+#include <asLib.h>
 #include <asDbLib.h>
 #include <dbAccess.h>
 #include <dbLock.h>
@@ -504,6 +505,30 @@ void testPut()
     }
 }
 
+void testAclChange()
+{
+    testDiag("%s", __func__);
+    TestClient ctxt;
+
+    ctxt.put("test:ai").set("value", 1.0).exec()->wait(5.0);
+    testPass("test:ai PUT succeeded (writable)");
+
+    try {
+        ctxt.put("test:ro").set("value", 99).exec()->wait(5.0);
+        testFail("test:ro should be read-only");
+    } catch(pvxs::client::RemoteError&) {
+        testPass("test:ro PUT rejected (read-only)");
+    }
+
+    asComputeAllAsg();
+    testPass("asComputeAllAsg() completed without crash");
+
+    epicsThreadSleep(0.2);
+    testPass("AS callbacks fired without crash after asComputeAllAsg()");
+
+    ctxt.put("test:ai").set("value", 53.2).exec()->wait(5.0);
+}
+
 void testGetPut64()
 {
 #ifdef DBR_UINT64
@@ -910,7 +935,7 @@ void testMonitorDBE(TestClient& ctxt)
 
 MAIN(testqsingle)
 {
-    testPlan(95);
+    testPlan(99);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -945,6 +970,7 @@ MAIN(testqsingle)
         testLongString();
         testGetArray();
         testPut();
+        testAclChange();
         testGetPut64();
         testPutProc();
         testPutLog();
