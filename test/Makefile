@@ -145,6 +145,11 @@ TESTPROD_HOST += testasn1uint64
 testasn1uint64_SRCS += testasn1uint64.cpp
 testasn1uint64_SRCS += certstatus.cpp
 TESTS += testasn1uint64
+
+TESTPROD_HOST += testsan
+testsan_SRCS += testsan.cpp
+TESTS += testsan
+
 endif # EVENT2_HAS_OPENSSL
 endif
 
