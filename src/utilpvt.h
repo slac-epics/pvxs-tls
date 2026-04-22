@@ -244,7 +244,7 @@ public:
 #undef RWLOCK_RLOCK
 #undef RWLOCK_RUNLOCK
 
-class FLock {
+class PVXS_API FLock {
     FILE * const fp = nullptr;
     bool writing = false;
 public:

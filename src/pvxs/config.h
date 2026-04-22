@@ -20,6 +20,13 @@
 
 #include <pvxs/version.h>
 
+//! Advertises that pvxs supports a disk-based OCSP response cache, configured
+//! via EPICS_PVA_CERT_STATUS_CACHE_DIR / EPICS_PVA_CERT_STATUS_CACHE_ENABLED
+//! and implemented in src/statuscache.{cpp,h}. Downstream consumers may
+//! conditionally depend on the cache via `#ifdef PVXS_HAS_DISK_OCSP_CACHE`.
+//! @since UNRELEASED
+#define PVXS_HAS_DISK_OCSP_CACHE 1
+
 namespace pvxs {
 namespace impl {
 
