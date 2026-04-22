@@ -437,6 +437,9 @@ struct SSLContext {
      */
     void setOnTlsReady(std::function<void()> fn);
 
+    void setOnSuspended(std::function<void()> fn);
+    void setOnResumed(std::function<void()> fn);
+
    private:
     // The entity certificate status monitor
     certs::cert_status_ptr<certs::CertStatusManager> cert_monitor;
@@ -452,6 +455,22 @@ struct SSLContext {
     std::function<void()> on_tls_ready_;
     evevent tls_ready_event;
     static void tlsReadyEventCallback(evutil_socket_t fd, short evt, void* raw);
+
+    // Callbacks invoked on the event loop thread when own cert enters/exits SUSPENDED
+    std::function<void()> on_suspended_;
+    evevent suspended_event;
+    static void suspendedEventCallback(evutil_socket_t fd, short evt, void* raw);
+
+    std::function<void()> on_resumed_;
+    evevent resumed_event;
+    static void resumedEventCallback(evutil_socket_t fd, short evt, void* raw);
+
+    // Tracks whether the most recently processed SUSPENDED transition actually fired suspended_event.
+    // Must not be derived from `cert_status` at GOOD-transition time because callers of setTlsOrTcpMode()
+    // overwrite `cert_status` before invoking this function, so inspecting it yields the new (GOOD) class
+    // rather than the prior (SUSPENDED) one. Set true when SUSPENDED fires suspended_event; cleared on
+    // GOOD (after firing resumed_event) and on DegradedMode.
+    bool was_suspended_{false};
 };
 
 PVXS_API void configureServerOCSPCallback(void* server_ptr, SSL* ssl);

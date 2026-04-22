@@ -565,6 +565,20 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 
                 tls_context = ossl::SSLContext::for_server(effective, inner_client, acceptor_loop);
                 log_debug_printf(osslsetup, "Created server TLS context for: %s\n", effective.tls_keychain_file.c_str());
+                tls_context->setOnSuspended([this]() {
+                    acceptor_loop.call([this]() {
+                        for (auto& pair : connections) {
+                            pair.second->suspendedByOwnCert();
+                        }
+                    });
+                });
+                tls_context->setOnResumed([this]() {
+                    acceptor_loop.call([this]() {
+                        for (auto& pair : connections) {
+                            pair.second->resumedByOwnCert();
+                        }
+                    });
+                });
             } catch (std::exception& e) {
                 log_debug_printf(osslsetup, "Failed to configure TLS for server: %s\n", e.what());
                 log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());

@@ -34,7 +34,10 @@ ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,
 
 ServerChan::~ServerChan() {
     assert(state==Destroy);
-    assert(!onClose);
+    if(onClose) {
+        auto fn(std::move(onClose));
+        fn("");
+    }
 }
 
 /* reached from:

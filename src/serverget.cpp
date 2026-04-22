@@ -418,6 +418,19 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
 
     } else { // EXEC, maybe Get or Put
 
+#ifdef PVXS_ENABLE_OPENSSL
+        if(suspended_by_cert && (cmd==CMD_PUT || cmd==CMD_RPC)) {
+            log_warn_printf(connsetup, "Server SUSPENDED: rejecting %s from Client %s\n",
+                            cmd==CMD_PUT ? "PUT" : "RPC", peerName.c_str());
+            EvOutBuf R(sendBE, txBody.get());
+            to_wire(R, sid);
+            to_wire(R, ioid);
+            to_wire(R, Status{Status::Error, "Server suspended: certificate SCHEDULED_OFFLINE / PENDING_RENEWAL"});
+            enqueueTxBody(cmd);
+            return;
+        }
+#endif
+
         std::shared_ptr<ServerGPR> op;
         auto it = opByIOID.find(ioid);
         if(it==opByIOID.end() || it->second->state==ServerOp::Dead) {

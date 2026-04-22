@@ -91,6 +91,10 @@ struct MonitorOp final : public ServerOp
                 auto conn(ch->conn.lock());
                 if(!conn || conn->state==ConnBase::Disconnected)
                     return;
+#ifdef PVXS_ENABLE_OPENSSL
+                if(conn->suspended_by_cert)
+                    return; // server cert SUSPENDED — hold updates until resumed
+#endif
 
                 auto bev(conn->connection());
 
@@ -397,6 +401,8 @@ DEFINE_INST_COUNTER(ServerMonitorControl);
 
 struct ServerMonitorSetup : public server::MonitorSetupOp
 {
+    std::string impliedError;
+
     ServerMonitorSetup(ServerConn* conn,
                      const std::weak_ptr<server::Server::Pvt>& server,
                      const std::string& name,
@@ -407,35 +413,40 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
         ,op(op)
     {}
     virtual ~ServerMonitorSetup() {
-        error("Monitor Create implied error");
+        error(impliedError.empty() ? "Monitor Create implied error" : impliedError);
     }
 
     virtual std::unique_ptr<server::MonitorControlOp> connect(const Value &prototype) override final
     {
-        if(!prototype)
-            throw std::invalid_argument("Must provide prototype");
-        auto type = Value::Helper::type(prototype);
-        auto mask = request2mask(type.get(), _pvRequest);
+        try {
+            if(!prototype)
+                throw std::invalid_argument("Must provide prototype");
+            auto type = Value::Helper::type(prototype);
+            auto mask = request2mask(type.get(), _pvRequest);
 
-        std::unique_ptr<server::MonitorControlOp> ret;
+            std::unique_ptr<server::MonitorControlOp> ret;
 
-        auto serv = server.lock();
-        if(!serv)
+            auto serv = server.lock();
+            if(!serv)
+                return ret;
+            serv->acceptor_loop.call([this, &type, &ret, &mask](){
+                if(auto oper = op.lock()) {
+                    if(oper->state!=ServerOp::Creating)
+                        return;
+                    oper->type = type;
+                    oper->pvMask = std::move(mask);
+                    ret.reset(new ServerMonitorControl(this, server, _name, oper));
+                    MonitorOp::doReply(oper);
+                }
+            });
+            if(!ret)
+                throw std::runtime_error("Dead Operation");
+
             return ret;
-        serv->acceptor_loop.call([this, &type, &ret, &mask](){
-            if(auto oper = op.lock()) {
-                if(oper->state!=ServerOp::Creating)
-                    return;
-                oper->type = type;
-                oper->pvMask = std::move(mask);
-                ret.reset(new ServerMonitorControl(this, server, _name, oper));
-                MonitorOp::doReply(oper);
-            }
-        });
-        if(!ret)
-            throw std::runtime_error("Dead Operation");
-
-        return ret;
+        } catch(std::exception& e) {
+            impliedError = e.what();
+            throw;
+        }
     }
     virtual void error(const std::string &msg) override final
     {
@@ -605,7 +616,12 @@ void ServerConn::handle_MONITOR()
                    std::string(SB()<<pvRequest).c_str());
 
         if(chan->onSubscribe) {
-            chan->onSubscribe(std::move(ctrl));
+            try {
+                chan->onSubscribe(std::move(ctrl));
+            } catch(std::exception& e) {
+                log_err_printf(connsetup, "Client %s MONITOR \"%s\" onSubscribe() error: %s\n",
+                               peerName.c_str(), chan->name.c_str(), e.what());
+            }
         } else {
             ctrl->error("Monitor operation not implemented by this PV");
         }

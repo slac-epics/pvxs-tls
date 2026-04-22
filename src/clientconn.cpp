@@ -234,7 +234,7 @@ void Connection::createChannels()
 #ifdef PVXS_ENABLE_OPENSSL
     if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
         log_debug_printf(certs, "Wait for Server %s certificate status to become GOOD\n", peerName.c_str());
-        return; // defer until peer certificate status validated
+        return; // defer until peer certificate status validated — covers UNKNOWN, SUSPENDED, and BAD
     }
 #endif
 
@@ -370,12 +370,35 @@ void Connection::bevEvent(short events) {
 void Connection::peerStatusCallback(certs::cert_status_class_t status_class) {
     if (status_class == certs::cert_status_class_t::GOOD) {
         log_debug_printf(certs, "Ready to proceed with creating channels: %s %s\n", "Connecting", peerName.c_str());
+        if (suspended_by_cert) {
+            suspended_by_cert = false;
+            for (auto& weak_sub : suspended_monitors) {
+                if (auto sub = weak_sub.lock()) {
+                    sub->pause(false);
+                }
+            }
+            suspended_monitors.clear();
+            log_debug_printf(certs, "Connection to %s resumed from SUSPENDED — monitors resumed\n", peerName.c_str());
+        }
         // Only the CONNECTION_VALIDATED handler should flip Connection::ready.
         // Here we only resume any deferred channel creation.
         proceedWithCreatingChannels();
     } else if (status_class == certs::cert_status_class_t::BAD) {
         log_debug_printf(certs, "Cancel Wait to Creating Channels: BAD CERT STATUS%s\n", "");
+        suspended_monitors.clear();
+        suspended_by_cert = false;
         disconnect();
+    } else if (status_class == certs::cert_status_class_t::SUSPENDED) {
+        log_warn_printf(certs, "Connection to %s SUSPENDED (own or peer cert) — keeping TLS, pausing monitors\n", peerName.c_str());
+        suspended_by_cert = true;
+        for (auto& pair : opByIOID) {
+            if (auto op = pair.second.handle.lock()) {
+                if (auto* sub = dynamic_cast<Subscription*>(op.get())) {
+                    sub->pause(true);
+                    suspended_monitors.push_back(sub->shared_from_this());
+                }
+            }
+        }
     } else {
         log_debug_printf(certs, "Continue Waiting to Create Channels: UNKNOWN CERT STATUS%s\n", "");
     }
@@ -390,6 +413,10 @@ std::shared_ptr<ConnBase> Connection::self_from_this()
 void Connection::cleanup()
 {
     ready = false;
+#ifdef PVXS_ENABLE_OPENSSL
+    suspended_monitors.clear();
+    suspended_by_cert = false;
+#endif
     if(status_cli.test(Level::Debug)) {
         for(auto& pair : pending) {
             if(const auto chan = pair.second.lock())

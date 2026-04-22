@@ -341,6 +341,15 @@ struct GPROp : public OperationBase
 
         auto& conn = chan->conn;
 
+#ifdef PVXS_ENABLE_OPENSSL
+        if(conn->suspended_by_cert) {
+            result = Result(std::make_exception_ptr(RemoteError("Connection suspended: certificate SCHEDULED_OFFLINE / PENDING_RENEWAL")));
+            state = Done;
+            notify();
+            return;
+        }
+#endif
+
         {
             (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
 

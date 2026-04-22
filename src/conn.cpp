@@ -62,6 +62,8 @@ const char* ConnBase::peerLabel() const
 
 #ifdef PVXS_ENABLE_OPENSSL
 bool ConnBase::isPeerStatusGood() const {
+    // Returns false for UNKNOWN, SUSPENDED, and BAD — all of which correctly defer
+    // createChannels() (client) and proceedWithConnectionValidation() (server).
     return peer_status && peer_status->status.getStatusClass() == certs::cert_status_class_t::GOOD;
 }
 #endif

@@ -25,6 +25,15 @@
 #include <pvxs/netcommon.h>
 #include <pvxs/util.h>
 
+//! Advertises that pvxs classifies certificate status SCHEDULED_OFFLINE and
+//! PENDING_RENEWAL as cert_status_class_t::SUSPENDED and pauses operations
+//! (monitor updates, new PUT/RPC, channel creation) without tearing down the
+//! TLS socket, resuming transparently when status returns to GOOD. Downstream
+//! consumers (notably pvxs-cms) use `#ifdef PVXS_HAS_SUSPENDED_STATE` to
+//! conditionally depend on the SUSPENDED behaviour.
+//! @since UNRELEASED
+#define PVXS_HAS_SUSPENDED_STATE 1
+
 namespace pvxs {
 namespace client {
 

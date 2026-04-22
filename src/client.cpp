@@ -587,6 +587,8 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
             tls_context = ossl::SSLContext::for_client(effective, inner, tcp_loop);
             log_debug_printf(setup, "Created TLS context for: %s\n", effective.tls_keychain_file.c_str());
             tls_context->setOnTlsReady([this]() { onTlsReady(); });
+            tls_context->setOnSuspended([this]() { onSuspended(); });
+            tls_context->setOnResumed([this]() { onResumed(); });
         }catch(std::exception& e){
             log_debug_printf(setup, "Failed to configure TLS for client: %s\n", e.what());
             if (tls_context) {
@@ -1504,6 +1506,24 @@ void ContextImpl::onTlsReady() {
         }
     }
 }
+
+void ContextImpl::onSuspended() {
+    log_warn_printf(setup, "Own certificate SUSPENDED — suspending %zu connection(s)\n", connByAddr.size());
+    for (auto& pair : connByAddr) {
+        if (auto conn = pair.second.lock()) {
+            conn->notifyOwnCertStatus(certs::cert_status_class_t::SUSPENDED);
+        }
+    }
+}
+
+void ContextImpl::onResumed() {
+    log_debug_printf(setup, "Own certificate resumed GOOD — resuming %zu connection(s)\n", connByAddr.size());
+    for (auto& pair : connByAddr) {
+        if (auto conn = pair.second.lock()) {
+            conn->notifyOwnCertStatus(certs::cert_status_class_t::GOOD);
+        }
+    }
+}
 #endif
 
 #ifdef PVXS_ENABLE_OPENSSL
@@ -1540,6 +1560,8 @@ void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
 
         tls_context = new_context;
         tls_context->setOnTlsReady([this]() { onTlsReady(); });
+        tls_context->setOnSuspended([this]() { onSuspended(); });
+        tls_context->setOnResumed([this]() { onResumed(); });
         effective = new_config;
     } catch (std::exception& e) {
         log_debug_printf(setup, "Failed to reconfigure TLS for client: %s\n", e.what());

@@ -149,6 +149,12 @@ struct ServerConn final : public ConnBase, public std::enable_shared_from_this<S
 
     std::list<std::function<void()>> backlog;
 
+#ifdef PVXS_ENABLE_OPENSSL
+    bool suspended_by_cert = false;
+    void suspendedByOwnCert();
+    void resumedByOwnCert();
+#endif
+
     INST_COUNTER(ServerConn);
 
     ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen);

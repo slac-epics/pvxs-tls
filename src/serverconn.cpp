@@ -365,6 +365,8 @@ void ServerConn::peerStatusCallback(certs::cert_status_class_t status_class) {
     } else if (status_class == certs::cert_status_class_t::BAD) {
         log_debug_printf(certs, "Cancel Wait for Connection Validation: BAD CERT STATUS%s\n", "");
         disconnect();
+    } else if (status_class == certs::cert_status_class_t::SUSPENDED) {
+        log_warn_printf(certs, "Continue Waiting for Connection Validation: SUSPENDED CLIENT CERT STATUS for %s\n", peerName.c_str());
     } else {
         log_debug_printf(certs, "Continue Waiting for Connection Validation: UNKNOWN CERT STATUS%s\n", "");
     }
@@ -392,6 +394,7 @@ void ServerConn::proceedWithConnectionValidation()
 #ifdef PVXS_ENABLE_OPENSSL
     // Check peer certificate status if required
     // we won't be subscribed if we don't need to check peer status before continuing
+    // isPeerStatusGood() returns false for UNKNOWN and SUSPENDED — both correctly defer validation without disconnecting
     if (state != Validated && peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
         log_debug_printf(connsetup, "Wait for Client %s certificate status to become GOOD\n", peerName.c_str());
         return; // Backoff - don't complete validation yet until we get the status were waiting for
@@ -519,6 +522,18 @@ std::shared_ptr<ConnBase> ServerConn::self_from_this()
 }
 
 // see also ServerChannel_shutdown()
+#ifdef PVXS_ENABLE_OPENSSL
+void ServerConn::suspendedByOwnCert() {
+    suspended_by_cert = true;
+    log_warn_printf(certs, "Server cert SUSPENDED — pausing monitors, rejecting PUT/RPC on %s\n", peerName.c_str());
+}
+
+void ServerConn::resumedByOwnCert() {
+    suspended_by_cert = false;
+    log_debug_printf(certs, "Server cert resumed GOOD — resuming monitors on %s\n", peerName.c_str());
+}
+#endif
+
 /* reached from:
  * 1. connection close
  */

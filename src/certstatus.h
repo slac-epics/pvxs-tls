@@ -73,13 +73,14 @@ class CertStatusSubscriptionException final : public CertStatusException {
 };
 
 // All certificate statuses
-#define CERT_STATUS_LIST   \
-    X_IT(UNKNOWN)          \
-    X_IT(VALID)            \
-    X_IT(PENDING)          \
-    X_IT(PENDING_APPROVAL) \
-    X_IT(PENDING_RENEWAL)  \
-    X_IT(EXPIRED)          \
+#define CERT_STATUS_LIST    \
+    X_IT(UNKNOWN)           \
+    X_IT(VALID)             \
+    X_IT(PENDING)           \
+    X_IT(PENDING_APPROVAL)  \
+    X_IT(PENDING_RENEWAL)   \
+    X_IT(SCHEDULED_OFFLINE) \
+    X_IT(EXPIRED)           \
     X_IT(REVOKED)
 
 // All OCSP certificate statuses
@@ -118,10 +119,18 @@ inline const char* OCSP_CERT_STATE(std::size_t index) {
 // used by connection logic (eg. allow/deny/defer).
 //
 // Must be scoped to avoid collision with certstatus_t enumerators (eg. UNKNOWN).
+//
+// Values:
+//   BAD       (-1) — cert EXPIRED or REVOKED; disconnect immediately
+//   UNKNOWN   ( 0) — cert status not yet confirmed; defer channels, no disconnect
+//   SUSPENDED ( 2) — cert valid but operationally offline (SCHEDULED_OFFLINE, PENDING_RENEWAL);
+//                    keep TLS socket, pause monitors, reject writes, stale GET on resume
+//   GOOD      ( 1) — cert VALID and current; normal operation
 enum class cert_status_class_t : int {
     BAD = -1,
     UNKNOWN = 0,
     GOOD = 1,
+    SUSPENDED = 2,
 };
 
 // Forward declarations
@@ -567,12 +576,18 @@ struct CertificateStatus {
      /**
       * @brief Get the cert status class
       *
-      * @return cert_status_class_t::GOOD (VALID), cert_status_class_t::BAD (REVOKED, EXPIRED), or cert_status_class_t::UNKNOWN (everything else)
+      * @return cert_status_class_t::GOOD (VALID),
+      *         cert_status_class_t::BAD (REVOKED, EXPIRED),
+      *         cert_status_class_t::SUSPENDED (SCHEDULED_OFFLINE, PENDING_RENEWAL), or
+      *         cert_status_class_t::UNKNOWN (everything else)
       */
      cert_status_class_t getStatusClass() const noexcept {
          if (isRevokedOrExpired()) return cert_status_class_t::BAD;
          if (!isStatusCurrent()) return cert_status_class_t::UNKNOWN;
-         return status == VALID ? cert_status_class_t::GOOD : cert_status_class_t::UNKNOWN;
+         if (status == VALID) return cert_status_class_t::GOOD;
+         if (status == SCHEDULED_OFFLINE || status == PENDING_RENEWAL) return cert_status_class_t::SUSPENDED;
+         // PENDING, PENDING_APPROVAL, UNKNOWN: transient — the certificate may become VALID again.
+         return cert_status_class_t::UNKNOWN;
      }
 
     /**

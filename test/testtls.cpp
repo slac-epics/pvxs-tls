@@ -865,10 +865,40 @@ void testFakeCertificateNameMatchingAttack() {
 
 }  // namespace
 
+void testSuspendedStatusClass() {
+    testDiag("=== testSuspendedStatusClass ===");
+    {
+        certs::CertificateStatus cs;
+        cs.status = certs::PVACertStatus(certs::SCHEDULED_OFFLINE);
+        testEq(int(cs.getStatusClass()), int(certs::cert_status_class_t::SUSPENDED));
+    }
+    {
+        certs::CertificateStatus cs;
+        cs.status = certs::PVACertStatus(certs::PENDING_RENEWAL);
+        testEq(int(cs.getStatusClass()), int(certs::cert_status_class_t::SUSPENDED));
+    }
+    {
+        certs::CertificateStatus cs;
+        cs.status = certs::PVACertStatus(certs::VALID);
+        testEq(int(cs.getStatusClass()), int(certs::cert_status_class_t::GOOD));
+    }
+    {
+        certs::CertificateStatus cs;
+        cs.status = certs::PVACertStatus(certs::EXPIRED);
+        testEq(int(cs.getStatusClass()), int(certs::cert_status_class_t::BAD));
+    }
+    {
+        certs::CertificateStatus cs;
+        cs.status = certs::PVACertStatus(certs::PENDING);
+        testEq(int(cs.getStatusClass()), int(certs::cert_status_class_t::UNKNOWN));
+    }
+}
+
 MAIN(testtls) {
-    testPlan(47);
+    testPlan(52);
     testSetup();
     logger_config_env();
+    testSuspendedStatusClass();
     testLegacyMode();
     testClientBackwardsCompatibility();
     testServerBackwardsCompatibility();

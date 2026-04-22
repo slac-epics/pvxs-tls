@@ -116,6 +116,11 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
     epicsTime connTime;
     std::shared_ptr<const ServerCredentials> cred;
 
+#ifdef PVXS_ENABLE_OPENSSL
+    bool suspended_by_cert = false;
+    std::vector<std::weak_ptr<Subscription>> suspended_monitors;
+#endif
+
     INST_COUNTER(Connection);
 
     Connection(const std::shared_ptr<ContextImpl>& context,
@@ -140,6 +145,12 @@ public:
 
     void createChannels();
     void proceedWithCreatingChannels();
+
+#ifdef PVXS_ENABLE_OPENSSL
+    void notifyOwnCertStatus(certs::cert_status_class_t status_class) {
+        peerStatusCallback(status_class);
+    }
+#endif
 
     void sendDestroyRequest(uint32_t sid, uint32_t ioid);
 
@@ -483,6 +494,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     void reloadTlsFromConfig(const Config& new_config);
     void certExpirationHandler();
     void onTlsReady();
+    void onSuspended();
+    void onResumed();
 #endif
 };
 
