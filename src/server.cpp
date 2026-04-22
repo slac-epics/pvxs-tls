@@ -560,6 +560,26 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
                 log_debug_printf(osslsetup, "Creating a client context for certificate status to use in server TLS context creation%s", "\n");
                 auto inner_conf = clientConfig(effective);
                 inner_conf.tls_disabled = true;
+                // The inner client must reach a peer PVAccess server (typically a colocated
+                // PVACMS) for cert-status subscription. Regular clients derived from
+                // clientConfig() target *this* server's ports, but the inner client targets
+                // a separate PVACMS on EPICS-default ports. Reset the search transport
+                // parameters here so the inner client does not inherit zone-specific
+                // broadcast/beacon ports from the outer server config.
+                {
+                    const client::Config env_default;
+                    inner_conf.udp_port = env_default.udp_port;
+                    for (auto &addr : inner_conf.addressList) {
+                        const auto last_colon = addr.rfind(':');
+                        if (last_colon == std::string::npos) continue;
+                        if (addr.find(':') != last_colon) continue; // IPv6 literal
+                        bool port_is_numeric = last_colon + 1 < addr.size();
+                        for (size_t i = last_colon + 1; port_is_numeric && i < addr.size(); ++i) {
+                            if (addr[i] < '0' || addr[i] > '9') port_is_numeric = false;
+                        }
+                        if (port_is_numeric) addr.erase(last_colon);
+                    }
+                }
                 log_debug_printf(osslsetup, "Created a client context for server certificate status%s", "\n");
                 const auto inner_client = inner_conf.build();
 

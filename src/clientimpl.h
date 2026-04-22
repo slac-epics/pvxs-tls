@@ -291,7 +291,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
 #ifdef PVXS_ENABLE_OPENSSL
     void configureExpirationHandler(ContextImpl * context_impl) const {
-        if ( tls_context && tls_context->state >= ossl::SSLContext::TcpReady) {
+        if ( tls_context && tls_context->state >= ossl::SSLContext::TcpOnly) {
             // Only do this if we have a valid tls_context
 
             const auto cert = tls_context->getEntityCertificate();

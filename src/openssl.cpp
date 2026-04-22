@@ -73,8 +73,10 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
                                                                [=](const certs::PVACertificateStatus &pva_status) {
             const auto cert_status_class = static_cast<certs::CertificateStatus>(pva_status).getStatusClass();
             log_debug_printf(watcher, "Received: %s certificate status\n", pva_status.status.s.c_str());
-            if (cert_status_class != certs::cert_status_class_t::GOOD) {
-                log_warn_printf(watcher, "Certificate not valid: %s\n", pva_status.status.s.c_str());
+            if (cert_status_class == certs::cert_status_class_t::BAD) {
+                log_warn_printf(watcher, "Certificate revoked or expired: %s\n", pva_status.status.s.c_str());
+            } else if (cert_status_class == certs::cert_status_class_t::SUSPENDED) {
+                log_warn_printf(watcher, "Certificate suspended (scheduled offline or pending renewal): %s\n", pva_status.status.s.c_str());
             }
 
             {
@@ -123,16 +125,28 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
         log_debug_printf(watcher, "Status check is disabled%s", "\n");
     }
 
-    // Set the state
     const auto cert_status_class = static_cast<certs::CertificateStatus>(cert_status).getStatusClass();
-    if ( cert_status_class == certs::cert_status_class_t::BAD ) {
-        // Should never happen
+    if (cert_status_class == certs::cert_status_class_t::BAD) {
         setDegradedMode(true);
         log_debug_printf(watcher, "Setting initial TLS connection state to: %s\n", "DegradedMode");
-    } else { // GOOD, UNKNOWN, and SUSPENDED — cert is still cryptographically valid; TlsReady is appropriate
+    } else if (status_check_disabled || no_status_extension || cert_status_class == certs::cert_status_class_t::GOOD) {
         Guard G(lock);
-        state = (status_check_disabled || no_status_extension || cert_status.isGood()) ? TlsReady : TcpReady;
-        log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", state == TlsReady ? "TlsReady" : "TcpReady", "SSLContext::monitorStatusAndSetState()", this);
+        state = TlsReady;
+        log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TlsReady", "SSLContext::monitorStatusAndSetState()", this);
+    } else if (cert_status_class == certs::cert_status_class_t::SUSPENDED) {
+        // SUSPENDED: SCHEDULED_OFFLINE or PENDING_RENEWAL: cert exists
+        // but is not operationally usable yet. Enter TcpOnly so plain-TCP connections still work
+        // while we wait for the cert status to resolve to GOOD (upgrade to TlsReady) or BAD (DegradedMode).
+        Guard G(lock);
+        state = TcpOnly;
+        log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpOnly", "SSLContext::monitorStatusAndSetState()", this);
+    } else {
+        // UNKNOWN/PENDING/PENDING_APPROVAL: cert exists
+        // but is not operationally usable yet. Enter TcpReady so plain-TCP connections still work
+        // if negotiated, otherwise we'll wait for status to resolve to GOOD (upgrade to TlsReady) or BAD (DegradedMode).
+        Guard G(lock);
+        state = TcpReady;
+        log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpOnly", "SSLContext::monitorStatusAndSetState()", this);
     }
 }
 
@@ -186,7 +200,7 @@ void SSLContext::setDegradedMode(const bool clear) {
 /**
  * @brief Transition TLS mode based on the given certificate status
  *
- * Will never be called if cert is EXPIRED of REVOKED so we can set to TcpReady if NOT GOOD because it may become GOOD again later
+ * Routes the SSLContext state machine based on the received certificate status class.
  *
  * @param cert_status_class the given cert status class
  */
@@ -201,6 +215,7 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
         case certs::cert_status_class_t::GOOD:
             switch (state) {
                 case Init:
+                case TcpOnly:
                 case TcpReady:
                     log_debug_printf(watcher, "Setting TLS Ready State%s\n", "");
                     {
@@ -226,22 +241,59 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
                 }
             }
             break;
+
         case certs::cert_status_class_t::BAD:
             was_suspended_ = false;
             setDegradedMode();
             break;
+
         case certs::cert_status_class_t::SUSPENDED:
-            log_warn_printf(watcher, "Own certificate is SUSPENDED (%s) — keeping TlsReady, pausing active operations\n", cert_status.status.s.c_str());
-            was_suspended_ = true;
-            if (suspended_event.get()) {
-                event_active(suspended_event.get(), EV_TIMEOUT, 0);
+            // SUSPENDED = SCHEDULED_OFFLINE or PENDING_RENEWAL. Routing depends on current state:
+            // - TlsReady: keep context up (existing TLS connections survive), set was_suspended_
+            //   and fire suspended_event so ContextImpl::onSuspended() / Server::Pvt callbacks
+            //   can pause per-connection monitors and reject PUT/RPC for the suspension window.
+            //   was_suspended_ enables the paired resumed_event on the next GOOD transition.
+            // - Init/TcpOnly/TcpReady: drop to TcpOnly so we don't advertise TLS or hang connecting
+            //   clients. Do NOT fire suspended_event here — the per-connection pause callback would
+            //   otherwise incorrectly suspend plain-TCP traffic that never depended on the cert.
+            //   was_suspended_ stays false so no spurious resumed_event is emitted on recovery.
+            switch (state) {
+                case TlsReady:
+                    log_warn_printf(watcher, "Own certificate is SUSPENDED (%s) — keeping TlsReady, pausing active operations\n", cert_status.status.s.c_str());
+                    was_suspended_ = true;
+                    if (suspended_event.get()) {
+                        event_active(suspended_event.get(), EV_TIMEOUT, 0);
+                    }
+                    break;
+                case Init:
+                case TcpOnly:
+                case TcpReady:
+                default:
+                    log_debug_printf(watcher, "Certificate SUSPENDED before TLS established — entering TcpOnly%s\n", "");
+                    {
+                        Guard G(lock);
+                        state = TcpOnly;
+                        log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpOnly", "SSLContext::setTlsOrTcpMode()", this);
+                    }
+                    break;
             }
             break;
+
         case certs::cert_status_class_t::UNKNOWN:
         default:
+            // UNKNOWN / PENDING / PENDING_APPROVAL: cert exists but is not yet usable.
+            // If TLS is already up (TlsReady): fall back to TcpReady so new connections can still be
+            // attempted (status may recover). If it was never established: enter TcpOnly so we don't
+            // deadlock connecting clients waiting for a cert that requires human approval.
             switch (state) {
                 case Init:
-                    log_debug_printf(watcher, "Keeping Init state until a VALID status is received%s\n", "");
+                case TcpOnly:
+                    log_debug_printf(watcher, "Cert not yet usable — entering TcpOnly%s\n", "");
+                    {
+                        Guard G(lock);
+                        state = TcpOnly;
+                        log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpOnly", "SSLContext::setTlsOrTcpMode()", this);
+                    }
                     break;
                 case TlsReady:
                     log_debug_printf(watcher, "Switching TLS state to TcpReady until a new VALID status is received%s\n", "");
@@ -250,10 +302,10 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
                         state = TcpReady;
                         log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpReady", "SSLContext::setTlsOrTcpMode()", this);
                     }
-                    // fall through
+                    break;
                 case TcpReady:
                 default:
-                    log_debug_printf(watcher, "Skipping setting TCP Ready State: Because the state is already%s\n", "TcpReady");
+                    log_debug_printf(watcher, "Skipping setting TCP Ready State: already TcpReady%s\n", "");
                     break;
             }
             break;
@@ -859,8 +911,11 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
     // Create a holder for peer status or return current holder if already exists
     auto peer_status = createPeerStatus(serial_number, fn);
 
-    // Subscribe if we have a pv and a function and we're not yet subscribed
-    if (!status_pv.empty() && !cert_id.empty() && fn && status_check_enabled && !peer_status->isSubscribed()) {
+    // Subscribe if we have a pv and a function and we're not yet subscribed.
+    // Skip subscription for permanent terminal statuses (REVOKED/EXPIRED): they cannot recover,
+    // so subscribing would burn a PVACMS channel with no benefit.
+    const bool cached_is_permanent_bad = peer_status->status.isCertified() && peer_status->status.isRevokedOrExpired();
+    if (!status_pv.empty() && !cert_id.empty() && fn && status_check_enabled && !peer_status->isSubscribed() && !cached_is_permanent_bad) {
         // Subscribe to certificate status updates
         std::weak_ptr<SSLPeerStatusAndMonitor> weak_peer_status = peer_status;
         {
@@ -892,6 +947,23 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::createPeerStatus(seri
     if (existing_peer_status_entry != peer_statuses.end()) {
         auto peer_status (existing_peer_status_entry->second.lock());
         if (peer_status) {
+            if (fn) {
+                certs::cert_status_class_t cached_class;
+                bool fire_now = false;
+                {
+                    Guard G(peer_status->lock);
+                    peer_status->fn = fn;
+                    cached_class = peer_status->status.getStatusClass();
+                    if (peer_status->status.isStatusCurrent() && peer_status->status.isCacheable()) {
+                        fire_now = true;
+                    } else if (peer_status->subscribed) {
+                        peer_status->subscribed = false;
+                    }
+                }
+                if (fire_now) {
+                    fn(cached_class);
+                }
+            }
             return peer_status;
         }
         peer_statuses.erase(serial_number);
@@ -922,6 +994,9 @@ void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_s
     if (!new_status.isStatusCurrent()) // Ignore expired status results
         return;
 
+    if (!new_status.isCacheable()) // Only cache actionable statuses; drop transient/indeterminate ones
+        return;
+
     // Status updates (and the associated timer operations) must happen in the SSL context's event loop.
     // Cert status updates may originate from other threads (eg. a client context used to query PVACMS).
     // Use call()/tryCall() (not dispatch) to avoid adding avoidable latency for connection bring-up.
@@ -933,10 +1008,6 @@ void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_s
         {
             Guard G(self->lock);
             prior_status_class = self->status.getStatusClass();
-            if (prior_status_class == certs::cert_status_class_t::GOOD &&
-                new_status.getStatusClass() == certs::cert_status_class_t::UNKNOWN) {
-                return; // Suppress spurious GOOD→UNKNOWN flap; GOOD→SUSPENDED is intentional and not suppressed
-            }
             self->status = new_status;
             status_class = self->status.getStatusClass();
         }

@@ -597,6 +597,24 @@ struct CertificateStatus {
      */
     bool isRevokedOrExpired() const noexcept { return status == REVOKED || status == EXPIRED; }
 
+    /**
+     * @brief Whether this status is cacheable as the authoritative peer status.
+     *
+     * Cacheable statuses are actionable and stable: the connection layer can rely on them
+     * without fearing a transient PVACMS hiccup. Non-cacheable statuses are transient or
+     * indeterminate (status not yet issued, awaiting operator action) and must not overwrite
+     * a prior authoritative status in the peer-status cache during a PVACMS outage.
+     *
+     * @return true for VALID, REVOKED, EXPIRED, PENDING_RENEWAL, SCHEDULED_OFFLINE;
+     *         false for UNKNOWN, PENDING, PENDING_APPROVAL
+     *
+     * @since UNRELEASED
+     */
+    bool isCacheable() const noexcept {
+        return status == VALID || status == REVOKED || status == EXPIRED
+            || status == PENDING_RENEWAL || status == SCHEDULED_OFFLINE;
+    }
+
      /**
       * @brief Check whether this *status result* is still current
       *

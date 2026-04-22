@@ -34,6 +34,15 @@
 //! @since UNRELEASED
 #define PVXS_HAS_SUSPENDED_STATE 1
 
+//! Advertises that SSLContext has a TcpOnly state distinct from DegradedMode,
+//! so that certificates in transient non-GOOD states (PENDING, SUSPENDED,
+//! SCHEDULED_OFFLINE before TLS was ever established) use plain TCP while the
+//! cert-status monitor stays active to auto-upgrade to TlsReady. Downstream
+//! consumers use `#ifdef PVXS_HAS_TCP_ONLY_STATE` to distinguish this from
+//! the previous behaviour where any non-GOOD status fell back to DegradedMode.
+//! @since UNRELEASED
+#define PVXS_HAS_TCP_ONLY_STATE 1
+
 namespace pvxs {
 namespace client {
 

@@ -112,7 +112,7 @@ struct SSLPeerStatusAndMonitor : public std::enable_shared_from_this<SSLPeerStat
     bool subscribed{false};
 
     // The function to call when the peer status changes
-    const std::function<void(certs::cert_status_class_t)> fn;
+    std::function<void(certs::cert_status_class_t)> fn;
 
     // The serial number of the certificate being monitored.  We get the status PV from the cert, so we know that it is from the right certificate authority
     const serial_number_t serial_number;
@@ -358,15 +358,20 @@ struct SSLContext {
      * only one side is ready
      *
      * `Init`           - The context has not been initialised (default)
-     * `DegradedMode`   - The context is in Degraded mode.  Only TCP communications are permitted.
+     * `DegradedMode`   - The context is in Degraded mode.  Certificate is permanently invalid (REVOKED/EXPIRED).
+     *                    Only TCP communications are permitted.  Cert monitor is stopped.
+     * `TcpOnly`        - Certificate exists but is not yet operationally usable (PENDING, PENDING_APPROVAL,
+     *                    SUSPENDED, PENDING_RENEWAL, SCHEDULED_OFFLINE before TLS was ever established).
+     *                    Use plain TCP only.  Do not advertise or accept TLS.  Cert monitor remains active
+     *                    so the context can upgrade to TlsReady automatically when status becomes VALID.
      * `TcpReady`       - The context is ready to establish TCP communications. TCP connections can be completely
      *                    configured, but TLS connections are deferred until the state is TlsReady.
-     * `TlsPartial`     - The context is partially ready to establish TLS communications (entity or peer is fully ready).
      * `TlsReady`       - The context is fully ready to establish TLS communications.
      */
     enum state_t {
         Init,
         DegradedMode,
+        TcpOnly,
         TcpReady,
         TlsReady,
     } state = Init;

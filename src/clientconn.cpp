@@ -232,9 +232,12 @@ void Connection::configureClientOCSPCallback(SSL* ssl) const {
 void Connection::createChannels()
 {
 #ifdef PVXS_ENABLE_OPENSSL
-    if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
+    const bool we_can_status_check =
+        context && context->tls_context && context->tls_context->state == ossl::SSLContext::TlsReady;
+
+    if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood() && we_can_status_check) {
         log_debug_printf(certs, "Wait for Server %s certificate status to become GOOD\n", peerName.c_str());
-        return; // defer until peer certificate status validated — covers UNKNOWN, SUSPENDED, and BAD
+        return;
     }
 #endif
 
@@ -496,7 +499,7 @@ void Connection::handle_CONNECTION_VALIDATION()
         if(method=="ca" || (method=="anonymous" && selected!="ca"))
             selected = method;
 #ifdef PVXS_ENABLE_OPENSSL
-        else if (isTLS && method == "x509" && context->isTlsConfigured())
+        else if (isTLS && method == "x509" && context->tls_context && context->tls_context->state >= ossl::SSLContext::TcpReady)
             selected = method;
 #endif
     }

@@ -392,12 +392,12 @@ void ServerConn::peerStatusCallback(certs::cert_status_class_t status_class) {
 void ServerConn::proceedWithConnectionValidation()
 {
 #ifdef PVXS_ENABLE_OPENSSL
-    // Check peer certificate status if required
-    // we won't be subscribed if we don't need to check peer status before continuing
-    // isPeerStatusGood() returns false for UNKNOWN and SUSPENDED — both correctly defer validation without disconnecting
-    if (state != Validated && peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
+    const bool we_can_status_check =
+        iface->server->tls_context && iface->server->tls_context->state == ossl::SSLContext::TlsReady;
+
+    if (state != Validated && peer_status && peer_status->isSubscribed() && !isPeerStatusGood() && we_can_status_check) {
         log_debug_printf(connsetup, "Wait for Client %s certificate status to become GOOD\n", peerName.c_str());
-        return; // Backoff - don't complete validation yet until we get the status were waiting for
+        return;
     }
 #endif
 
