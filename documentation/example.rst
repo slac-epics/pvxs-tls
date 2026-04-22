@@ -33,10 +33,3 @@ Mailbox Server
 .. literalinclude:: ../example/mailbox.cpp
     :language: c++
     :name: mailbox.cpp
-
-Counter Server
---------------
-
-.. literalinclude:: ../example/ticker.cpp
-    :language: c++
-    :name: ticker.cpp

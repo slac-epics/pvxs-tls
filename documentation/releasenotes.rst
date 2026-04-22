@@ -3,17 +3,25 @@
 Release Notes
 =============
 
-1.5.2 (UNRELEASED)
-------------------
+UNRELEASED
+----------
 
-* ioc: promote DBE_ALARM only to also fetch value.
+* tls: Add ``cert_status_class_t::SUSPENDED`` classification for ``SCHEDULED_OFFLINE`` and ``PENDING_RENEWAL`` certificate states.
+  When an entity's own certificate or its peer's certificate enters ``SUSPENDED`` state:
 
-1.5.1 (Feb 2026)
-----------------
+  - **Client (peer/server cert SUSPENDED)**: TLS socket is kept open; active monitors are paused and resume transparently on ``GOOD``; new PUT/RPC operations receive a ``RemoteError("Connection suspended: certificate SCHEDULED_OFFLINE / PENDING_RENEWAL")``; new channel creation is deferred. No reconnect or new TLS handshake is required.
+  - **Client (own cert SUSPENDED)**: same per-connection behaviour as above, triggered via the ``SSLContext::on_suspended_`` callback.
+  - **Server (own cert SUSPENDED)**: existing connections are suspended (monitor updates withheld, PUT/RPC rejected) without disconnecting; QSRV/IOC sources remain attached and resume on ``GOOD``.
+  - **Server (peer/client cert SUSPENDED)**: connection validation is deferred (same as ``UNKNOWN``); no channel disruption.
 
-* Call ``epicsSignalInstallSigPipeIgnore()``.
-* When available, set ``SO_NOSIGPIPE`` on TCP sockets.
-* python: Handle setuptools v80 pkg_resources removal.
+  Previously, both ``SCHEDULED_OFFLINE`` and ``PENDING_RENEWAL`` mapped to ``UNKNOWN``, causing reconnecting clients to defer channel creation indefinitely with no feedback.
+
+* server/ioc: Implement PVAccess ``CMD_ACL_CHANGE`` (0x06) protocol message.
+  The server now sends write-access permissions to clients when a channel is created,
+  and whenever ``ChannelControl::signalRights()`` is called.
+  QSRV2 single-record and group sources report AS-computed write access at connect time.
+  GUI clients such as Phoebus/cs-studio can use this to show PVs as read-only without
+  attempting a PUT first. Compatible with older clients (message is silently ignored).
 
 1.5.0 (Jan 2026)
 ----------------
@@ -22,7 +30,7 @@ Release Notes
 * server: disable one-sided attempt to handle saturated connection.
 * ioc: add `pvxs_log_config()` and `pvxs_log_reset()` IOCsh functions.
 * ioc: renamed semi-internal C symbol names to avoid conflicts with QSRV1:
-       ``dbpvar()`` -> ``dbpvxr()``, ``pvaLinkNWorkers`` -> ``pvxLinkNWorkers``.
+       `dbpvar()` -> ``dbpvxr()`, ``pvaLinkNWorkers`` -> ``pvxLinkNWorkers``.
        Names in IOC shell remain unchanged.
 * ioc: fix PUT to scalar mapping
 * tools: pvxvct can use endpoint syntax to listen for multicast on a specific interface.

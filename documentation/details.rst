@@ -99,7 +99,7 @@ scheme of MAJOR.MINOR.PATCH with the following amendments.
 * See :ref:`ntcompat` for ``NT*`` type construction helpers.
 
 .. _pgpkey:
-  
+
 Each release will be accompanied by a signed tag in the git repository,
 which may be verified with the author's GPG key
 `5C159E669D69E2D4C4E74E540C8E1C8347330CFB <https://keys.openpgp.org/search?q=5C159E669D69E2D4C4E74E540C8E1C8347330CFB>`_

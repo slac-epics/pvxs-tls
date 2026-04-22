@@ -16,14 +16,11 @@ and optionally display and control meta-data fields.
 
     using namespace pvxs;
 
-    // single integer (NTScalar)
+    // single integer
     Value iscalar = nt::NTScalar{TypeCode::Int64}.create();
 
     // eg. access "value" field
     iscalar["value"] = 42;
-
-    // array of doubles (NTScalarArray)
-    Value darr = nt::NTScalar{TypeCode::Float64A}.create();
 
 .. code-block:: c++
 
