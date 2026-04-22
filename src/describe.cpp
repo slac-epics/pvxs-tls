@@ -21,9 +21,6 @@
 
 #include "evhelper.h"
 #include "describe.h"
-#ifdef PVXS_ENABLE_OPENSSL
-#  include <openssl/opensslv.h>
-#endif
 
 namespace pvxs {
 
