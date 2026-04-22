@@ -596,7 +596,11 @@ MAIN(testsock)
         testAbort("test_udp6: %s", e.what());
     }
     test_local_mcast();
+#ifdef __rtems__
+    testSkip(13, "test_mcast_scope: RTEMS multicast scoping differs from Linux");
+#else
     test_mcast_scope();
+#endif
     test_from_wire();
     test_to_wire();
     testDiag("Done");
