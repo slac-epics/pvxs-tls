@@ -188,13 +188,24 @@ void SSLContext::restartStatusValidityTimerFromCertStatus() const {
  */
 void SSLContext::setDegradedMode(const bool clear) {
     log_debug_printf(watcher, "Permanently switching TLS state to Degraded%s\n", "");
-    Guard G(lock);
-    if (clear) {
-        cert_monitor.reset();   // Unsubscribe from the certificate status monitor if any
-        cert_status = {};    // Set the certificate status to be UNKNOWN
+    bool fire_callback = false;
+    {
+        Guard G(lock);
+        if (clear) {
+            cert_monitor.reset();   // Unsubscribe from the certificate status monitor if any
+            cert_status = {};    // Set the certificate status to be UNKNOWN
+        }
+        const bool was_degraded = (state == DegradedMode);
+        state = DegradedMode;
+        if (!clear && !was_degraded && !degraded_callback_fired) {
+            degraded_callback_fired = true;
+            fire_callback = true;
+        }
     }
-    state = DegradedMode;
     log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-11s : SSLContext::setDegradedMode()\n", "SSLContext::state", "DegradedMode");
+    if (fire_callback && degraded_event.get()) {
+        event_active(degraded_event.get(), EV_TIMEOUT, 0);
+    }
 }
 
 /**
@@ -282,9 +293,20 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
         case certs::cert_status_class_t::UNKNOWN:
         default:
             // UNKNOWN / PENDING / PENDING_APPROVAL: cert exists but is not yet usable.
-            // If TLS is already up (TlsReady): fall back to TcpReady so new connections can still be
-            // attempted (status may recover). If it was never established: enter TcpOnly so we don't
-            // deadlock connecting clients waiting for a cert that requires human approval.
+            // Routing depends on current state:
+            // - TlsReady (LIVE-UNKNOWN, e.g. PVACMS went offline long enough that the
+            //   cert validity period elapsed): keep the TLS context up and route through the
+            //   SUSPENDED machinery — set was_suspended_ and fire suspended_event so per-
+            //   connection monitors are paused and PUT/RPC is rejected for the duration.
+            //   The cert is presumed still valid (PVACMS is silent, not declaring it bad);
+            //   when status delivery resumes with GOOD the existing was_suspended_ branch
+            //   fires resumed_event and operations replay.  Existing live TLS conns are
+            //   intentionally NOT torn down — that would force an avoidable reconnect storm
+            //   for what is likely a transient PVACMS outage.
+            // - Init/TcpOnly: enter TcpOnly so we don't deadlock connecting clients waiting
+            //   for a cert that may require human approval.  Do NOT fire suspended_event
+            //   here — TLS was never established so per-conn suspension is meaningless.
+            // - TcpReady: already in a TLS-degraded state; nothing to do.
             switch (state) {
                 case Init:
                 case TcpOnly:
@@ -296,11 +318,10 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
                     }
                     break;
                 case TlsReady:
-                    log_debug_printf(watcher, "Switching TLS state to TcpReady until a new VALID status is received%s\n", "");
-                    {
-                        Guard G(lock);
-                        state = TcpReady;
-                        log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpReady", "SSLContext::setTlsOrTcpMode()", this);
+                    log_warn_printf(watcher, "Own certificate status is UNKNOWN (%s) — keeping TlsReady, pausing active operations until status recovers\n", cert_status.status.s.c_str());
+                    was_suspended_ = true;
+                    if (suspended_event.get()) {
+                        event_active(suspended_event.get(), EV_TIMEOUT, 0);
                     }
                     break;
                 case TcpReady:
@@ -325,6 +346,7 @@ SSLContext::SSLContext(const impl::evbase loop, const bool is_client) : loop(loo
     , tls_ready_event(event_new(loop.base, -1, EV_TIMEOUT, &tlsReadyEventCallback, this))
     , suspended_event(event_new(loop.base, -1, EV_TIMEOUT, &suspendedEventCallback, this))
     , resumed_event(event_new(loop.base, -1, EV_TIMEOUT, &resumedEventCallback, this))
+    , degraded_event(event_new(loop.base, -1, EV_TIMEOUT, &degradedEventCallback, this))
 {}
 
 SSLContext::SSLContext(const SSLContext &o)
@@ -343,6 +365,9 @@ SSLContext::SSLContext(const SSLContext &o)
     , suspended_event(event_new(loop.base, -1, EV_TIMEOUT, &suspendedEventCallback, this))
     , on_resumed_(o.on_resumed_)
     , resumed_event(event_new(loop.base, -1, EV_TIMEOUT, &resumedEventCallback, this))
+    , on_degraded_(o.on_degraded_)
+    , degraded_event(event_new(loop.base, -1, EV_TIMEOUT, &degradedEventCallback, this))
+    , degraded_callback_fired(o.degraded_callback_fired)
     , was_suspended_(o.was_suspended_)
 {
     // If the original timer was pending, restart ours with the remaining time
@@ -367,6 +392,9 @@ SSLContext::SSLContext(SSLContext &o) noexcept
     , suspended_event(event_new(loop.base, -1, EV_TIMEOUT, &suspendedEventCallback, this))
     , on_resumed_(std::move(o.on_resumed_))
     , resumed_event(event_new(loop.base, -1, EV_TIMEOUT, &resumedEventCallback, this))
+    , on_degraded_(std::move(o.on_degraded_))
+    , degraded_event(event_new(loop.base, -1, EV_TIMEOUT, &degradedEventCallback, this))
+    , degraded_callback_fired(o.degraded_callback_fired)
     , was_suspended_(o.was_suspended_)
 {
     // If the original timer was pending, restart ours and cancel the original
@@ -387,6 +415,9 @@ SSLContext::~SSLContext() {
     }
     if (resumed_event.get()) {
         event_del(resumed_event.get());
+    }
+    if (degraded_event.get()) {
+        event_del(degraded_event.get());
     }
     if (status_validity_timer.get()) {
         event_del(status_validity_timer.get());
@@ -452,6 +483,27 @@ void SSLContext::resumedEventCallback(evutil_socket_t, short, void* raw) {
             fn();
         } catch (std::exception& e) {
             log_err_printf(watcher, "Unhandled error in resumed callback: %s\n", e.what());
+        }
+    }
+}
+
+void SSLContext::setOnDegraded(std::function<void()> fn) {
+    Guard G(lock);
+    on_degraded_ = std::move(fn);
+}
+
+void SSLContext::degradedEventCallback(evutil_socket_t, short, void* raw) {
+    auto* ctx = static_cast<SSLContext*>(raw);
+    std::function<void()> fn;
+    {
+        Guard G(ctx->lock);
+        fn = ctx->on_degraded_;
+    }
+    if (fn) {
+        try {
+            fn();
+        } catch (std::exception& e) {
+            log_err_printf(watcher, "Unhandled error in TLS degraded callback: %s\n", e.what());
         }
     }
 }

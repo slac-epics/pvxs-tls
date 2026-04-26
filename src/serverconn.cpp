@@ -364,11 +364,23 @@ void ServerConn::peerStatusCallback(certs::cert_status_class_t status_class) {
         proceedWithConnectionValidation();
     } else if (status_class == certs::cert_status_class_t::BAD) {
         log_debug_printf(certs, "Cancel Wait for Connection Validation: BAD CERT STATUS%s\n", "");
+        cert_status_disconnect = true;
         disconnect();
-    } else if (status_class == certs::cert_status_class_t::SUSPENDED) {
-        log_warn_printf(certs, "Continue Waiting for Connection Validation: SUSPENDED CLIENT CERT STATUS for %s\n", peerName.c_str());
+    } else if (status_class == certs::cert_status_class_t::SUSPENDED ||
+               status_class == certs::cert_status_class_t::UNKNOWN) {
+        // SUSPENDED: PVACMS told us the peer cert is in a recoverable transient state
+        //   (SCHEDULED_OFFLINE / PENDING_RENEWAL).
+        // UNKNOWN: PVACMS is silent (validity expired, or status update not yet received).
+        // Either way the peer cert is presumed still valid but operations should be paused
+        // until status recovers.  Currently the server-side peerStatusCallback treats both
+        // identically as a log-only event; per-conn pausing is driven by Server::Pvt's
+        // setOnSuspended hook which iterates all conns when the OWN cert (not the peer's)
+        // becomes SUSPENDED/UNKNOWN.  This matches the established peer-vs-own asymmetry.
+        log_warn_printf(certs, "Continue Waiting for Connection Validation: %s CLIENT CERT STATUS for %s\n",
+                        status_class == certs::cert_status_class_t::SUSPENDED ? "SUSPENDED" : "UNKNOWN",
+                        peerName.c_str());
     } else {
-        log_debug_printf(certs, "Continue Waiting for Connection Validation: UNKNOWN CERT STATUS%s\n", "");
+        log_debug_printf(certs, "Continue Waiting for Connection Validation: %s CERT STATUS%s\n", "OTHER", "");
     }
 
 }

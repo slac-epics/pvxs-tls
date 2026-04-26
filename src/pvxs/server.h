@@ -149,6 +149,28 @@ public:
     //! @param zero If true, zero counters after reading
     //! @since 0.2.0
     Report report(bool zero=true) const;
+
+    //! Test-only: simulate the local entity certificate transitioning to a
+    //! BAD (REVOKED/EXPIRED) status, without requiring a live PVACMS.
+    //! Used by unit tests to verify that the cert-status teardown path
+    //! tears down live TLS connections and disables TLS listeners.
+    //! No-op if TLS is not configured.
+    //! @since UNRELEASED
+    Server& testInjectEntityCertBad();
+
+    //! Test-only: simulate the local entity certificate transitioning to an
+    //! UNKNOWN status (PVACMS silent / validity expired).  Used by unit
+    //! tests to verify the live-UNKNOWN pause/resume cycle.  No-op if TLS
+    //! is not configured.
+    //! @since UNRELEASED
+    Server& testInjectEntityCertUnknown();
+
+    //! Test-only: simulate the local entity certificate transitioning back
+    //! to GOOD after an UNKNOWN window.  Pairs with
+    //! testInjectEntityCertUnknown() to drive the resume path.  No-op if
+    //! TLS is not configured.
+    //! @since UNRELEASED
+    Server& testInjectEntityCertGood();
 #endif
 
     explicit operator bool() const { return !!pvt; }

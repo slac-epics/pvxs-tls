@@ -390,9 +390,20 @@ void Connection::peerStatusCallback(certs::cert_status_class_t status_class) {
         log_debug_printf(certs, "Cancel Wait to Creating Channels: BAD CERT STATUS%s\n", "");
         suspended_monitors.clear();
         suspended_by_cert = false;
+        cert_status_disconnect = true;
         disconnect();
-    } else if (status_class == certs::cert_status_class_t::SUSPENDED) {
-        log_warn_printf(certs, "Connection to %s SUSPENDED (own or peer cert) — keeping TLS, pausing monitors\n", peerName.c_str());
+    } else if (status_class == certs::cert_status_class_t::SUSPENDED ||
+               status_class == certs::cert_status_class_t::UNKNOWN) {
+        // SUSPENDED: PVACMS told us the peer cert is in a recoverable transient state
+        //   (SCHEDULED_OFFLINE / PENDING_RENEWAL).
+        // UNKNOWN: PVACMS is silent (validity expired, or status update not yet received).
+        // Both are presumed-recoverable: keep TLS up, pause monitors so we don't deliver
+        // updates we couldn't currently authenticate.  When the GOOD branch fires above,
+        // monitors are unpaused via the suspended_by_cert/suspended_monitors machinery
+        // and queued events replay.
+        log_warn_printf(certs, "Connection to %s %s (own or peer cert) — keeping TLS, pausing monitors\n",
+                        peerName.c_str(),
+                        status_class == certs::cert_status_class_t::SUSPENDED ? "SUSPENDED" : "UNKNOWN");
         suspended_by_cert = true;
         for (auto& pair : opByIOID) {
             if (auto op = pair.second.handle.lock()) {
@@ -403,7 +414,7 @@ void Connection::peerStatusCallback(certs::cert_status_class_t status_class) {
             }
         }
     } else {
-        log_debug_printf(certs, "Continue Waiting to Create Channels: UNKNOWN CERT STATUS%s\n", "");
+        log_debug_printf(certs, "Continue Waiting to Create Channels: %s CERT STATUS%s\n", "OTHER", "");
     }
 }
 #endif

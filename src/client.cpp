@@ -529,6 +529,59 @@ Report Context::report(bool zero) const
     return ret;
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
+Context& Context::testInjectEntityCertBad()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+    if(pvt->impl && pvt->impl->tls_context) {
+        pvt->impl->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::BAD);
+    }
+    return *this;
+}
+
+Context& Context::testInjectEntityCertUnknown()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+    if(pvt->impl && pvt->impl->tls_context) {
+        pvt->impl->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::UNKNOWN);
+    }
+    return *this;
+}
+
+Context& Context::testInjectEntityCertGood()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+    if(pvt->impl && pvt->impl->tls_context) {
+        pvt->impl->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::GOOD);
+    }
+    return *this;
+}
+#else
+Context& Context::testInjectEntityCertBad()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+    return *this;
+}
+
+Context& Context::testInjectEntityCertUnknown()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+    return *this;
+}
+
+Context& Context::testInjectEntityCertGood()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+    return *this;
+}
+#endif
+
 static
 Value buildCAMethod()
 {
@@ -589,6 +642,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
             tls_context->setOnTlsReady([this]() { onTlsReady(); });
             tls_context->setOnSuspended([this]() { onSuspended(); });
             tls_context->setOnResumed([this]() { onResumed(); });
+            tls_context->setOnDegraded([this]() { onLocalCertBadTearDown(); });
         }catch(std::exception& e){
             log_debug_printf(setup, "Failed to configure TLS for client: %s\n", e.what());
             if (tls_context) {
@@ -1524,6 +1578,42 @@ void ContextImpl::onResumed() {
         }
     }
 }
+
+/**
+ * @brief Tear down live TLS outbound connections after the local cert went BAD.
+ *
+ * Runs on tcp_loop.  The SSLContext is already in DegradedMode at this point,
+ * so isTlsPossible() returns false and no new TLS connections will be created
+ * by the search/reconnect machinery.  Existing channels return to the
+ * Searching state via Connection::cleanup() and may resolve via plain TCP if
+ * the user's transport configuration permits.
+ *
+ * Snapshot strong refs first because Connection::cleanup() erases entries
+ * from connByAddr.  Filter on the isTLS bool encoded in the connByAddr key
+ * so plain-TCP connections are not affected.
+ *
+ * @since UNRELEASED
+ */
+void ContextImpl::onLocalCertBadTearDown() {
+    tcp_loop.call([this]() {
+        std::vector<std::shared_ptr<Connection>> tls_conns;
+        tls_conns.reserve(connByAddr.size());
+        for (auto& pair : connByAddr) {
+            if (!pair.first.second) continue;  // .second == isTLS in the key
+            if (auto conn = pair.second.lock()) {
+                tls_conns.push_back(std::move(conn));
+            }
+        }
+
+        log_warn_printf(setup, "Local certificate became REVOKED/EXPIRED; tearing down %zu TLS connection(s)\n", tls_conns.size());
+
+        for (auto& conn : tls_conns) {
+            conn->cert_status_disconnect = true;
+            conn->disconnect();
+            conn->cleanup();
+        }
+    });
+}
 #endif
 
 #ifdef PVXS_ENABLE_OPENSSL
@@ -1562,6 +1652,7 @@ void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
         tls_context->setOnTlsReady([this]() { onTlsReady(); });
         tls_context->setOnSuspended([this]() { onSuspended(); });
         tls_context->setOnResumed([this]() { onResumed(); });
+        tls_context->setOnDegraded([this]() { onLocalCertBadTearDown(); });
         effective = new_config;
     } catch (std::exception& e) {
         log_debug_printf(setup, "Failed to reconfigure TLS for client: %s\n", e.what());
