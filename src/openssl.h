@@ -437,6 +437,26 @@ struct SSLContext {
      */
     void setOnTlsReady(std::function<void()> fn);
 
+    /**
+     * @brief Set a callback to be invoked (on the event loop thread) when the
+     *        context transitions permanently to DegradedMode because the local
+     *        entity certificate's status became BAD (REVOKED or EXPIRED).
+     *
+     * The callback fires at most once per SSLContext, on the first BAD-driven
+     * transition. It is NOT fired for the bootstrap path that constructs an
+     * already-degraded context (`setDegradedMode(true)`), only for live status
+     * transitions.
+     *
+     * The callback is dispatched via an event on the SSLContext's event loop,
+     * so it is safe to call from any thread. Owners (Server::Pvt /
+     * client::ContextImpl) use it to tear down live TLS connections and
+     * (server-side) disable inbound TLS listeners so that no further TLS
+     * traffic is exchanged using a now-untrusted local certificate.
+     *
+     * @since UNRELEASED
+     */
+    void setOnDegraded(std::function<void()> fn);
+
    private:
     // The entity certificate status monitor
     certs::cert_status_ptr<certs::CertStatusManager> cert_monitor;
@@ -452,6 +472,15 @@ struct SSLContext {
     std::function<void()> on_tls_ready_;
     evevent tls_ready_event;
     static void tlsReadyEventCallback(evutil_socket_t fd, short evt, void* raw);
+
+    // Callback invoked on the event loop thread when the entity cert status
+    // transitions to BAD (REVOKED/EXPIRED) and the context becomes permanently
+    // DegradedMode.  Used by Server::Pvt / client::ContextImpl to drop live
+    // TLS connections.  Fires at most once.
+    std::function<void()> on_degraded_;
+    evevent degraded_event;
+    bool degraded_callback_fired{false};
+    static void degradedEventCallback(evutil_socket_t fd, short evt, void* raw);
 };
 
 PVXS_API void configureServerOCSPCallback(void* server_ptr, SSL* ssl);
