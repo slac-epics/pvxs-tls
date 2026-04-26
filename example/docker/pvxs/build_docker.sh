@@ -12,9 +12,9 @@ pushd "${PROJECTS}/pvxs"
 trap "popd" EXIT
 
 BASE_IMAGE_NAME="epics-base"
-BASE_IMAGE_TAG="latest"
+BASE_IMAGE_TAG="dev"
 TARGET_IMAGE_NAME="pvxs"
-TARGET_IMAGE_TAG="latest"
+TARGET_IMAGE_TAG="dev"
 
 echo "--- Building ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_USERNAME:-slac-epics}/${TARGET_IMAGE_NAME} Docker image ---"
 
