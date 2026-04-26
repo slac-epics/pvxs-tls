@@ -100,6 +100,9 @@ void ConnBase::connect(ev_owned_ptr<bufferevent> &&bev)
 
 void ConnBase::disconnect()
 {
+    if (state == Disconnected && !bev) {
+        return;
+    }
     log_debug_printf(connsetup, "ConnBase::disconnect(): disconnecting a %s\n", peerLabel());
     bev.reset();
     state = Disconnected;
@@ -181,12 +184,27 @@ void ConnBase::bevEvent(const short events) {
     }
 #endif
 
-    // If any socket warnings / errors, then log and disconnect
+    // If any socket warnings / errors, then log and disconnect.
+    //
+    // When a connection is being torn down due to a certificate status
+    // becoming BAD, both ends observe the same status transition independently
+    // and race to close the socket.  The losing side typically sees a
+    // BEV_EVENT_ERROR or BEV_EVENT_EOF on a half-closed socket -- this is the
+    // expected, coordinated behavior, not a real error.  Demote those events
+    // to debug-level when we're already mid-teardown for a known cert-status
+    // reason or when the conn is already in the Disconnected state.
+#ifdef PVXS_ENABLE_OPENSSL
+    const bool expected_close = cert_status_disconnect || state == Disconnected;
+#else
+    const bool expected_close = state == Disconnected;
+#endif
     if(events&(BEV_EVENT_EOF|BEV_EVENT_ERROR|BEV_EVENT_TIMEOUT)) {
         if(events&BEV_EVENT_ERROR) {
             const char *msg = evutil_socket_error_to_string(err);
-            if (err) {
-            log_err_printf(connio, "connection to %s %s closed with socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
+            if (err && !expected_close) {
+                log_err_printf(connio, "connection to %s %s closed with socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
+            } else if (err) {
+                log_debug_printf(connio, "connection to %s %s closed with expected socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
             } else {
                 log_debug_printf(connio, "connection to %s %s closed\n", peerLabel(), peerName.c_str());
             }

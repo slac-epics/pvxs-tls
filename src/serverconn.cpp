@@ -364,6 +364,7 @@ void ServerConn::peerStatusCallback(certs::cert_status_class_t status_class) {
         proceedWithConnectionValidation();
     } else if (status_class == certs::cert_status_class_t::BAD) {
         log_debug_printf(certs, "Cancel Wait for Connection Validation: BAD CERT STATUS%s\n", "");
+        cert_status_disconnect = true;
         disconnect();
     } else if (status_class == certs::cert_status_class_t::SUSPENDED) {
         log_warn_printf(certs, "Continue Waiting for Connection Validation: SUSPENDED CLIENT CERT STATUS for %s\n", peerName.c_str());

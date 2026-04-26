@@ -188,13 +188,24 @@ void SSLContext::restartStatusValidityTimerFromCertStatus() const {
  */
 void SSLContext::setDegradedMode(const bool clear) {
     log_debug_printf(watcher, "Permanently switching TLS state to Degraded%s\n", "");
-    Guard G(lock);
-    if (clear) {
-        cert_monitor.reset();   // Unsubscribe from the certificate status monitor if any
-        cert_status = {};    // Set the certificate status to be UNKNOWN
+    bool fire_callback = false;
+    {
+        Guard G(lock);
+        if (clear) {
+            cert_monitor.reset();   // Unsubscribe from the certificate status monitor if any
+            cert_status = {};    // Set the certificate status to be UNKNOWN
+        }
+        const bool was_degraded = (state == DegradedMode);
+        state = DegradedMode;
+        if (!clear && !was_degraded && !degraded_callback_fired) {
+            degraded_callback_fired = true;
+            fire_callback = true;
+        }
     }
-    state = DegradedMode;
     log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-11s : SSLContext::setDegradedMode()\n", "SSLContext::state", "DegradedMode");
+    if (fire_callback && degraded_event.get()) {
+        event_active(degraded_event.get(), EV_TIMEOUT, 0);
+    }
 }
 
 /**
@@ -325,6 +336,7 @@ SSLContext::SSLContext(const impl::evbase loop, const bool is_client) : loop(loo
     , tls_ready_event(event_new(loop.base, -1, EV_TIMEOUT, &tlsReadyEventCallback, this))
     , suspended_event(event_new(loop.base, -1, EV_TIMEOUT, &suspendedEventCallback, this))
     , resumed_event(event_new(loop.base, -1, EV_TIMEOUT, &resumedEventCallback, this))
+    , degraded_event(event_new(loop.base, -1, EV_TIMEOUT, &degradedEventCallback, this))
 {}
 
 SSLContext::SSLContext(const SSLContext &o)
@@ -343,6 +355,9 @@ SSLContext::SSLContext(const SSLContext &o)
     , suspended_event(event_new(loop.base, -1, EV_TIMEOUT, &suspendedEventCallback, this))
     , on_resumed_(o.on_resumed_)
     , resumed_event(event_new(loop.base, -1, EV_TIMEOUT, &resumedEventCallback, this))
+    , on_degraded_(o.on_degraded_)
+    , degraded_event(event_new(loop.base, -1, EV_TIMEOUT, &degradedEventCallback, this))
+    , degraded_callback_fired(o.degraded_callback_fired)
     , was_suspended_(o.was_suspended_)
 {
     // If the original timer was pending, restart ours with the remaining time
@@ -367,6 +382,9 @@ SSLContext::SSLContext(SSLContext &o) noexcept
     , suspended_event(event_new(loop.base, -1, EV_TIMEOUT, &suspendedEventCallback, this))
     , on_resumed_(std::move(o.on_resumed_))
     , resumed_event(event_new(loop.base, -1, EV_TIMEOUT, &resumedEventCallback, this))
+    , on_degraded_(std::move(o.on_degraded_))
+    , degraded_event(event_new(loop.base, -1, EV_TIMEOUT, &degradedEventCallback, this))
+    , degraded_callback_fired(o.degraded_callback_fired)
     , was_suspended_(o.was_suspended_)
 {
     // If the original timer was pending, restart ours and cancel the original
@@ -387,6 +405,9 @@ SSLContext::~SSLContext() {
     }
     if (resumed_event.get()) {
         event_del(resumed_event.get());
+    }
+    if (degraded_event.get()) {
+        event_del(degraded_event.get());
     }
     if (status_validity_timer.get()) {
         event_del(status_validity_timer.get());
@@ -452,6 +473,27 @@ void SSLContext::resumedEventCallback(evutil_socket_t, short, void* raw) {
             fn();
         } catch (std::exception& e) {
             log_err_printf(watcher, "Unhandled error in resumed callback: %s\n", e.what());
+        }
+    }
+}
+
+void SSLContext::setOnDegraded(std::function<void()> fn) {
+    Guard G(lock);
+    on_degraded_ = std::move(fn);
+}
+
+void SSLContext::degradedEventCallback(evutil_socket_t, short, void* raw) {
+    auto* ctx = static_cast<SSLContext*>(raw);
+    std::function<void()> fn;
+    {
+        Guard G(ctx->lock);
+        fn = ctx->on_degraded_;
+    }
+    if (fn) {
+        try {
+            fn();
+        } catch (std::exception& e) {
+            log_err_printf(watcher, "Unhandled error in TLS degraded callback: %s\n", e.what());
         }
     }
 }

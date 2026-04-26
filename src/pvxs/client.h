@@ -638,6 +638,16 @@ public:
     //! Compile report about peers and channels
     //! @since 0.2.0
     Report report(bool zero=true) const;
+
+    //! Test-only: simulate the local entity certificate transitioning to a
+    //! BAD (REVOKED/EXPIRED) status, without requiring a live PVACMS.
+    //! Used by unit tests to verify that the cert-status teardown path
+    //! tears down live TLS outbound connections.  Non-TLS connections and
+    //! the channel-search machinery are intentionally untouched, so existing
+    //! channels may resolve via plain TCP if the user's transport
+    //! configuration permits.  No-op if TLS is not configured.
+    //! @since UNRELEASED
+    Context& testInjectEntityCertBad();
 #endif
 
     explicit operator bool() const { return pvt.operator bool(); }

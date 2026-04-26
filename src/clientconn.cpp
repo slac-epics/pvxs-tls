@@ -390,6 +390,7 @@ void Connection::peerStatusCallback(certs::cert_status_class_t status_class) {
         log_debug_printf(certs, "Cancel Wait to Creating Channels: BAD CERT STATUS%s\n", "");
         suspended_monitors.clear();
         suspended_by_cert = false;
+        cert_status_disconnect = true;
         disconnect();
     } else if (status_class == certs::cert_status_class_t::SUSPENDED) {
         log_warn_printf(certs, "Connection to %s SUSPENDED (own or peer cert) — keeping TLS, pausing monitors\n", peerName.c_str());

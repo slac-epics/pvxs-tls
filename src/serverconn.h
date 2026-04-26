@@ -334,6 +334,11 @@ struct Server::Pvt
 #ifdef PVXS_ENABLE_OPENSSL
     bool canRespondToTcpSearch() const { return !tls_context || tls_context->state >= ossl::SSLContext::DegradedMode; }
     bool canRespondToTlsSearch() const { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady && effective.tls_port; }
+
+    // Invoked on the acceptor_loop when the entity certificate's status becomes
+    // BAD (REVOKED/EXPIRED).  Disables inbound TLS listeners and tears down all
+    // currently-accepted TLS connections.  @since UNRELEASED
+    void onLocalCertBadTearDown();
 #else
     bool canRespondToTcpSearch() const { return true; }
     bool canRespondToTlsSearch() const { return false; }
