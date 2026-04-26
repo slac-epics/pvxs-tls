@@ -1150,8 +1150,103 @@ void testClientLocalCertBadThenReconfigureGood() {
         << "After reconfigure server must see client2's new identity";
 }
 
+/**
+ * @brief Verifies that when the server's local cert status becomes UNKNOWN
+ *        on a live TLS connection, GETs continue to work both during the
+ *        UNKNOWN window and after recovery to GOOD.  This is the live-UNKNOWN
+ *        policy: presume cert still valid, pause WRITE operations (covered
+ *        separately in suspended-by-cert tests), replay on recovery.  Reads
+ *        are intentionally not gated.  Distinct from the BAD policy which is
+ *        permanent and tears down conns.
+ */
+void testServerLocalCertUnknownThenGood() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    bool initial_is_tls{false};
+    auto conn(cli.connect(TEST_PV)
+        .onConnect([&initial_is_tls](const client::Connected& c) { initial_is_tls = c.cred && c.cred->isTLS; })
+        .exec());
+
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+    testTrue(initial_is_tls) << "Initial connection must be over TLS";
+
+    serv.testInjectEntityCertUnknown();
+    epicsThread::sleep(0.5);
+
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42)
+        << "GET must still work during server UNKNOWN window (live conn preserved)";
+
+    serv.testInjectEntityCertGood();
+    epicsThread::sleep(0.5);
+
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42)
+        << "GET must still work after server cert resumes GOOD";
+}
+
+/**
+ * @brief Mirror of the server-side test for the client side.  When the
+ *        client's own cert status goes UNKNOWN, all client-issued operations
+ *        (GET/PUT/RPC) are gated client-side until status recovers.  This
+ *        test verifies that ops are restored after GOOD recovery and the
+ *        underlying TLS connection was preserved across the cycle (the post-
+ *        recovery GET succeeds without a fresh search/handshake observable
+ *        delay).
+ */
+void testClientLocalCertUnknownThenGood() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    bool initial_is_tls{false};
+    auto conn(cli.connect(TEST_PV)
+        .onConnect([&initial_is_tls](const client::Connected& c) { initial_is_tls = c.cred && c.cred->isTLS; })
+        .exec());
+
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+    testTrue(initial_is_tls) << "Initial connection must be over TLS";
+
+    cli.testInjectEntityCertUnknown();
+    epicsThread::sleep(0.5);
+
+    cli.testInjectEntityCertGood();
+    epicsThread::sleep(0.5);
+
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42)
+        << "GET must work after client cert resumes GOOD (conn was preserved)";
+}
+
 MAIN(testtls) {
-    testPlan(72);
+    testPlan(79);
     testSetup();
     logger_config_env();
     testSuspendedStatusClass();
@@ -1176,6 +1271,8 @@ MAIN(testtls) {
     testNonTlsServerUnaffectedByLocalCertBad();
     testServerLocalCertBadThenReconfigureGood();
     testClientLocalCertBadThenReconfigureGood();
+    testServerLocalCertUnknownThenGood();
+    testClientLocalCertUnknownThenGood();
     cleanup_for_valgrind();
     return testDone();
 }

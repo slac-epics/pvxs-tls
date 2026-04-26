@@ -539,8 +539,42 @@ Context& Context::testInjectEntityCertBad()
     }
     return *this;
 }
+
+Context& Context::testInjectEntityCertUnknown()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+    if(pvt->impl && pvt->impl->tls_context) {
+        pvt->impl->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::UNKNOWN);
+    }
+    return *this;
+}
+
+Context& Context::testInjectEntityCertGood()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+    if(pvt->impl && pvt->impl->tls_context) {
+        pvt->impl->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::GOOD);
+    }
+    return *this;
+}
 #else
 Context& Context::testInjectEntityCertBad()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+    return *this;
+}
+
+Context& Context::testInjectEntityCertUnknown()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+    return *this;
+}
+
+Context& Context::testInjectEntityCertGood()
 {
     if(!pvt)
         throw std::logic_error("NULL Context");

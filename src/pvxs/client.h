@@ -648,6 +648,20 @@ public:
     //! configuration permits.  No-op if TLS is not configured.
     //! @since UNRELEASED
     Context& testInjectEntityCertBad();
+
+    //! Test-only: simulate the local entity certificate transitioning to an
+    //! UNKNOWN status (PVACMS silent / validity expired).  Used by unit
+    //! tests to verify the live-UNKNOWN pause/resume cycle.  No-op if TLS
+    //! is not configured.
+    //! @since UNRELEASED
+    Context& testInjectEntityCertUnknown();
+
+    //! Test-only: simulate the local entity certificate transitioning back
+    //! to GOOD after an UNKNOWN window.  Pairs with
+    //! testInjectEntityCertUnknown() to drive the resume path.  No-op if
+    //! TLS is not configured.
+    //! @since UNRELEASED
+    Context& testInjectEntityCertGood();
 #endif
 
     explicit operator bool() const { return pvt.operator bool(); }

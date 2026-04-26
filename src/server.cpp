@@ -311,8 +311,42 @@ Server& Server::testInjectEntityCertBad()
     }
     return *this;
 }
+
+Server& Server::testInjectEntityCertUnknown()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    if(pvt->tls_context) {
+        pvt->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::UNKNOWN);
+    }
+    return *this;
+}
+
+Server& Server::testInjectEntityCertGood()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    if(pvt->tls_context) {
+        pvt->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::GOOD);
+    }
+    return *this;
+}
 #else
 Server& Server::testInjectEntityCertBad()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    return *this;
+}
+
+Server& Server::testInjectEntityCertUnknown()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    return *this;
+}
+
+Server& Server::testInjectEntityCertGood()
 {
     if(!pvt)
         throw std::logic_error("NULL Server");

@@ -293,9 +293,20 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
         case certs::cert_status_class_t::UNKNOWN:
         default:
             // UNKNOWN / PENDING / PENDING_APPROVAL: cert exists but is not yet usable.
-            // If TLS is already up (TlsReady): fall back to TcpReady so new connections can still be
-            // attempted (status may recover). If it was never established: enter TcpOnly so we don't
-            // deadlock connecting clients waiting for a cert that requires human approval.
+            // Routing depends on current state:
+            // - TlsReady (LIVE-UNKNOWN, e.g. PVACMS went offline long enough that the
+            //   cert validity period elapsed): keep the TLS context up and route through the
+            //   SUSPENDED machinery — set was_suspended_ and fire suspended_event so per-
+            //   connection monitors are paused and PUT/RPC is rejected for the duration.
+            //   The cert is presumed still valid (PVACMS is silent, not declaring it bad);
+            //   when status delivery resumes with GOOD the existing was_suspended_ branch
+            //   fires resumed_event and operations replay.  Existing live TLS conns are
+            //   intentionally NOT torn down — that would force an avoidable reconnect storm
+            //   for what is likely a transient PVACMS outage.
+            // - Init/TcpOnly: enter TcpOnly so we don't deadlock connecting clients waiting
+            //   for a cert that may require human approval.  Do NOT fire suspended_event
+            //   here — TLS was never established so per-conn suspension is meaningless.
+            // - TcpReady: already in a TLS-degraded state; nothing to do.
             switch (state) {
                 case Init:
                 case TcpOnly:
@@ -307,11 +318,10 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
                     }
                     break;
                 case TlsReady:
-                    log_debug_printf(watcher, "Switching TLS state to TcpReady until a new VALID status is received%s\n", "");
-                    {
-                        Guard G(lock);
-                        state = TcpReady;
-                        log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpReady", "SSLContext::setTlsOrTcpMode()", this);
+                    log_warn_printf(watcher, "Own certificate status is UNKNOWN (%s) — keeping TlsReady, pausing active operations until status recovers\n", cert_status.status.s.c_str());
+                    was_suspended_ = true;
+                    if (suspended_event.get()) {
+                        event_active(suspended_event.get(), EV_TIMEOUT, 0);
                     }
                     break;
                 case TcpReady:
