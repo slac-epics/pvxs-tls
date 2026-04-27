@@ -32,6 +32,19 @@ namespace certs {
 std::string getStatusCacheDir();
 
 /**
+ * @brief Resolve a per-Context override against the env-var default.
+ *
+ * Returns @p override_dir if non-empty (typically from
+ * `Config::tls_status_cache_dir`); otherwise falls back to
+ * `getStatusCacheDir()` (env-var or XDG default).  This is the path
+ * tests use to give each role its own cache directory while keeping
+ * the env-var default for production.
+ *
+ * @since UNRELEASED
+ */
+std::string resolveStatusCacheDir(const std::string &override_dir);
+
+/**
  * @brief Check whether disk caching of certificate status is enabled.
  *
  * Returns false when EPICS_PVA_NO_STATUS_CACHE is set to a truthy
@@ -58,6 +71,13 @@ bool isStatusCacheEnabled();
 bool writeCacheFile(const std::string &cert_id,
                     const uint8_t *data, size_t len);
 
+/// @overload
+/// @param cache_dir  per-Context override; empty falls back to env-var default
+/// @since UNRELEASED
+bool writeCacheFile(const std::string &cert_id,
+                    const uint8_t *data, size_t len,
+                    const std::string &cache_dir);
+
 /**
  * @brief Read cached OCSP response bytes.
  *
@@ -70,6 +90,12 @@ bool writeCacheFile(const std::string &cert_id,
  */
 std::vector<uint8_t> readCacheFile(const std::string &cert_id);
 
+/// @overload
+/// @param cache_dir  per-Context override; empty falls back to env-var default
+/// @since UNRELEASED
+std::vector<uint8_t> readCacheFile(const std::string &cert_id,
+                                   const std::string &cache_dir);
+
 /**
  * @brief Delete a cached OCSP response file if it exists.
  *
@@ -77,6 +103,12 @@ std::vector<uint8_t> readCacheFile(const std::string &cert_id);
  * @since UNRELEASED
  */
 void deleteCacheFile(const std::string &cert_id);
+
+/// @overload
+/// @param cache_dir  per-Context override; empty falls back to env-var default
+/// @since UNRELEASED
+void deleteCacheFile(const std::string &cert_id,
+                     const std::string &cache_dir);
 
 } // namespace certs
 } // namespace pvxs

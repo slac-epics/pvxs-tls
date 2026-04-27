@@ -423,10 +423,12 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
         cert_status_manager->callback_ref = std::move(fn);
         std::weak_ptr<CertStatusManager> weak_cert_status_manager(cert_status_manager);
 
+        const std::string cache_dir = client.config().tls_status_cache_dir;
+
         // Attempt to serve from the disk cache before subscribing to the PV
         if (isStatusCacheEnabled()) {
             try {
-                auto cached_bytes = readCacheFile(cert_id);
+                auto cached_bytes = readCacheFile(cert_id, cache_dir);
                 if (!cached_bytes.empty()) {
                     log_debug_printf(status, "Cache hit for %s (%zu bytes)\n", cert_id.c_str(), cached_bytes.size());
                     shared_array<uint8_t> buf(cached_bytes.size());
@@ -447,12 +449,12 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
                         (*cert_status_manager->callback_ref)(cached_status);
                     } else {
                         log_debug_printf(status, "Cached status for %s is expired, discarding\n", cert_id.c_str());
-                        deleteCacheFile(cert_id);
+                        deleteCacheFile(cert_id, cache_dir);
                     }
                 }
             } catch (std::exception &e) {
                 log_debug_printf(status, "Cache read failed for %s: %s, deleting cache file\n", cert_id.c_str(), e.what());
-                deleteCacheFile(cert_id);
+                deleteCacheFile(cert_id, cache_dir);
             }
         }
 
@@ -460,7 +462,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
         auto sub = cert_status_manager->client_.monitor(status_pv)
                        .maskConnected(true)
                        .maskDisconnected(true)
-                       .event([trusted_store_ptr, weak_cert_status_manager, cert_id](client::Subscription &s) {
+                       .event([trusted_store_ptr, weak_cert_status_manager, cert_id, cache_dir](client::Subscription &s) {
                            try {
                                const auto csm = weak_cert_status_manager.lock();
                                if (!csm) return;
@@ -473,20 +475,20 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
                                         log_debug_printf(status, "Calling (*csm->callback_ref)(status_update)%s\n", "");
                                          (*csm->callback_ref)(status_update);
                                          log_debug_printf(status, "Called (*csm->callback_ref)(status_update)%s\n", "");
-                                         if (isStatusCacheEnabled() && status_update.isStatusCurrent()) {
-                                             const auto *new_data = status_update.ocsp_bytes.data();
-                                             const auto new_size = status_update.ocsp_bytes.size();
-                                             if (new_size != csm->cached_ocsp_bytes_.size() ||
-                                                 std::memcmp(new_data, csm->cached_ocsp_bytes_.data(), new_size) != 0) {
-                                                 // Re-read from disk in case another process already wrote it
-                                                 auto on_disk = readCacheFile(cert_id);
-                                                 if (on_disk.size() != new_size ||
-                                                     std::memcmp(on_disk.data(), new_data, new_size) != 0) {
-                                                     writeCacheFile(cert_id, new_data, new_size);
-                                                 }
-                                                 csm->cached_ocsp_bytes_.assign(new_data, new_data + new_size);
-                                             }
-                                         }
+                                          if (isStatusCacheEnabled() && status_update.isStatusCurrent()) {
+                                              const auto *new_data = status_update.ocsp_bytes.data();
+                                              const auto new_size = status_update.ocsp_bytes.size();
+                                              if (new_size != csm->cached_ocsp_bytes_.size() ||
+                                                  std::memcmp(new_data, csm->cached_ocsp_bytes_.data(), new_size) != 0) {
+                                                  // Re-read from disk in case another process already wrote it
+                                                  auto on_disk = readCacheFile(cert_id, cache_dir);
+                                                  if (on_disk.size() != new_size ||
+                                                      std::memcmp(on_disk.data(), new_data, new_size) != 0) {
+                                                      writeCacheFile(cert_id, new_data, new_size, cache_dir);
+                                                  }
+                                                  csm->cached_ocsp_bytes_.assign(new_data, new_data + new_size);
+                                              }
+                                          }
                                    } catch (OCSPParseException &e) {
                                        log_debug_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
                                    } catch (std::invalid_argument &e) {

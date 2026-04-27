@@ -65,6 +65,22 @@ struct PVXS_API ConfigCommon {
      */
     std::string tls_keychain_file;
 
+    /** Per-Context override for the OCSP status cache directory.
+     *
+     *  Tests use this to isolate cache hit/miss counts per role
+     *  (server entity cert vs client peer cert vs admin RPC) so
+     *  subscription/delivery counters can be verified independently.
+     *
+     *  In production this is left empty so every client and every
+     *  server in a deployment shares the same `EPICS_PVA_STATUS_CACHE_DIR`
+     *  (or its XDG default) and benefits maximally from the disk cache.
+     *
+     *  Settable via `EPICS_PVA_TLS_STATUS_CACHE_DIR` (and
+     *  `EPICS_PVAS_TLS_STATUS_CACHE_DIR` for server-side overrides).
+     *  @since UNRELEASED
+     */
+    std::string tls_status_cache_dir;
+
     /** Client certificate request during TLS handshake.
      *
      *  - Default.   Currently equivalent to Optional

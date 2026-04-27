@@ -57,18 +57,17 @@ namespace certs {
 
 namespace {
 
-std::string cacheFilePath(const std::string &cert_id) {
-    return getStatusCacheDir() + "/" + cert_id + ".ocsp";
+std::string cacheFilePath(const std::string &cert_id, const std::string &cache_dir) {
+    return cache_dir + "/" + cert_id + ".ocsp";
 }
 
-std::string cacheTempPath(const std::string &cert_id) {
-    return getStatusCacheDir() + "/" + cert_id + ".ocsp.tmp";
+std::string cacheTempPath(const std::string &cert_id, const std::string &cache_dir) {
+    return cache_dir + "/" + cert_id + ".ocsp.tmp";
 }
 
-bool ensureCacheDirExists() {
-    const auto dir = getStatusCacheDir();
+bool ensureCacheDirExists(const std::string &cache_dir) {
     // ensureDirectoryExists expects a filepath (directory + trailing sep + dummy)
-    std::string probe = dir + "/x";
+    std::string probe = cache_dir + "/x";
     try {
         ensureDirectoryExists(probe, false);
         return true;
@@ -86,6 +85,10 @@ std::string getStatusCacheDir() {
     return getXdgPvaDataHome() + "/status_cache";
 }
 
+std::string resolveStatusCacheDir(const std::string &override_dir) {
+    return override_dir.empty() ? getStatusCacheDir() : override_dir;
+}
+
 bool isStatusCacheEnabled() {
     const char *env = std::getenv("EPICS_PVA_NO_STATUS_CACHE");
     if (!env)
@@ -98,17 +101,24 @@ bool isStatusCacheEnabled() {
 }
 
 bool writeCacheFile(const std::string &cert_id, const uint8_t *data, size_t len) {
+    return writeCacheFile(cert_id, data, len, std::string{});
+}
+
+bool writeCacheFile(const std::string &cert_id, const uint8_t *data, size_t len,
+                    const std::string &cache_dir_override) {
     if (cert_id.empty() || !data || len == 0)
         return false;
 
-    if (!ensureCacheDirExists()) {
+    const auto cache_dir = resolveStatusCacheDir(cache_dir_override);
+
+    if (!ensureCacheDirExists(cache_dir)) {
         log_debug_printf(cachelog, "Cannot create cache directory: %s\n",
-                         getStatusCacheDir().c_str());
+                         cache_dir.c_str());
         return false;
     }
 
-    const auto tmp = cacheTempPath(cert_id);
-    const auto dst = cacheFilePath(cert_id);
+    const auto tmp = cacheTempPath(cert_id, cache_dir);
+    const auto dst = cacheFilePath(cert_id, cache_dir);
 
     std::unique_ptr<FILE> fp(std::fopen(tmp.c_str(), "wb"));
     if (!fp) {
@@ -141,10 +151,15 @@ bool writeCacheFile(const std::string &cert_id, const uint8_t *data, size_t len)
 }
 
 std::vector<uint8_t> readCacheFile(const std::string &cert_id) {
+    return readCacheFile(cert_id, std::string{});
+}
+
+std::vector<uint8_t> readCacheFile(const std::string &cert_id,
+                                   const std::string &cache_dir_override) {
     if (cert_id.empty())
         return {};
 
-    const auto path = cacheFilePath(cert_id);
+    const auto path = cacheFilePath(cert_id, resolveStatusCacheDir(cache_dir_override));
 
     std::unique_ptr<FILE> fp(std::fopen(path.c_str(), "rb"));
     if (!fp)
@@ -167,9 +182,14 @@ std::vector<uint8_t> readCacheFile(const std::string &cert_id) {
 }
 
 void deleteCacheFile(const std::string &cert_id) {
+    deleteCacheFile(cert_id, std::string{});
+}
+
+void deleteCacheFile(const std::string &cert_id,
+                     const std::string &cache_dir_override) {
     if (cert_id.empty())
         return;
-    const auto path = cacheFilePath(cert_id);
+    const auto path = cacheFilePath(cert_id, resolveStatusCacheDir(cache_dir_override));
     std::remove(path.c_str());
 }
 
