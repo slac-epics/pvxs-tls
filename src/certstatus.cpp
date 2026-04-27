@@ -18,6 +18,9 @@
 #include "statuscache.h"
 
 namespace pvxs {
+
+DEFINE_LOGGER(cert_status_event, "pvxs.certs.mon.event");
+
 namespace certs {
 
 /**
@@ -435,6 +438,10 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
                     if (cached_status.isStatusCurrent()) {
                         log_debug_printf(status, "Cached status for %s is current, invoking callback\n",
                                          cert_id.c_str());
+                        log_info_printf(::pvxs::cert_status_event,
+                                        "cert-status: cache-hit pv=%s status=%s\n",
+                                        status_pv.c_str(),
+                                        cached_status.status.s.c_str());
                         cert_status_manager->cached_ocsp_bytes_ = std::move(cached_bytes);
                         cert_status_manager->status_ = std::make_shared<CertificateStatus>(cached_status);
                         (*cert_status_manager->callback_ref)(cached_status);
