@@ -39,6 +39,14 @@ DEFINE_LOGGER(watcher, "pvxs.certs.mon");
 DEFINE_LOGGER(io, "pvxs.ossl.io");
 DEFINE_LOGGER(status_cli, "pvxs.st.cli");
 DEFINE_LOGGER(status_svr, "pvxs.st.svr");
+// Stable, parsable event stream for tests / harnesses to count cert-status
+// subscribe and listener-fire events without parsing the noisier DEBUG logs.
+// Format guarantees:
+//   "cert-status: subscribe pv=<pv-name> kind=entity|peer"
+//   "cert-status: delivery  pv=<pv-name> kind=entity|peer status=<status-string>"
+// Both are emitted at INFO so they're visible at the default log level when
+// `pvxs.certs.mon.event=INFO` is enabled (e.g. via `PVXS_LOG`).
+DEFINE_LOGGER(event, "pvxs.certs.mon.event");
 
 namespace pvxs {
 namespace ossl {
@@ -69,10 +77,13 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
             const auto cert_id = certs::CertStatusManager::getCertIdFromStatusPv(status_pv);
 
             log_debug_printf(watcher, "Installing Certificate Status Monitor: %s\n", status_pv.c_str());
+            log_info_printf(event, "cert-status: subscribe pv=%s kind=entity\n", status_pv.c_str());
             cert_monitor = certs::CertStatusManager::subscribe(getCertStatusExData()->client, trusted_store_ptr, status_pv, cert_id,
                                                                [=](const certs::PVACertificateStatus &pva_status) {
             const auto cert_status_class = static_cast<certs::CertificateStatus>(pva_status).getStatusClass();
             log_debug_printf(watcher, "Received: %s certificate status\n", pva_status.status.s.c_str());
+            log_info_printf(event, "cert-status: delivery  pv=%s kind=entity status=%s\n",
+                            status_pv.c_str(), pva_status.status.s.c_str());
             if (cert_status_class == certs::cert_status_class_t::BAD) {
                 log_warn_printf(watcher, "Certificate revoked or expired: %s\n", pva_status.status.s.c_str());
             } else if (cert_status_class == certs::cert_status_class_t::SUSPENDED) {
@@ -974,10 +985,13 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
             Guard G(peer_status->lock);
             peer_status->subscribed = true;
         }
+        log_info_printf(event, "cert-status: subscribe pv=%s kind=peer\n", status_pv.c_str());
         peer_status->cert_status_manager =
             certs::CertStatusManager::subscribe(client, trusted_store_ptr, status_pv, cert_id,
-                                                [weak_peer_status](const certs::PVACertificateStatus &status) {
+                                                [weak_peer_status, status_pv](const certs::PVACertificateStatus &status) {
                 log_debug_printf(watcher, "Received: %s PEER certificate status\n", status.status.s.c_str());
+                log_info_printf(event, "cert-status: delivery  pv=%s kind=peer status=%s\n",
+                                status_pv.c_str(), status.status.s.c_str());
                 const auto peer_status_update = weak_peer_status.lock();
                 if (!status.isGood())
                     log_warn_printf(watcher, "Peer certificate not VALID: %s\n", status.status.s.c_str());
