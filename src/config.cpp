@@ -578,6 +578,11 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     }
 
     if (pickone({"EPICS_PVAS_CERT_PV_PREFIX", "EPICS_PVA_CERT_PV_PREFIX"})) self.setCertPvPrefix(pickone.val);
+
+    // EPICS_PVAS_TLS_STATUS_CACHE_DIR
+    if (pickone({"EPICS_PVAS_TLS_STATUS_CACHE_DIR", "EPICS_PVA_TLS_STATUS_CACHE_DIR"})) {
+        self.tls_status_cache_dir = pickone.val;
+    }
 #endif  // PVXS_ENABLE_OPENSSL
 }
 Config& Config::applyEnv() {
@@ -652,6 +657,8 @@ void Config::updateDefs(defs_t& defs) const {
 
     // EPICS_PVAS_CERT_PV_PREFIX
     if (!getCertPvPrefix().empty()) defs["EPICS_PVAS_CERT_PV_PREFIX"] = getCertPvPrefix();
+
+    if (!tls_status_cache_dir.empty()) defs["EPICS_PVA_TLS_STATUS_CACHE_DIR"] = defs["EPICS_PVAS_TLS_STATUS_CACHE_DIR"] = tls_status_cache_dir;
 #endif  // PVXS_ENABLE_OPENSSL
 }
 
@@ -811,6 +818,10 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     }
 
     if (pickone({"EPICS_PVA_CERT_PV_PREFIX"})) self.setCertPvPrefix(pickone.val);
+
+    if (pickone({"EPICS_PVA_TLS_STATUS_CACHE_DIR"})) {
+        self.tls_status_cache_dir = pickone.val;
+    }
 #endif  // PVXS_ENABLE_OPENSSL
 }
 
@@ -851,6 +862,8 @@ void Config::updateDefs(defs_t& defs) const {
 
     // EPICS_PVA_CERT_PV_PREFIX
     if (!getCertPvPrefix().empty()) defs["EPICS_PVA_CERT_PV_PREFIX"] = getCertPvPrefix();
+
+    if (!tls_status_cache_dir.empty()) defs["EPICS_PVA_TLS_STATUS_CACHE_DIR"] = tls_status_cache_dir;
 
 #endif  // PVXS_ENABLE_OPENSSL
 }
