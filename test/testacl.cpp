@@ -4,8 +4,6 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#include <atomic>
-
 #include <testMain.h>
 #include <epicsUnitTest.h>
 #include <epicsEvent.h>
@@ -47,10 +45,6 @@ void testWritablePV()
     auto pv = server::SharedPV::buildMailbox();
 
     AclTester t(pv);
-
-    epicsEvent gotRights;
-    std::atomic<int> rightsCount{0};
-    std::atomic<bool> lastWritable{false};
 
     auto mon = t.cli.monitor("test:pv")
         .event([&](client::Subscription& sub) {
