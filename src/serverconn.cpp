@@ -368,12 +368,11 @@ void ServerConn::peerStatusCallback(certs::cert_status_class_t status_class) {
         disconnect();
     } else if (status_class == certs::cert_status_class_t::SUSPENDED ||
                status_class == certs::cert_status_class_t::UNKNOWN) {
-        // Per cert-startup-tcp-bootstrap/design.md#D3: when ServerConn is paused
-        // at proceedWithConnectionValidation (state < Validated) and the first
-        // authoritative peer status is non-GOOD, drop the connection so the peer
-        // re-searches and can pick up our TCP endpoint.  The Validated case keeps
-        // existing log-only behavior (per-conn pausing handled separately by
-        // Server::Pvt::onSuspended for OWN cert transitions).
+        // When ServerConn is paused at proceedWithConnectionValidation (state <
+        // Validated) and the first authoritative peer status is non-GOOD, drop
+        // the connection so the peer re-searches and can pick up our TCP endpoint.
+        // The Validated case keeps existing log-only behavior (per-conn pausing
+        // handled separately by Server::Pvt::onSuspended for OWN cert transitions).
         if (state != Validated) {
             log_warn_printf(certs, "Pre-Validated server connection from %s gives up TLS: peer cert %s\n",
                             peerName.c_str(),

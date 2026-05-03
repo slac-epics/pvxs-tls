@@ -1346,15 +1346,13 @@ void testClientLocalCertScheduledOfflineFallsBackToTcpAndRecovers() {
 }
 
 // ===========================================================================
-// Group 6 tests: cert-startup-tcp-bootstrap give-up wiring + PeerStatusStore.
-// Numbering matches openspec/changes/cert-startup-tcp-bootstrap/tasks.md#6.
+// Cert-status give-up wiring + PeerStatusStore tests.
 // ===========================================================================
 
 namespace {
 
-// Helper used by 6.10-6.12, 6.16, 6.17, 6.21, 6.24, 6.25 to inject a synthetic
-// CertificateStatus directly into PeerStatusStore (bypasses PVACMS so the
-// store-level invariants can be tested in isolation).
+// Inject a synthetic CertificateStatus directly into PeerStatusStore (bypasses
+// PVACMS so store-level invariants can be tested in isolation).
 certs::CertificateStatus makeSyntheticStatus(certs::certstatus_t status,
                                              time_t valid_for_seconds) {
     certs::CertificateStatus s;
@@ -1368,7 +1366,7 @@ certs::CertificateStatus makeSyntheticStatus(certs::certstatus_t status,
 
 }  // namespace
 
-// 6.10 — entries survive Connection / Context destruction.
+// Entries survive Connection / Context destruction.
 void testPeerStatusStoreSurvivesConnectionDestruction() {
     testShow() << __func__;
     auto& store = ossl::PeerStatusStore::instance();
@@ -1389,7 +1387,7 @@ void testPeerStatusStoreSurvivesConnectionDestruction() {
     store.reset();
 }
 
-// 6.11 — entry expires past status_valid_until_date.
+// Entry expires past status_valid_until_date.
 void testPeerStatusStoreEntryExpires() {
     testShow() << __func__;
     auto& store = ossl::PeerStatusStore::instance();
@@ -1403,7 +1401,7 @@ void testPeerStatusStoreEntryExpires() {
     store.reset();
 }
 
-// 6.12 — fresh delivery overrides prior entry.
+// Fresh delivery overrides prior entry.
 void testPeerStatusStoreFreshDeliveryOverrides() {
     testShow() << __func__;
     auto& store = ossl::PeerStatusStore::instance();
@@ -1417,7 +1415,7 @@ void testPeerStatusStoreFreshDeliveryOverrides() {
     store.reset();
 }
 
-// 6.16 — singleton is process-wide (one instance per process).
+// Singleton is process-wide (one instance per process).
 void testPeerStatusStoreIsProcessWide() {
     testShow() << __func__;
     auto& a = ossl::PeerStatusStore::instance();
@@ -1426,18 +1424,16 @@ void testPeerStatusStoreIsProcessWide() {
         << "instance() must return the same singleton across all calls";
 }
 
-// 6.17 — confirm no global constructor was added (negative-symbol test).
+// Confirm no global constructor was added (negative-symbol test).
 // Implemented as a runtime no-op assertion: the actual symbol check is the
-// `nm` invocation documented in tasks.md#5b.8 and run as part of the build
-// verification.  Including a placeholder test here keeps the openspec-task
-// numbering aligned with executed assertions.
+// `nm` invocation run as part of build verification.
 void testPeerStatusStoreNoNewGlobalConstructor() {
     testShow() << __func__;
     testPass("Verified externally via nm: only Itanium ABI guard variable "
              "(_ZGV..._instance...inst) is present; no _GLOBAL__sub_I_*peerstatusstore* exists");
 }
 
-// 6.21 — update() returns prior class for D10 recovery detection.
+// update() returns prior class for recovery detection.
 void testPeerStatusStoreUpdateReturnsPriorClass() {
     testShow() << __func__;
     auto& store = ossl::PeerStatusStore::instance();
@@ -1462,7 +1458,7 @@ void testPeerStatusStoreUpdateReturnsPriorClass() {
     store.reset();
 }
 
-// 6.24 — D10 recovery observer is silent on GOOD -> GOOD churn.
+// Recovery observer is silent on GOOD -> GOOD churn.
 void testActiveUpgradeNoOp_GoodToGood() {
     testShow() << __func__;
     auto& store = ossl::PeerStatusStore::instance();
@@ -1485,7 +1481,7 @@ void testActiveUpgradeNoOp_GoodToGood() {
     store.reset();
 }
 
-// 6.25 — D10 recovery observer is silent when there was no prior entry.
+// Recovery observer is silent when there was no prior entry.
 void testActiveUpgradeNoOp_NeverHadPriorEntry() {
     testShow() << __func__;
     auto& store = ossl::PeerStatusStore::instance();
@@ -1500,8 +1496,8 @@ void testActiveUpgradeNoOp_NeverHadPriorEntry() {
     store.reset();
 }
 
-// 6.6 (mapped to local-cert VALID → upgrade) — happy path: VALID delivery
-// while a deferred connection is paused MUST allow TLS to complete.
+// Happy path: VALID delivery while a deferred connection is paused MUST allow
+// TLS to complete (regression guard for the give-up wiring).
 void testStartupOwnCertValidUpgradesAsBefore() {
     testShow() << __func__;
 
@@ -1527,7 +1523,7 @@ void testStartupOwnCertValidUpgradesAsBefore() {
         << "VALID delivery must let TLS connection complete normally (no give-up path)";
 }
 
-// 6.7 — PVACMS never replies: the conn paused at the gate stays paused.
+// PVACMS never replies: the conn paused at the gate stays paused.
 void testStartupOwnCertNoStatusReplyStillWaits() {
     testShow() << __func__;
 
@@ -1553,7 +1549,7 @@ void testStartupOwnCertNoStatusReplyStillWaits() {
     // No setCertificateStatus on either side: the gate has nothing authoritative
     // to either commit or abandon the TLS attempt.  Bound the wait so the test
     // does not hang.  This documents existing "wait forever" behavior — adding
-    // a bounded timeout is explicit non-goal per design.md Goals/Non-Goals.
+    // a bounded timeout is an explicit non-goal of the current behavior.
     const bool got = connected_evt.wait(2.0);
     if (got) {
         testPass("PVACMS-silent path may now opportunistically connect; previously hung");
@@ -1562,7 +1558,7 @@ void testStartupOwnCertNoStatusReplyStillWaits() {
     }
 }
 
-// 6.8 — cached VALID skips the optimistic window.
+// Cached VALID skips the optimistic window.
 // Use the same mechanism the production code uses to "cache" status: directly
 // inject VALID via setCertificateStatus before any client/server activity.
 void testStartupCachedValidBootsStraightToTls() {
@@ -1599,10 +1595,9 @@ void testStartupCachedValidBootsStraightToTls() {
     testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
 }
 
-// 6.1 — local PENDING_APPROVAL (own cert) abandons TLS and falls back to TCP.
-// (Symmetric variant of testClientLocalCertPendingApprovalFallsBackToTcpAndRecovers
-// already in the suite, but starts in a paused-at-gate state to exercise the
-// deferred-connection give-up flow added in Group 2.)
+// Local PENDING_APPROVAL (own cert) abandons TLS and falls back to TCP.
+// Starts in a paused-at-gate state to exercise the deferred-connection give-up
+// flow.
 void testStartupOwnCertPendingApprovalAbandonsTlsAndFallsBackToTcp() {
     testShow() << __func__;
 
@@ -1641,7 +1636,7 @@ void testStartupOwnCertPendingApprovalAbandonsTlsAndFallsBackToTcp() {
         << "GET must succeed on the TCP fallback connection";
 }
 
-// 6.2 — local SCHEDULED_OFFLINE abandons TLS, falls back to TCP.
+// Local SCHEDULED_OFFLINE abandons TLS, falls back to TCP.
 void testStartupOwnCertScheduledOfflineAbandonsTlsAndFallsBackToTcp() {
     testShow() << __func__;
 
@@ -1677,8 +1672,8 @@ void testStartupOwnCertScheduledOfflineAbandonsTlsAndFallsBackToTcp() {
     testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
 }
 
-// 6.3 — local REVOKED (BAD arm) abandons TLS, falls back to TCP.
-// Confirms the BAD-arm give-up signal added in Group 2 reaches the deferred-connection handler.
+// Local REVOKED (BAD arm) abandons TLS, falls back to TCP.
+// Confirms the BAD-arm give-up signal reaches the deferred-connection handler.
 void testStartupOwnCertRevokedAbandonsTlsAndFallsBackToTcp() {
     testShow() << __func__;
 
@@ -1714,7 +1709,7 @@ void testStartupOwnCertRevokedAbandonsTlsAndFallsBackToTcp() {
     testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
 }
 
-// 6.4 — peer cert PENDING_APPROVAL: client abandons TLS, server drops conn.
+// Peer cert PENDING_APPROVAL: client abandons TLS, server drops conn.
 void testStartupPeerCertPendingApprovalAbandonsTlsConnection() {
     testShow() << __func__;
 
@@ -1749,7 +1744,7 @@ void testStartupPeerCertPendingApprovalAbandonsTlsConnection() {
     testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
 }
 
-// 6.5 — peer cert SCHEDULED_OFFLINE abandons TLS connection.
+// Peer cert SCHEDULED_OFFLINE abandons TLS connection.
 void testStartupPeerCertScheduledOfflineAbandonsTlsConnection() {
     testShow() << __func__;
 
@@ -1784,7 +1779,7 @@ void testStartupPeerCertScheduledOfflineAbandonsTlsConnection() {
     testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
 }
 
-// 6.13 — well-behaved client filters TLS replies after recording a non-GOOD peer.
+// Well-behaved client filters TLS replies after recording a non-GOOD peer.
 // Direct PeerStatusStore manipulation: after a GUID-binding is recorded with a
 // non-GOOD entry, subsequent procSearchReply hits get filtered out.  The full
 // procSearchReply integration is exercised via cli.get() below; the assertion
@@ -1822,16 +1817,16 @@ void testWellBehavedClientFiltersTlsAfterPeerNonGood() {
 
     testTrue(connected_evt.wait(5.0));
     testFalse(last_mode.load() == 1)
-        << "Client must commit to TCP because server cert is non-GOOD (D8a/D9 path)";
+        << "Client must commit to TCP because server cert is non-GOOD";
 
     store.reset();
 }
 
-// 6.14 — server rejects post-handshake when peer is in store as non-GOOD.
+// Server rejects post-handshake when peer is in store as non-GOOD.
 // Approach: pre-poison the store with a non-GOOD entry for the client cert,
 // then have the client try to connect.  The server's ConnBase post-handshake
-// lookup (D8 site 2) catches the cached entry and drops the bufferevent.
-// The client falls back to TCP via reconnect (or the higher-level channel).
+// lookup catches the cached entry and drops the bufferevent.  The client
+// falls back to TCP via reconnect (or the higher-level channel).
 void testServerRejectsHandshakeFromKnownNonGoodPeer() {
     testShow() << __func__;
 
@@ -1861,8 +1856,8 @@ void testServerRejectsHandshakeFromKnownNonGoodPeer() {
     store.reset();
 }
 
-// 6.15 — defense-in-depth: client post-handshake catches what GUID-indirection
-// missed. Same setup as 6.14 but no GUID binding is pre-recorded.
+// Defense-in-depth: client post-handshake catches what GUID-indirection
+// missed.  No GUID binding is pre-recorded.
 void testClientPostHandshakeAbandonsOnStoreNonGood() {
     testShow() << __func__;
 
@@ -1892,10 +1887,11 @@ void testClientPostHandshakeAbandonsOnStoreNonGood() {
     store.reset();
 }
 
-// 6.18, 6.19, 6.20 — D9 partitioning details.  Implemented as one unified test
-// because the partitioning is an internal optimization with no externally
-// observable PV-level signal beyond the fall-back behavior already covered by
-// 6.1-6.5.  This test exercises the partition state machine directly.
+// Search partitioning details.  Implemented as a unified test because the
+// partitioning is an internal optimization with no externally observable
+// PV-level signal beyond the fall-back behavior already covered by the
+// give-up tests above.  This test exercises the partition state machine
+// directly.
 void testTickSearchPartitionsByPeerStatusStore() {
     testShow() << __func__;
 
@@ -1960,14 +1956,14 @@ void testProcSearchReplyD8aDiscardRecordsGuid() {
     testTrue(store.lookupByGuid(g, out));
     auto cached = store.lookup(out);
     testTrue(cached && cached->getStatusClass() != certs::cert_status_class_t::GOOD)
-        << "After D8a discard: GUID -> id binding + cached non-GOOD entry must coexist";
+        << "After TLS-discard: GUID -> id binding + cached non-GOOD entry must coexist";
 
     store.reset();
 }
 
-// 6.22, 6.23 — D10 active upgrade.  Full integration requires racing PVACMS
-// status deliveries which is beyond the scope of a unit test; instead, exercise
-// the observer-firing contract directly.  The recovery_observer fires when
+// Active upgrade on recovery.  Full integration requires racing PVACMS status
+// deliveries which is beyond the scope of a unit test; instead, exercise the
+// observer-firing contract directly.  The recovery observer fires when
 // update() returns (had_prior=true, prior=non-GOOD) AND the new status is GOOD.
 void testActiveUpgradeOnRecovery_Client_CaseA() {
     testShow() << __func__;
@@ -2009,7 +2005,7 @@ void testActiveUpgradeOnRecovery_Client_CaseA() {
     store.reset();
 }
 
-// 6.23 — server-side observer (symmetric structure to 6.22).
+// Server-side observer (symmetric structure to client-side).
 void testActiveUpgradeOnRecovery_Server_CaseA() {
     testShow() << __func__;
 
@@ -2033,7 +2029,7 @@ void testActiveUpgradeOnRecovery_Server_CaseA() {
     store.reset();
 }
 
-// 6.26 — D10 safety: observer never tears down TLS connections.
+// Safety: observer never tears down TLS connections.
 // The assertion is enforced in the observer body via assert(!conn->isTLS); this
 // test documents the contract by exercising the predicate path.
 void testActiveUpgradeSafety_NeverTearsDownTlsConnections() {
@@ -2060,7 +2056,7 @@ void testActiveUpgradeSafety_NeverTearsDownTlsConnections() {
     store.reset();
 }
 
-// 6.27 — D10 Case B (passive recovery via OCSP expiry).
+// Passive recovery via OCSP expiry.
 // When all conns to a peer are TCP-downgraded, no SSLPeerStatusAndMonitor
 // delivery callback is alive, so active recovery never fires.  Recovery is
 // bounded by the OCSP status_valid_until_date.  This test exercises the
@@ -2085,7 +2081,7 @@ void testPassiveRecoveryOnOcspExpiry_CaseB() {
     epicsThreadSleep(2.0);
 
     testFalse(static_cast<bool>(store.lookup(out)))
-        << "After OCSP expiry, lookup returns empty; D9 partitioning treats this as GOOD-or-unknown";
+        << "After OCSP expiry, lookup returns empty; search partitioning treats this as GOOD-or-unknown";
 
     store.reset();
 }
@@ -2121,7 +2117,7 @@ MAIN(testtls) {
     testClientLocalCertPendingApprovalFallsBackToTcpAndRecovers();
     testClientLocalCertScheduledOfflineFallsBackToTcpAndRecovers();
 
-    // Group 6 - cert-startup-tcp-bootstrap give-up wiring + PeerStatusStore.
+    // Cert-status give-up wiring + PeerStatusStore tests.
     testPeerStatusStoreSurvivesConnectionDestruction();
     testPeerStatusStoreEntryExpires();
     testPeerStatusStoreFreshDeliveryOverrides();

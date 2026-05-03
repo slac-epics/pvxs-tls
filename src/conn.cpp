@@ -168,8 +168,7 @@ void ConnBase::bevEvent(const short events) {
             log_debug_printf(connsetup, "ConnBase::bevEvent(): A %s CONNECTED event \n", peerLabel());
             const auto ctx = bufferevent_openssl_get_ssl(bev.get());
             if (ctx) {
-                // Per cert-startup-tcp-bootstrap/design.md#D8 sites 2 + 3:
-                // post-handshake PeerStatusStore lookup BEFORE subscribing fresh.
+                // Post-handshake PeerStatusStore lookup BEFORE subscribing fresh.
                 // If the store has cached a non-GOOD entry for this peer cert,
                 // abandon the connection immediately -- the cached PVACMS-signed
                 // status is authoritative until OCSP expiry, so subscribing fresh

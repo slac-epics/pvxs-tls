@@ -627,7 +627,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
         tls_context->setDegradedMode(true);
         log_debug_printf(setup, "TLS is not configured.  Setting Degraded Mode.%s", "\n");
     }
-    // D10: register one process-wide PeerStatusStore recovery observer per ContextImpl.
+    // register one process-wide PeerStatusStore recovery observer per ContextImpl.
     // The observer dispatches onto tcp_loop so the teardown work runs on the right thread
     // (PeerStatusStore::fireRecoveryObservers is called from the SSLPeerStatusAndMonitor
     // delivery callback on the SSLContext's loop, which may NOT be tcp_loop).
@@ -1000,25 +1000,25 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion
         return;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    // Per cert-startup-tcp-bootstrap/design.md#D6 + D8a: a TLS reply must be discarded
-    // when (D6) our local SSLContext is not currently advertising TLS (TcpOnly /
-    // DegradedMode), or (D8a) the PeerStatusStore has cached a non-GOOD entry for the
-    // server identified by this reply's GUID.  The wire format carries one protocol
-    // per reply (src/server.cpp:1005-1011), so there is no per-reply TCP fallback
-    // path -- discarding the reply leaves the channel in Channel::Searching and the
-    // next tickSearch (per D9 partitioning) will emit a TCP-only SEARCH for it.
-    bool d6_discard_all_tls = false;
-    bool d8a_discard_known_non_good = false;
-    ossl::PeerCertId d8a_peer_id;
+    // A TLS reply must be discarded when our local SSLContext is not currently
+    // advertising TLS (TcpOnly / DegradedMode), or when the PeerStatusStore has
+    // cached a non-GOOD entry for the server identified by this reply's GUID.
+    // The wire format carries one protocol per reply, so there is no per-reply
+    // TCP fallback path -- discarding the reply leaves the channel in
+    // Channel::Searching and the next tickSearch will emit a TCP-only SEARCH
+    // for it.
+    bool discard_tls_local_not_ready = false;
+    bool discard_tls_peer_not_good = false;
+    ossl::PeerCertId discard_tls_peer_id;
     if (isTLS) {
         if (self.tls_context && (self.tls_context->state == ossl::SSLContext::TcpOnly ||
                                  self.tls_context->state == ossl::SSLContext::DegradedMode)) {
-            d6_discard_all_tls = true;
+            discard_tls_local_not_ready = true;
         }
-        if (ossl::PeerStatusStore::instance().lookupByGuid(guid, d8a_peer_id)) {
-            const auto cached = ossl::PeerStatusStore::instance().lookup(d8a_peer_id);
+        if (ossl::PeerStatusStore::instance().lookupByGuid(guid, discard_tls_peer_id)) {
+            const auto cached = ossl::PeerStatusStore::instance().lookup(discard_tls_peer_id);
             if (cached && cached->getStatusClass() != certs::cert_status_class_t::GOOD) {
-                d8a_discard_known_non_good = true;
+                discard_tls_peer_not_good = true;
             }
         }
     }
@@ -1046,19 +1046,19 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion
         log_debug_printf(io, "Search reply for %s\n", chan->name.c_str());
 
 #ifdef PVXS_ENABLE_OPENSSL
-        if (isTLS && (d6_discard_all_tls || d8a_discard_known_non_good)) {
-            // Per D9-sub-b: record chan->guid even on discard so the next tickSearch
-            // can consult PeerStatusStore::lookupByGuid() and place this channel in
-            // the TCP-only sub-bucket (D9 partitioning).  Without this the channel
-            // would re-emit ["tls","tcp"] every tick and groundhog-day on the same
-            // discarded TLS reply.
+        if (isTLS && (discard_tls_local_not_ready || discard_tls_peer_not_good)) {
+            // Record chan->guid even on discard so the next tickSearch can consult
+            // PeerStatusStore::lookupByGuid() and place this channel in the
+            // TCP-only sub-bucket.  Without this the channel would re-emit
+            // ["tls","tcp"] every tick and groundhog-day on the same discarded
+            // TLS reply.
             if (chan->state == Channel::Searching) {
                 chan->guid = guid;
             }
             log_warn_printf(watcher, "Discarded TLS search reply from %s for %s: %s\n",
                             std::string(SB() << guid).c_str(), chan->name.c_str(),
-                            d6_discard_all_tls ? "local TLS context not ready"
-                                               : "peer cert status not GOOD");
+                            discard_tls_local_not_ready ? "local TLS context not ready"
+                                                        : "peer cert status not GOOD");
             continue;
         }
 #endif
@@ -1204,7 +1204,7 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
                      bucket.size());
 
 #ifdef PVXS_ENABLE_OPENSSL
-    // Per cert-startup-tcp-bootstrap/design.md#D9: partition the bucket into a
+    // Partition the bucket into a
     // default sub-bucket (TLS+TCP search) and a TCP-only sub-bucket based on
     // PeerStatusStore::lookupByGuid(chan->guid).  Channels targeting a peer
     // whose cached cert status is non-GOOD are routed into the TCP-only
@@ -1641,15 +1641,14 @@ void ContextImpl::onTlsReady() {
 }
 
 void ContextImpl::onTcpOnly() {
-    // Per cert-startup-tcp-bootstrap/design.md#D1+D2: tcp_only_event is fired
-    // not just on SUSPENDED-class transitions but also on BAD (DegradedMode)
-    // transitions, so that any deferred connection paused at
-    // proceedWithCreatingChannels waiting for TlsReady abandons the TLS attempt.
+    // tcp_only_event is fired not just on SUSPENDED-class transitions but also
+    // on BAD (DegradedMode) transitions, so that any deferred connection paused
+    // at proceedWithCreatingChannels waiting for TlsReady abandons the TLS attempt.
     // For the BAD case, however, we must NOT set reconnect_for_tls_when_ready
     // (TLS won't come back without an explicit reconfigure) and we must NOT
     // pre-emptively poke for a TCP commit (the existing onLocalCertBadTearDown
-    // path already tore down live TLS conns; pre-emptive TCP commit would
-    // race with a subsequent reconfigure that wants to bring TLS back up).
+    // path already tore down live TLS conns; pre-emptive TCP commit would race
+    // with a subsequent reconfigure that wants to bring TLS back up).
     const bool is_bad = tls_context && tls_context->state == ossl::SSLContext::DegradedMode;
     if (!is_bad) {
         reconnect_for_tls_when_ready = true;
@@ -1665,17 +1664,18 @@ void ContextImpl::onTcpOnly() {
 }
 
 void ContextImpl::onPeerRecovered(const std::string& peer_id) {
-    // D10: a peer's cert status has just transitioned non-GOOD -> GOOD.
-    // Walk connByAddr, find every NON-TLS connection whose peer matches the recovered id,
-    // tear it down so the channels return to Searching.  D9 partitioning will then place
-    // them in the default sub-bucket (PeerStatusStore now reports GOOD), the SEARCH lists
-    // ["tls","tcp"], and the next reply commits to TLS.
+    // A peer's cert status has just transitioned non-GOOD -> GOOD.  Walk
+    // connByAddr, find every NON-TLS connection whose peer matches the recovered
+    // id, and tear it down so the channels return to Searching.  Search
+    // partitioning will then place them in the default sub-bucket (PeerStatusStore
+    // now reports GOOD), the SEARCH lists ["tls","tcp"], and the next reply
+    // commits to TLS.
     //
-    // SAFETY (design.md#D10-sub-d): we explicitly skip isTLS conns.  The delivery callback
-    // chain runs on a TLS connection (SSLPeerStatusAndMonitor exists post-TLS-handshake);
-    // tearing down a TLS conn here could destroy the very connection delivering the
-    // callback, leading to use-after-free.  Non-TLS conns are safe to tear down because
-    // the delivery never originates from them.
+    // SAFETY: we explicitly skip isTLS conns.  The delivery callback chain runs
+    // on a TLS connection (SSLPeerStatusAndMonitor exists post-TLS-handshake);
+    // tearing down a TLS conn here could destroy the very connection delivering
+    // the callback, leading to use-after-free.  Non-TLS conns are safe to tear
+    // down because the delivery never originates from them.
     if (peer_id.empty()) return;
     std::vector<std::shared_ptr<Connection>> tcp_conns;
     tcp_conns.reserve(connByAddr.size());

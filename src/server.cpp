@@ -642,7 +642,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
             log_debug_printf(osslsetup, "TLS is not configured but we have a server TLS context.  Set it to TCP only (DegradedMode)%s", "\n");
             tls_context->setDegradedMode(true);
         }
-        // D10 server-side: register the recovery observer mirror of ContextImpl's.
+        // Register the recovery observer (mirror of ContextImpl's).
         // Dispatched onto acceptor_loop so connections map mutation is loop-safe.
         recovery_observer_handle_ = ossl::PeerStatusStore::instance().registerRecoveryObserver(
             [this](const ossl::PeerCertId& id) {
@@ -935,12 +935,12 @@ void Server::Pvt::onLocalCertBadTearDown()
 
 void Server::Pvt::onLocalCertTcpOnlyTearDown()
 {
-    // Per cert-startup-tcp-bootstrap/design.md#D1+D2: tcp_only_event is fired
-    // not just on SUSPENDED-class transitions but also on BAD (DegradedMode)
-    // transitions, so deferred TLS connections paused at proceedWithConnectionValidation
-    // get a give-up signal.  But for the BAD case, onLocalCertBadTearDown has already
-    // disabled the TLS listener and torn down TLS conns; running this body again is
-    // redundant and would log a duplicate WARN.  Skip in that case.
+    // tcp_only_event is fired not just on SUSPENDED-class transitions but also on
+    // BAD (DegradedMode) transitions, so deferred TLS connections paused at
+    // proceedWithConnectionValidation get a give-up signal.  But for the BAD case,
+    // onLocalCertBadTearDown has already disabled the TLS listener and torn down
+    // TLS conns; running this body again is redundant and would log a duplicate
+    // WARN.  Skip in that case.
     if (tls_context && tls_context->state == ossl::SSLContext::DegradedMode) {
         return;
     }

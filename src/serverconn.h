@@ -346,10 +346,10 @@ struct Server::Pvt
     // continues in the background.  @since UNRELEASED
     void onLocalCertTcpOnlyTearDown();
 
-    // D10 server-side observer: invoked when a peer cert recovers non-GOOD -> GOOD.
+    // Recovery observer: invoked when a peer cert recovers non-GOOD -> GOOD.
     // Tears down NON-TLS server connections from the recovered peer so it re-connects
-    // via TLS.  Skips TLS connections per design.md#D10-sub-d (the delivery callback
-    // runs on a TLS conn; tearing it down here would be a use-after-free).
+    // via TLS.  Skips TLS connections because the delivery callback runs on a TLS conn;
+    // tearing it down here would be a use-after-free.
     // @since UNRELEASED
     void onPeerRecovered(const std::string& peer_id);
 

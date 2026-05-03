@@ -97,7 +97,7 @@ public:
      * @param id peer cert identity
      * @param status fresh status delivery
      * @return the prior entry's status class, or empty if there was no prior entry.
-     *         Used by recovery-observer logic (D10) to detect non-GOOD->GOOD
+     *         Used by recovery-observer logic to detect non-GOOD->GOOD
      *         transitions without spurious teardowns on GOOD->GOOD churn.
      */
     std::pair<bool, certs::cert_status_class_t>

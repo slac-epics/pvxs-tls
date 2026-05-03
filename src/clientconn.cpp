@@ -395,10 +395,9 @@ void Connection::peerStatusCallback(certs::cert_status_class_t status_class) {
         disconnect();
     } else if (status_class == certs::cert_status_class_t::SUSPENDED ||
                status_class == certs::cert_status_class_t::UNKNOWN) {
-        // Per cert-startup-tcp-bootstrap/design.md#D3: when the connection is
-        // paused at the peer-status gate (state < Validated) and the first
-        // authoritative peer status is non-GOOD, give up on TLS and let the
-        // channel re-search via TCP.  The live-SUSPENDED handling below
+        // When the connection is paused at the peer-status gate (state < Validated)
+        // and the first authoritative peer status is non-GOOD, give up on TLS and
+        // let the channel re-search via TCP.  The live-SUSPENDED handling below
         // (pause monitors) only applies once the connection is Validated.
         if (state != Validated) {
             log_warn_printf(certs, "Pre-Validated connection to %s gives up TLS: peer cert %s\n",
@@ -629,10 +628,10 @@ void Connection::handle_CONNECTION_VALIDATED()
     }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    // Per cert-startup-tcp-bootstrap/design.md#D8a: now that this TLS connection has fully validated
-    // and we hold the peer cert, record the binding (server GUID -> PeerCertId) so that future
-    // SEARCH replies from this server (which carry GUID but not the cert itself) can short-circuit
-    // via PeerStatusStore::lookupByGuid in procSearchReply (D8a) and tickSearch (D9 partitioning).
+    // Now that this TLS connection has fully validated and we hold the peer cert,
+    // record the binding (server GUID -> PeerCertId) so that future SEARCH replies
+    // from this server (which carry GUID but not the cert itself) can short-circuit
+    // via PeerStatusStore::lookupByGuid in procSearchReply and tickSearch partitioning.
     // Recording is one-shot per (GUID, peer_id) pair; the store's map overwrites idempotently.
     if (isTLS && bev) {
         const auto ctx = bufferevent_openssl_get_ssl(bev.get());
