@@ -5,6 +5,7 @@
  */
 #define PVXS_ENABLE_EXPERT_API
 
+#include <atomic>
 #include <cstring>
 #include <sstream>
 
@@ -930,7 +931,7 @@ void testServerLocalCertBadTearsDownTlsConn() {
     testTrue(is_tls) << "Initial connection must be over TLS";
     testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
 
-    serv.testInjectEntityCertBad();
+    serv.setCertificateStatus(certs::REVOKED);
 
     testTrue(disconnected_evt.wait(5.0))
         << "Client must observe disconnect after server's local cert went BAD";
@@ -995,7 +996,7 @@ void testClientLocalCertBadTearsDownTlsConn() {
     testTrue(is_tls) << "Initial connection must be over TLS";
     testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
 
-    cli.testInjectEntityCertBad();
+    cli.setCertificateStatus(certs::REVOKED);
 
     testTrue(disconnected_evt.wait(5.0))
         << "Client must observe disconnect after its own local cert went BAD";
@@ -1027,12 +1028,12 @@ void testNonTlsServerUnaffectedByLocalCertBad() {
     auto reply(cli.get(TEST_PV).exec()->wait(5.0));
     testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
 
-    serv.testInjectEntityCertBad();
-    cli.testInjectEntityCertBad();
+    serv.setCertificateStatus(certs::REVOKED);
+    cli.setCertificateStatus(certs::REVOKED);
 
     auto reply2(cli.get(TEST_PV).exec()->wait(5.0));
     testEq(reply2[TEST_PV_FIELD].as<int32_t>(), 42)
-        << "Plain TCP must keep working after testInjectEntityCertBad on a non-TLS endpoint";
+        << "Plain TCP must keep working after setCertificateStatus(REVOKED) on a non-TLS endpoint";
 }
 
 /**
@@ -1072,7 +1073,7 @@ void testServerLocalCertBadThenReconfigureGood() {
     }
     (void)pop(sub, evt);  // drain the post-Connected update
 
-    serv.testInjectEntityCertBad();
+    serv.setCertificateStatus(certs::REVOKED);
 
     testThrows<client::Disconnect>([&sub, &evt] { pop(sub, evt); })
         << "Client must observe Disconnect after server local cert went BAD";
@@ -1127,7 +1128,7 @@ void testClientLocalCertBadThenReconfigureGood() {
     testEq(who1[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1)
         << "Server must initially see client1's identity";
 
-    cli.testInjectEntityCertBad();
+    cli.setCertificateStatus(certs::REVOKED);
 
     testThrows<client::Disconnect>([&sub, &evt] { pop(sub, evt); })
         << "Client must observe Disconnect after its own local cert went BAD";
@@ -1186,13 +1187,13 @@ void testServerLocalCertUnknownThenGood() {
     testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
     testTrue(initial_is_tls) << "Initial connection must be over TLS";
 
-    serv.testInjectEntityCertUnknown();
+    serv.setCertificateStatus(certs::UNKNOWN);
     epicsThread::sleep(0.5);
 
     testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42)
         << "GET must still work during server UNKNOWN window (live conn preserved)";
 
-    serv.testInjectEntityCertGood();
+    serv.setCertificateStatus(certs::VALID);
     epicsThread::sleep(0.5);
 
     testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42)
@@ -1235,18 +1236,116 @@ void testClientLocalCertUnknownThenGood() {
     testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
     testTrue(initial_is_tls) << "Initial connection must be over TLS";
 
-    cli.testInjectEntityCertUnknown();
+    cli.setCertificateStatus(certs::UNKNOWN);
     epicsThread::sleep(0.5);
 
-    cli.testInjectEntityCertGood();
+    cli.setCertificateStatus(certs::VALID);
     epicsThread::sleep(0.5);
 
     testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42)
         << "GET must work after client cert resumes GOOD (conn was preserved)";
 }
 
+void testClientLocalCertPendingApprovalFallsBackToTcpAndRecovers() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    std::atomic<int> last_mode{-1};
+    epicsEvent connected_evt;
+    epicsEvent disconnected_evt;
+    auto conn(cli.connect(TEST_PV)
+        .onConnect([&last_mode, &connected_evt](const client::Connected& c) {
+            last_mode.store(c.cred && c.cred->isTLS ? 1 : 0);
+            connected_evt.signal();
+        })
+        .onDisconnect([&disconnected_evt]() { disconnected_evt.signal(); })
+        .exec());
+
+    testTrue(connected_evt.wait(5.0)) << "Initial TLS connect must complete";
+    testTrue(last_mode.load() == 1) << "Initial connection must be over TLS";
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+
+    cli.setCertificateStatus(certs::PENDING_APPROVAL);
+
+    testTrue(disconnected_evt.wait(5.0)) << "TLS connection must disconnect on PENDING_APPROVAL downgrade";
+    testTrue(connected_evt.wait(5.0)) << "Client must reconnect after PENDING_APPROVAL downgrade";
+    testFalse(last_mode.load() == 1) << "Reconnect during PENDING_APPROVAL must be plain TCP";
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+
+    cli.setCertificateStatus(certs::VALID);
+
+    testTrue(disconnected_evt.wait(5.0)) << "TCP fallback connection must disconnect when upgrading back to TLS";
+    testTrue(connected_evt.wait(5.0)) << "Client must reconnect after status returns GOOD";
+    testTrue(last_mode.load() == 1) << "Reconnect after GOOD must be over TLS";
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+}
+
+void testClientLocalCertScheduledOfflineFallsBackToTcpAndRecovers() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    std::atomic<int> last_mode{-1};
+    epicsEvent connected_evt;
+    epicsEvent disconnected_evt;
+    auto conn(cli.connect(TEST_PV)
+        .onConnect([&last_mode, &connected_evt](const client::Connected& c) {
+            last_mode.store(c.cred && c.cred->isTLS ? 1 : 0);
+            connected_evt.signal();
+        })
+        .onDisconnect([&disconnected_evt]() { disconnected_evt.signal(); })
+        .exec());
+
+    testTrue(connected_evt.wait(5.0)) << "Initial TLS connect must complete";
+    testTrue(last_mode.load() == 1) << "Initial connection must be over TLS";
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+
+    cli.setCertificateStatus(certs::SCHEDULED_OFFLINE);
+
+    testTrue(disconnected_evt.wait(5.0)) << "TLS connection must disconnect on SCHEDULED_OFFLINE downgrade";
+    testTrue(connected_evt.wait(5.0)) << "Client must reconnect after SCHEDULED_OFFLINE downgrade";
+    testFalse(last_mode.load() == 1) << "Reconnect during SCHEDULED_OFFLINE must be plain TCP";
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+
+    cli.setCertificateStatus(certs::VALID);
+
+    testTrue(disconnected_evt.wait(5.0)) << "TCP fallback connection must disconnect when upgrading back to TLS";
+    testTrue(connected_evt.wait(5.0)) << "Client must reconnect after status returns GOOD";
+    testTrue(last_mode.load() == 1) << "Reconnect after GOOD must be over TLS";
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+}
+
 MAIN(testtls) {
-    testPlan(79);
+    testPlan(101);
     testSetup();
     logger_config_env();
     testSuspendedStatusClass();
@@ -1273,6 +1372,8 @@ MAIN(testtls) {
     testClientLocalCertBadThenReconfigureGood();
     testServerLocalCertUnknownThenGood();
     testClientLocalCertUnknownThenGood();
+    testClientLocalCertPendingApprovalFallsBackToTcpAndRecovers();
+    testClientLocalCertScheduledOfflineFallsBackToTcpAndRecovers();
     cleanup_for_valgrind();
     return testDone();
 }

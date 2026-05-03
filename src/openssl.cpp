@@ -152,11 +152,11 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
         state = TcpOnly;
         log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpOnly", "SSLContext::monitorStatusAndSetState()", this);
     } else {
-        // UNKNOWN/PENDING/PENDING_APPROVAL: cert exists
-        // but is not operationally usable yet. Enter TcpReady so plain-TCP connections still work
-        // if negotiated, otherwise we'll wait for status to resolve to GOOD (upgrade to TlsReady) or BAD (DegradedMode).
+        // UNKNOWN/PENDING/PENDING_APPROVAL: cert exists but is not yet operationally usable.
+        // PENDING_APPROVAL must force plain TCP immediately so callers do not deadlock waiting
+        // for an operator action.  UNKNOWN/PENDING keep the historical TcpReady bootstrap path.
         Guard G(lock);
-        state = TcpReady;
+        state = cert_status.status == certs::PENDING_APPROVAL ? TcpOnly : TcpReady;
         log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpOnly", "SSLContext::monitorStatusAndSetState()", this);
     }
 }
@@ -230,6 +230,25 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
     log_debug_printf(watcher, "Received a %s certificate status from the status monitor\n", cert_status.status.s.c_str());
     if (state == DegradedMode) {
         log_warn_printf(watcher, "Logic Error. Should not be monitoring certificate status: Because the context state is %s\n", "DegradedMode");
+        return;
+    }
+
+    const bool force_tcp_only = cert_status.status == certs::PENDING_APPROVAL
+        || cert_status.status == certs::SCHEDULED_OFFLINE;
+
+    if (force_tcp_only) {
+        bool fire_tcp_only = false;
+        {
+            Guard G(lock);
+            fire_tcp_only = state != TcpOnly;
+            state = TcpOnly;
+            was_suspended_ = false;
+            log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpOnly", "SSLContext::setTlsOrTcpMode()", this);
+        }
+        log_warn_printf(watcher, "Own certificate status is %s — forcing TcpOnly and keeping status monitor active\n", cert_status.status.s.c_str());
+        if (fire_tcp_only && tcp_only_event.get()) {
+            event_active(tcp_only_event.get(), EV_TIMEOUT, 0);
+        }
         return;
     }
 
@@ -355,6 +374,7 @@ void SSLContext::setTlsOrTcpMode() {
 SSLContext::SSLContext(const impl::evbase loop, const bool is_client) : loop(loop), is_client(is_client)
     , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))
     , tls_ready_event(event_new(loop.base, -1, EV_TIMEOUT, &tlsReadyEventCallback, this))
+    , tcp_only_event(event_new(loop.base, -1, EV_TIMEOUT, &tcpOnlyEventCallback, this))
     , suspended_event(event_new(loop.base, -1, EV_TIMEOUT, &suspendedEventCallback, this))
     , resumed_event(event_new(loop.base, -1, EV_TIMEOUT, &resumedEventCallback, this))
     , degraded_event(event_new(loop.base, -1, EV_TIMEOUT, &degradedEventCallback, this))
@@ -372,6 +392,8 @@ SSLContext::SSLContext(const SSLContext &o)
     , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create a new timer for this instance
     , on_tls_ready_(o.on_tls_ready_)  // Copy the callback
     , tls_ready_event(event_new(loop.base, -1, EV_TIMEOUT, &tlsReadyEventCallback, this))
+    , on_tcp_only_(o.on_tcp_only_)
+    , tcp_only_event(event_new(loop.base, -1, EV_TIMEOUT, &tcpOnlyEventCallback, this))
     , on_suspended_(o.on_suspended_)
     , suspended_event(event_new(loop.base, -1, EV_TIMEOUT, &suspendedEventCallback, this))
     , on_resumed_(o.on_resumed_)
@@ -399,6 +421,8 @@ SSLContext::SSLContext(SSLContext &o) noexcept
     , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create new timer
     , on_tls_ready_(std::move(o.on_tls_ready_))  // Move the callback
     , tls_ready_event(event_new(loop.base, -1, EV_TIMEOUT, &tlsReadyEventCallback, this))
+    , on_tcp_only_(std::move(o.on_tcp_only_))
+    , tcp_only_event(event_new(loop.base, -1, EV_TIMEOUT, &tcpOnlyEventCallback, this))
     , on_suspended_(std::move(o.on_suspended_))
     , suspended_event(event_new(loop.base, -1, EV_TIMEOUT, &suspendedEventCallback, this))
     , on_resumed_(std::move(o.on_resumed_))
@@ -421,6 +445,9 @@ SSLContext::~SSLContext() {
     if (tls_ready_event.get()) {
         event_del(tls_ready_event.get());
     }
+    if (tcp_only_event.get()) {
+        event_del(tcp_only_event.get());
+    }
     if (suspended_event.get()) {
         event_del(suspended_event.get());
     }
@@ -440,6 +467,11 @@ void SSLContext::setOnTlsReady(std::function<void()> fn) {
     on_tls_ready_ = std::move(fn);
 }
 
+void SSLContext::setOnTcpOnly(std::function<void()> fn) {
+    Guard G(lock);
+    on_tcp_only_ = std::move(fn);
+}
+
 void SSLContext::tlsReadyEventCallback(evutil_socket_t, short, void* raw) {
     auto* ctx = static_cast<SSLContext*>(raw);
     std::function<void()> fn;
@@ -452,6 +484,22 @@ void SSLContext::tlsReadyEventCallback(evutil_socket_t, short, void* raw) {
             fn();
         } catch (std::exception& e) {
             log_err_printf(watcher, "Unhandled error in TLS ready callback: %s\n", e.what());
+        }
+    }
+}
+
+void SSLContext::tcpOnlyEventCallback(evutil_socket_t, short, void* raw) {
+    auto* ctx = static_cast<SSLContext*>(raw);
+    std::function<void()> fn;
+    {
+        Guard G(ctx->lock);
+        fn = ctx->on_tcp_only_;
+    }
+    if (fn) {
+        try {
+            fn();
+        } catch (std::exception& e) {
+            log_err_printf(watcher, "Unhandled error in TcpOnly callback: %s\n", e.what());
         }
     }
 }

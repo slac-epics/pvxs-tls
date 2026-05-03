@@ -302,51 +302,18 @@ Report Server::report(bool zero) const
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
-Server& Server::testInjectEntityCertBad()
-{
+Server& Server::setCertificateStatus(size_t stat) {
+    const auto status = static_cast<certs::certstatus_t>(stat);
     if(!pvt)
         throw std::logic_error("NULL Server");
     if(pvt->tls_context) {
-        pvt->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::BAD);
-    }
-    return *this;
-}
-
-Server& Server::testInjectEntityCertUnknown()
-{
-    if(!pvt)
-        throw std::logic_error("NULL Server");
-    if(pvt->tls_context) {
-        pvt->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::UNKNOWN);
-    }
-    return *this;
-}
-
-Server& Server::testInjectEntityCertGood()
-{
-    if(!pvt)
-        throw std::logic_error("NULL Server");
-    if(pvt->tls_context) {
-        pvt->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::GOOD);
+        pvt->tls_context->get_cert_status().status = certs::PVACertStatus(status);
+        pvt->tls_context->setTlsOrTcpMode(certs::CertificateStatus::getStatusClass(status));
     }
     return *this;
 }
 #else
-Server& Server::testInjectEntityCertBad()
-{
-    if(!pvt)
-        throw std::logic_error("NULL Server");
-    return *this;
-}
-
-Server& Server::testInjectEntityCertUnknown()
-{
-    if(!pvt)
-        throw std::logic_error("NULL Server");
-    return *this;
-}
-
-Server& Server::testInjectEntityCertGood()
+Server& Server::setCertificateStatus(size_t)
 {
     if(!pvt)
         throw std::logic_error("NULL Server");
@@ -638,6 +605,17 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 
                 tls_context = ossl::SSLContext::for_server(effective, inner_client, acceptor_loop);
                 log_debug_printf(osslsetup, "Created server TLS context for: %s\n", effective.tls_keychain_file.c_str());
+                tls_context->setOnTlsReady([this]() {
+                    acceptor_loop.call([this]() {
+                        for (auto& iface : interfaces) {
+                            if (!iface.isTLS || !iface.listener.get()) continue;
+                            if (evconnlistener_enable(iface.listener.get())) {
+                                log_err_printf(serversetup, "Error enabling TLS listener on %s after local cert recovered\n", iface.name.c_str());
+                            }
+                        }
+                    });
+                });
+                tls_context->setOnTcpOnly([this]() { onLocalCertTcpOnlyTearDown(); });
                 tls_context->setOnSuspended([this]() {
                     acceptor_loop.call([this]() {
                         for (auto& pair : connections) {
@@ -778,6 +756,10 @@ void Server::Pvt::start()
         log_debug_printf(serversetup, "Server starting\n%s", "");
 
         for(auto& iface : interfaces) {
+            if(iface.isTLS && !isContextReadyForTls()) {
+                log_debug_printf(serversetup, "Server leaving TLS listener disabled on %s until local cert becomes usable\n", iface.name.c_str());
+                continue;
+            }
             if(evconnlistener_enable(iface.listener.get())) {
                 log_err_printf(serversetup, "Error enabling listener on %s\n", iface.name.c_str());
             }
@@ -905,6 +887,33 @@ void Server::Pvt::onLocalCertBadTearDown()
         }
 
         log_warn_printf(serversetup, "Local certificate became REVOKED/EXPIRED; tearing down %zu TLS connection(s)\n", tls_conns.size());
+
+        for(auto& conn : tls_conns) {
+            conn->cert_status_disconnect = true;
+            conn->disconnect();
+            conn->cleanup();
+        }
+    });
+}
+
+void Server::Pvt::onLocalCertTcpOnlyTearDown()
+{
+    acceptor_loop.call([this]() {
+        for(auto& iface : interfaces) {
+            if(!iface.isTLS) continue;
+            if(iface.listener.get() && evconnlistener_disable(iface.listener.get())) {
+                log_err_printf(serversetup, "Error disabling TLS listener on %s after local cert entered TcpOnly\n", iface.name.c_str());
+            }
+        }
+
+        std::vector<std::shared_ptr<ServerConn>> tls_conns;
+        tls_conns.reserve(connections.size());
+        for(auto& pair : connections) {
+            if(pair.first && pair.first->iface && pair.first->iface->isTLS)
+                tls_conns.push_back(pair.second);
+        }
+
+        log_warn_printf(serversetup, "Local certificate entered TcpOnly; tearing down %zu TLS connection(s) so peers can reconnect over TCP\n", tls_conns.size());
 
         for(auto& conn : tls_conns) {
             conn->cert_status_disconnect = true;

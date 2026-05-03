@@ -431,7 +431,8 @@ struct SSLContext {
 
     static bool getPeerCredentials(PeerCredentials& cred, const SSL* ctx);
     static std::shared_ptr<SSLPeerStatusAndMonitor>  subscribeToPeerCertStatus(const SSL* ssl, const std::function<void(certs::cert_status_class_t)> &fn);
-    const certs::PVACertificateStatus& get_cert_status() { return cert_status; }
+    certs::PVACertificateStatus& get_cert_status() { return cert_status; }
+    const certs::PVACertificateStatus& get_cert_status() const { return cert_status; }
 
     /**
      * @brief Set a callback to be invoked (on the event loop thread) when
@@ -441,6 +442,8 @@ struct SSLContext {
      * so it is safe to call from any thread.
      */
     void setOnTlsReady(std::function<void()> fn);
+
+    void setOnTcpOnly(std::function<void()> fn);
 
     void setOnSuspended(std::function<void()> fn);
     void setOnResumed(std::function<void()> fn);
@@ -480,6 +483,13 @@ struct SSLContext {
     std::function<void()> on_tls_ready_;
     evevent tls_ready_event;
     static void tlsReadyEventCallback(evutil_socket_t fd, short evt, void* raw);
+
+    // Callback invoked on the event loop thread when the local entity certificate
+    // enters TcpOnly.  Owners use this to tear down live TLS connections so they
+    // can reconnect via plain TCP while the cert-status monitor remains active.
+    std::function<void()> on_tcp_only_;
+    evevent tcp_only_event;
+    static void tcpOnlyEventCallback(evutil_socket_t fd, short evt, void* raw);
 
     // Callbacks invoked on the event loop thread when own cert enters/exits SUSPENDED
     std::function<void()> on_suspended_;

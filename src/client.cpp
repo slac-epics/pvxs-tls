@@ -530,51 +530,19 @@ Report Context::report(bool zero) const
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
-Context& Context::testInjectEntityCertBad()
-{
+Context& Context::setCertificateStatus(size_t stat) {
+    const auto status = static_cast<certs::certstatus_t>(stat);
     if(!pvt)
         throw std::logic_error("NULL Context");
     if(pvt->impl && pvt->impl->tls_context) {
-        pvt->impl->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::BAD);
+        pvt->impl->tls_context->get_cert_status().status = certs::PVACertStatus(status);
+        pvt->impl->tls_context->setTlsOrTcpMode(certs::CertificateStatus::getStatusClass(status));
     }
     return *this;
 }
 
-Context& Context::testInjectEntityCertUnknown()
-{
-    if(!pvt)
-        throw std::logic_error("NULL Context");
-    if(pvt->impl && pvt->impl->tls_context) {
-        pvt->impl->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::UNKNOWN);
-    }
-    return *this;
-}
-
-Context& Context::testInjectEntityCertGood()
-{
-    if(!pvt)
-        throw std::logic_error("NULL Context");
-    if(pvt->impl && pvt->impl->tls_context) {
-        pvt->impl->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::GOOD);
-    }
-    return *this;
-}
 #else
-Context& Context::testInjectEntityCertBad()
-{
-    if(!pvt)
-        throw std::logic_error("NULL Context");
-    return *this;
-}
-
-Context& Context::testInjectEntityCertUnknown()
-{
-    if(!pvt)
-        throw std::logic_error("NULL Context");
-    return *this;
-}
-
-Context& Context::testInjectEntityCertGood()
+Context& Context::setCertificateStatus(size_t)
 {
     if(!pvt)
         throw std::logic_error("NULL Context");
@@ -639,10 +607,11 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
             log_debug_printf(setup, "Created a client context for certificate status%s", "\n");
             tls_context = ossl::SSLContext::for_client(effective, inner, tcp_loop);
             log_debug_printf(setup, "Created TLS context for: %s\n", effective.tls_keychain_file.c_str());
-            tls_context->setOnTlsReady([this]() { onTlsReady(); });
-            tls_context->setOnSuspended([this]() { onSuspended(); });
-            tls_context->setOnResumed([this]() { onResumed(); });
-            tls_context->setOnDegraded([this]() { onLocalCertBadTearDown(); });
+        tls_context->setOnTlsReady([this]() { onTlsReady(); });
+        tls_context->setOnTcpOnly([this]() { onTcpOnly(); });
+        tls_context->setOnSuspended([this]() { onSuspended(); });
+        tls_context->setOnResumed([this]() { onResumed(); });
+        tls_context->setOnDegraded([this]() { onLocalCertBadTearDown(); });
         }catch(std::exception& e){
             log_debug_printf(setup, "Failed to configure TLS for client: %s\n", e.what());
             if (tls_context) {
@@ -1203,7 +1172,7 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
             to_wire(M, uint8_t(0u));
 
 #ifdef PVXS_ENABLE_OPENSSL
-        } else if(isTlsConfigured()) {
+        } else if(isTlsReady()) {
             to_wire(M, uint8_t(2u));
             to_wire(M, "tls");
             to_wire(M, "tcp");
@@ -1553,12 +1522,29 @@ void ContextImpl::certExpirationHandler() {
  * at the time handle_CONNECTION_VALIDATED() ran.
  */
 void ContextImpl::onTlsReady() {
+    if (reconnect_for_tls_when_ready) {
+        reconnect_for_tls_when_ready = false;
+        log_debug_printf(setup, "SSLContext returned to TlsReady; reconnecting peer connections to prefer TLS\n%s", "");
+        removePeer();
+        poke();
+        return;
+    }
     log_debug_printf(setup, "SSLContext now TlsReady, re-evaluating %zu connection(s)\n", connByAddr.size());
     for (auto& pair : connByAddr) {
         if (auto conn = pair.second.lock()) {
             conn->createChannels();
         }
     }
+}
+
+void ContextImpl::onTcpOnly() {
+    reconnect_for_tls_when_ready = true;
+    tcp_loop.call([this]() {
+        removeTlsPeer();
+        lastPoke.secPastEpoch = 0;
+        lastPoke.nsec = 0;
+        poke();
+    });
 }
 
 void ContextImpl::onSuspended() {
@@ -1650,6 +1636,7 @@ void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
 
         tls_context = new_context;
         tls_context->setOnTlsReady([this]() { onTlsReady(); });
+        tls_context->setOnTcpOnly([this]() { onTcpOnly(); });
         tls_context->setOnSuspended([this]() { onSuspended(); });
         tls_context->setOnResumed([this]() { onResumed(); });
         tls_context->setOnDegraded([this]() { onLocalCertBadTearDown(); });

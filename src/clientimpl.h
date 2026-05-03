@@ -495,12 +495,14 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     void reloadTlsFromConfig(const Config& new_config);
     void certExpirationHandler();
     void onTlsReady();
+    void onTcpOnly();
     void onSuspended();
     void onResumed();
     // Invoked on the tcp_loop when the entity certificate's status becomes
     // BAD (REVOKED/EXPIRED).  Tears down all currently-open TLS outbound
     // connections; non-TLS conns are left untouched.  @since UNRELEASED
     void onLocalCertBadTearDown();
+    bool reconnect_for_tls_when_ready{false};
 #endif
 };
 

@@ -590,6 +590,29 @@ struct CertificateStatus {
          return cert_status_class_t::UNKNOWN;
      }
 
+     /**
+      * @brief Convert to a status class
+      *
+      * @return cert_status_class_t::GOOD (VALID),
+      *         cert_status_class_t::BAD (REVOKED, EXPIRED),
+      *         cert_status_class_t::SUSPENDED (SCHEDULED_OFFLINE, PENDING_RENEWAL), or
+      *         cert_status_class_t::UNKNOWN (everything else)
+      */
+     static cert_status_class_t getStatusClass(certstatus_t status) noexcept {
+        switch (status) {
+            case REVOKED:
+            case EXPIRED:
+                return cert_status_class_t::BAD;
+            case SCHEDULED_OFFLINE:
+            case PENDING_RENEWAL:
+                return cert_status_class_t::SUSPENDED;
+            case VALID:
+                return cert_status_class_t::GOOD;
+            default:
+                return cert_status_class_t::UNKNOWN;
+        }
+     }
+
     /**
      * @brief Check if the certificate is Expired of Revoked
      *

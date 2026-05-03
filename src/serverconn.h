@@ -339,6 +339,12 @@ struct Server::Pvt
     // BAD (REVOKED/EXPIRED).  Disables inbound TLS listeners and tears down all
     // currently-accepted TLS connections.  @since UNRELEASED
     void onLocalCertBadTearDown();
+
+    // Invoked on the acceptor_loop when the entity certificate enters TcpOnly.
+    // Disables inbound TLS listeners and tears down all currently-accepted TLS
+    // connections so peers can reconnect over plain TCP while status recovery
+    // continues in the background.  @since UNRELEASED
+    void onLocalCertTcpOnlyTearDown();
 #else
     bool canRespondToTcpSearch() const { return true; }
     bool canRespondToTlsSearch() const { return false; }
