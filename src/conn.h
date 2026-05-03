@@ -106,6 +106,14 @@ protected:
     std::shared_ptr<ossl::SSLPeerStatusAndMonitor> peer_status;
     bool isPeerStatusGood() const ;
 
+public:
+    // Read-only access to the cached PeerCertId of this connection's peer (empty if no peer or
+    // peer cert lacks the SPVA status extension).  Used by D10 recovery observers to identify
+    // which connections belong to a just-recovered peer without exposing the full monitor.
+    // @since UNRELEASED
+    std::string peerCertId() const;
+protected:
+
 #endif
 public:
     const bool isTLS;

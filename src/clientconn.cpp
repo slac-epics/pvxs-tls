@@ -10,6 +10,7 @@
 
 #ifdef PVXS_ENABLE_OPENSSL
 #include "certstatus.h"
+#include "peerstatusstore.h"
 #endif
 
 #include "clientimpl.h"
@@ -626,6 +627,31 @@ void Connection::handle_CONNECTION_VALIDATED()
             log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Connection::ready", ready ? "true" : "false", "Connection::handle_CONNECTION_VALIDATED()", chan->name.c_str());
         }
     }
+
+#ifdef PVXS_ENABLE_OPENSSL
+    // Per cert-startup-tcp-bootstrap/design.md#D8a: now that this TLS connection has fully validated
+    // and we hold the peer cert, record the binding (server GUID -> PeerCertId) so that future
+    // SEARCH replies from this server (which carry GUID but not the cert itself) can short-circuit
+    // via PeerStatusStore::lookupByGuid in procSearchReply (D8a) and tickSearch (D9 partitioning).
+    // Recording is one-shot per (GUID, peer_id) pair; the store's map overwrites idempotently.
+    if (isTLS && bev) {
+        const auto ctx = bufferevent_openssl_get_ssl(bev.get());
+        if (ctx) {
+            if (auto* peer_x509 = SSL_get_peer_certificate(ctx)) {
+                const auto peer_id = ossl::peerCertIdFromX509(peer_x509);
+                X509_free(peer_x509);
+                if (!peer_id.empty()) {
+                    for (const auto& pair : pending) {
+                        const auto chan = pair.second.lock();
+                        if (!chan) continue;
+                        ossl::PeerStatusStore::instance().recordGuidBinding(chan->guid, peer_id);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+#endif
 
     createChannels();
 

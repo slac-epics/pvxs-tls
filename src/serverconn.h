@@ -345,6 +345,17 @@ struct Server::Pvt
     // connections so peers can reconnect over plain TCP while status recovery
     // continues in the background.  @since UNRELEASED
     void onLocalCertTcpOnlyTearDown();
+
+    // D10 server-side observer: invoked when a peer cert recovers non-GOOD -> GOOD.
+    // Tears down NON-TLS server connections from the recovered peer so it re-connects
+    // via TLS.  Skips TLS connections per design.md#D10-sub-d (the delivery callback
+    // runs on a TLS conn; tearing it down here would be a use-after-free).
+    // @since UNRELEASED
+    void onPeerRecovered(const std::string& peer_id);
+
+    // Handle for unregistering the PeerStatusStore recovery observer in the dtor.
+    // Zero means "not registered".  @since UNRELEASED
+    std::size_t recovery_observer_handle_{0};
 #else
     bool canRespondToTcpSearch() const { return true; }
     bool canRespondToTlsSearch() const { return false; }

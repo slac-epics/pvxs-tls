@@ -29,6 +29,7 @@
 
 #ifdef PVXS_ENABLE_OPENSSL
 #include "certstatus.h"
+#include "peerstatusstore.h"
 #endif
 
 namespace pvxs {
@@ -641,6 +642,12 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
             log_debug_printf(osslsetup, "TLS is not configured but we have a server TLS context.  Set it to TCP only (DegradedMode)%s", "\n");
             tls_context->setDegradedMode(true);
         }
+        // D10 server-side: register the recovery observer mirror of ContextImpl's.
+        // Dispatched onto acceptor_loop so connections map mutation is loop-safe.
+        recovery_observer_handle_ = ossl::PeerStatusStore::instance().registerRecoveryObserver(
+            [this](const ossl::PeerCertId& id) {
+                acceptor_loop.dispatch([this, id]() { onPeerRecovered(id); });
+            });
 
         decltype(tcpifaces) tlsifaces(tcpifaces); // copy before any setPort()
 #endif
@@ -733,7 +740,37 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 Server::Pvt::~Pvt()
 {
     stop();
+#ifdef PVXS_ENABLE_OPENSSL
+    if (recovery_observer_handle_) {
+        ossl::PeerStatusStore::instance().unregisterRecoveryObserver(recovery_observer_handle_);
+        recovery_observer_handle_ = 0;
+    }
+#endif
 }
+
+#ifdef PVXS_ENABLE_OPENSSL
+void Server::Pvt::onPeerRecovered(const std::string& peer_id)
+{
+    if (peer_id.empty()) return;
+    std::vector<std::shared_ptr<ServerConn>> tcp_conns;
+    tcp_conns.reserve(connections.size());
+    for (auto& pair : connections) {
+        const auto& conn = pair.second;
+        if (!conn) continue;
+        if (conn->isTLS) continue;
+        if (conn->peerCertId() != peer_id) continue;
+        tcp_conns.push_back(conn);
+    }
+    if (tcp_conns.empty()) return;
+    log_warn_printf(serversetup, "Peer %s recovered to GOOD; tearing down %zu TCP server connection(s) so peer re-attempts TLS\n",
+                    peer_id.c_str(), tcp_conns.size());
+    for (auto& conn : tcp_conns) {
+        assert(!conn->isTLS);
+        conn->disconnect();
+        conn->cleanup();
+    }
+}
+#endif
 
 void Server::Pvt::start()
 {

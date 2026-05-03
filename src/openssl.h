@@ -120,6 +120,12 @@ struct SSLPeerStatusAndMonitor : public std::enable_shared_from_this<SSLPeerStat
     // Peer status and monitor map holder: Cert Status Ex data where Map where status and monitors are mapped to status pv
     CertStatusExData* ex_data_ptr;
 
+    // Canonical PeerCertId for the cert being monitored, of the form "{issuer_8hex}:{serial_20decimal}".
+    // Populated whenever setPeerStatus has access to the X509 cert; empty for entity-status monitors.
+    // Used as the key into PeerStatusStore so updateStatus() can publish fresh deliveries process-wide.
+    // @since UNRELEASED
+    std::string cert_id;
+
     certs::CertificateStatus status;
 
     /**

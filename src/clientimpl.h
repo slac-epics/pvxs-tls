@@ -231,7 +231,8 @@ struct Channel {
     // when state==Searching, number of repetitions
     size_t nSearch = 0u;
 
-    // GUID of last positive reply when state!=Searching
+    // GUID of last reply (positive commit, or discard for protocol selection).
+    // @since UNRELEASED
     ServerGUID guid{};
     SockAddr replyAddr;
 
@@ -502,7 +503,18 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     // BAD (REVOKED/EXPIRED).  Tears down all currently-open TLS outbound
     // connections; non-TLS conns are left untouched.  @since UNRELEASED
     void onLocalCertBadTearDown();
+    // D10 observer: invoked when a peer recovers from non-GOOD to GOOD.
+    // Tears down TCP connections to the recovered peer so the channels re-search
+    // and commit to TLS via the now-permissive D9 partitioning.  Tears down ONLY
+    // non-TLS connections (TLS connections were never downgraded; tearing them
+    // down would risk self-destruction during the delivery callback on this
+    // very loop, see design.md#D10-sub-d).  @since UNRELEASED
+    void onPeerRecovered(const std::string& peer_id);
     bool reconnect_for_tls_when_ready{false};
+    // Handle returned by PeerStatusStore::registerRecoveryObserver in the ctor;
+    // used to unregister in the dtor so the singleton does not call into a
+    // destroyed ContextImpl.  Zero means "not registered".  @since UNRELEASED
+    std::size_t recovery_observer_handle_{0};
 #endif
 };
 

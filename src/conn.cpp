@@ -14,6 +14,7 @@
 #ifdef PVXS_ENABLE_OPENSSL
 #include <openssl/err.h>
 #include "openssl.h"
+#include "peerstatusstore.h"
 #endif
 
 DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
@@ -65,6 +66,11 @@ bool ConnBase::isPeerStatusGood() const {
     // Returns false for UNKNOWN, SUSPENDED, and BAD — all of which correctly defer
     // createChannels() (client) and proceedWithConnectionValidation() (server).
     return peer_status && peer_status->status.getStatusClass() == certs::cert_status_class_t::GOOD;
+}
+
+std::string ConnBase::peerCertId() const {
+    if (!peer_status) return {};
+    return peer_status->cert_id;
 }
 #endif
 
@@ -162,6 +168,32 @@ void ConnBase::bevEvent(const short events) {
             log_debug_printf(connsetup, "ConnBase::bevEvent(): A %s CONNECTED event \n", peerLabel());
             const auto ctx = bufferevent_openssl_get_ssl(bev.get());
             if (ctx) {
+                // Per cert-startup-tcp-bootstrap/design.md#D8 sites 2 + 3:
+                // post-handshake PeerStatusStore lookup BEFORE subscribing fresh.
+                // If the store has cached a non-GOOD entry for this peer cert,
+                // abandon the connection immediately -- the cached PVACMS-signed
+                // status is authoritative until OCSP expiry, so subscribing fresh
+                // would just re-learn the same answer.  The teardown is symmetric
+                // for client and server: drop the bufferevent, let cleanup() return
+                // attached channels to Searching (client) / drop the conn (server).
+                ossl::PeerCertId post_handshake_peer_id;
+                if (auto* peer_x509 = SSL_get_peer_certificate(ctx)) {
+                    post_handshake_peer_id = ossl::peerCertIdFromX509(peer_x509);
+                    X509_free(peer_x509);
+                }
+                if (!post_handshake_peer_id.empty()) {
+                    const auto cached = ossl::PeerStatusStore::instance().lookup(post_handshake_peer_id);
+                    if (cached && cached->getStatusClass() != certs::cert_status_class_t::GOOD) {
+                        log_warn_printf(connsetup,
+                                        "Post-handshake PeerStatusStore reject: peer %s cert %s status=%s; abandoning %s connection\n",
+                                        peerName.c_str(), post_handshake_peer_id.c_str(),
+                                        cached->status.s.c_str(), peerLabel());
+                        cert_status_disconnect = true;
+                        bev.reset();
+                        cleanup();
+                        return;
+                    }
+                }
                 if (!peer_status) {
                     try {
                         log_debug_printf(connsetup, "ConnBase::bevEvent().  Subscribe to %s peer certificate status \n", peerLabel());

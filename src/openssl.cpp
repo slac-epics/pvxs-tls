@@ -26,6 +26,7 @@
 #include "idfilereader.h"
 #include "opensslgbl.h"
 #include "ownedptr.h"
+#include "peerstatusstore.h"
 #include "serverconn.h"
 #include "utilpvt.h"
 
@@ -1046,6 +1047,15 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
     // Create a holder for peer status or return current holder if already exists
     auto peer_status = createPeerStatus(serial_number, fn);
 
+    // Stash the canonical PeerCertId on the monitor so updateStatus() can publish to PeerStatusStore.
+    // Per cert-startup-tcp-bootstrap/design.md#D8, every fresh peer-status delivery must populate
+    // the process-wide store, but the delivery callback at openssl.cpp:1131 only sees the monitor,
+    // not the X509 cert. Cache the id here while we still have status_pv (which encodes it).
+    if (!cert_id.empty() && peer_status->cert_id.empty()) {
+        Guard G(peer_status->lock);
+        peer_status->cert_id = cert_id;
+    }
+
     // Subscribe if we have a pv and a function and we're not yet subscribed.
     // Skip subscription for permanent terminal statuses (REVOKED/EXPIRED): they cannot recover,
     // so subscribing would burn a PVACMS channel with no benefit.
@@ -1143,16 +1153,34 @@ void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_s
     if(!ex_data_ptr->loop.tryCall([self, new_status]() {
         certs::cert_status_class_t prior_status_class;
         certs::cert_status_class_t status_class;
+        std::string id_snapshot;
         {
             Guard G(self->lock);
             prior_status_class = self->status.getStatusClass();
             self->status = new_status;
             status_class = self->status.getStatusClass();
+            id_snapshot = self->cert_id;
         }
 
         // Call the callback if there has been any change in the cert status class
         if (self->fn && status_class != prior_status_class)
             self->fn(status_class);
+
+        // Per cert-startup-tcp-bootstrap/design.md#D8 + D10: publish every fresh peer-status delivery
+        // to the process-wide PeerStatusStore so that future SEARCH replies and post-handshake checks
+        // can short-circuit non-GOOD peers without paying for a TLS handshake. update() always
+        // overwrites; the returned (had_prior, prior_class) lets us detect non-GOOD -> GOOD recovery
+        // transitions and notify observers (D10) so they can tear down TCP-downgraded conns and
+        // re-search for a TLS upgrade.
+        if (!id_snapshot.empty()) {
+            auto& store = PeerStatusStore::instance();
+            const auto prior = store.update(id_snapshot, new_status);
+            if (prior.first &&
+                prior.second != certs::cert_status_class_t::GOOD &&
+                status_class == certs::cert_status_class_t::GOOD) {
+                store.fireRecoveryObservers(id_snapshot);
+            }
+        }
 
         // Restart status validity countdown timer for this new status
         self->restartStatusValidityTimerFromCertStatus();
