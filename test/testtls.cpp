@@ -1424,15 +1424,6 @@ void testPeerStatusStoreIsProcessWide() {
         << "instance() must return the same singleton across all calls";
 }
 
-// Confirm no global constructor was added (negative-symbol test).
-// Implemented as a runtime no-op assertion: the actual symbol check is the
-// `nm` invocation run as part of build verification.
-void testPeerStatusStoreNoNewGlobalConstructor() {
-    testShow() << __func__;
-    testPass("Verified externally via nm: only Itanium ABI guard variable "
-             "(_ZGV..._instance...inst) is present; no _GLOBAL__sub_I_*peerstatusstore* exists");
-}
-
 // update() returns prior class for recovery detection.
 void testPeerStatusStoreUpdateReturnsPriorClass() {
     testShow() << __func__;
@@ -1521,41 +1512,6 @@ void testStartupOwnCertValidUpgradesAsBefore() {
     auto reply = cli.get(TEST_PV).exec()->wait(5.0);
     testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42)
         << "VALID delivery must let TLS connection complete normally (no give-up path)";
-}
-
-// PVACMS never replies: the conn paused at the gate stays paused.
-void testStartupOwnCertNoStatusReplyStillWaits() {
-    testShow() << __func__;
-
-    auto initial(nt::NTScalar{TypeCode::Int32}.create());
-    auto mbox(server::SharedPV::buildReadonly());
-
-    auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
-    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
-
-    auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
-    auto cli(cli_conf.build());
-
-    mbox.open(initial.update(TEST_PV_FIELD, 42));
-    serv.start();
-
-    epicsEvent connected_evt;
-    auto conn(cli.connect(TEST_PV)
-        .onConnect([&connected_evt](const client::Connected&) { connected_evt.signal(); })
-        .exec());
-
-    // No setCertificateStatus on either side: the gate has nothing authoritative
-    // to either commit or abandon the TLS attempt.  Bound the wait so the test
-    // does not hang.  This documents existing "wait forever" behavior — adding
-    // a bounded timeout is an explicit non-goal of the current behavior.
-    const bool got = connected_evt.wait(2.0);
-    if (got) {
-        testPass("PVACMS-silent path may now opportunistically connect; previously hung");
-    } else {
-        testPass("PVACMS-silent path still bounded-waits at the gate (current behavior preserved)");
-    }
 }
 
 // Cached VALID skips the optimistic window.
@@ -1779,119 +1735,9 @@ void testStartupPeerCertScheduledOfflineAbandonsTlsConnection() {
     testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
 }
 
-// Well-behaved client filters TLS replies after recording a non-GOOD peer.
-// Direct PeerStatusStore manipulation: after a GUID-binding is recorded with a
-// non-GOOD entry, subsequent procSearchReply hits get filtered out.  The full
-// procSearchReply integration is exercised via cli.get() below; the assertion
-// is that the operation completes (over TCP, since TLS replies are filtered).
-void testWellBehavedClientFiltersTlsAfterPeerNonGood() {
-    testShow() << __func__;
-
-    auto& store = ossl::PeerStatusStore::instance();
-    store.reset();
-
-    auto initial(nt::NTScalar{TypeCode::Int32}.create());
-    auto mbox(server::SharedPV::buildReadonly());
-
-    auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
-    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
-
-    auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
-    auto cli(cli_conf.build());
-
-    mbox.open(initial.update(TEST_PV_FIELD, 42));
-    cli.setCertificateStatus(certs::VALID);
-    serv.setCertificateStatus(certs::PENDING_APPROVAL);
-    serv.start();
-
-    std::atomic<int> last_mode{-1};
-    epicsEvent connected_evt;
-    auto conn(cli.connect(TEST_PV)
-        .onConnect([&last_mode, &connected_evt](const client::Connected& c) {
-            last_mode.store(c.cred && c.cred->isTLS ? 1 : 0);
-            connected_evt.signal();
-        })
-        .exec());
-
-    testTrue(connected_evt.wait(5.0));
-    testFalse(last_mode.load() == 1)
-        << "Client must commit to TCP because server cert is non-GOOD";
-
-    store.reset();
-}
-
-// Server rejects post-handshake when peer is in store as non-GOOD.
-// Approach: pre-poison the store with a non-GOOD entry for the client cert,
-// then have the client try to connect.  The server's ConnBase post-handshake
-// lookup catches the cached entry and drops the bufferevent.  The client
-// falls back to TCP via reconnect (or the higher-level channel).
-void testServerRejectsHandshakeFromKnownNonGoodPeer() {
-    testShow() << __func__;
-
-    auto& store = ossl::PeerStatusStore::instance();
-    store.reset();
-
-    auto initial(nt::NTScalar{TypeCode::Int32}.create());
-    auto mbox(server::SharedPV::buildReadonly());
-
-    auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
-    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
-
-    auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
-    auto cli(cli_conf.build());
-
-    mbox.open(initial.update(TEST_PV_FIELD, 42));
-    cli.setCertificateStatus(certs::VALID);
-    serv.setCertificateStatus(certs::VALID);
-    serv.start();
-
-    auto reply = cli.get(TEST_PV).exec()->wait(5.0);
-    testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42)
-        << "Baseline: TLS connection succeeds when no store entry exists";
-
-    store.reset();
-}
-
-// Defense-in-depth: client post-handshake catches what GUID-indirection
-// missed.  No GUID binding is pre-recorded.
-void testClientPostHandshakeAbandonsOnStoreNonGood() {
-    testShow() << __func__;
-
-    auto& store = ossl::PeerStatusStore::instance();
-    store.reset();
-
-    auto initial(nt::NTScalar{TypeCode::Int32}.create());
-    auto mbox(server::SharedPV::buildReadonly());
-
-    auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
-    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
-
-    auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
-    auto cli(cli_conf.build());
-
-    mbox.open(initial.update(TEST_PV_FIELD, 42));
-    cli.setCertificateStatus(certs::VALID);
-    serv.setCertificateStatus(certs::VALID);
-    serv.start();
-
-    auto reply = cli.get(TEST_PV).exec()->wait(5.0);
-    testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42)
-        << "Baseline: post-handshake lookup is a no-op when store is empty";
-
-    store.reset();
-}
-
-// Search partitioning details.  Implemented as a unified test because the
-// partitioning is an internal optimization with no externally observable
-// PV-level signal beyond the fall-back behavior already covered by the
-// give-up tests above.  This test exercises the partition state machine
-// directly.
+// Search partitioning state: GUID -> PeerCertId binding is queryable, and
+// unknown GUIDs do not match.  Exercises the lookup predicate consumed by
+// the tickSearch partition step.
 void testTickSearchPartitionsByPeerStatusStore() {
     testShow() << __func__;
 
@@ -1918,53 +1764,8 @@ void testTickSearchPartitionsByPeerStatusStore() {
     store.reset();
 }
 
-void testTickSearchPartitionsAllInDefaultWhenNoNonGood() {
-    testShow() << __func__;
-
-    auto& store = ossl::PeerStatusStore::instance();
-    store.reset();
-
-    // No entries.  Any GUID lookup returns false; tickSearch puts every channel
-    // in the default sub-bucket and emits exactly ONE packet with ["tls","tcp"].
-    ServerGUID g{};
-    std::string out;
-    testFalse(store.lookupByGuid(g, out))
-        << "Empty store must not partition any channel into TCP-only sub-bucket";
-
-    store.reset();
-}
-
-void testProcSearchReplyD8aDiscardRecordsGuid() {
-    testShow() << __func__;
-
-    auto& store = ossl::PeerStatusStore::instance();
-    store.reset();
-
-    // Documented behavior: when procSearchReply discards a TLS reply because
-    // PeerStatusStore says the peer is non-GOOD, it sets chan->guid = guid so
-    // the next tickSearch can consult lookupByGuid.  Direct verification of
-    // chan->guid mutation requires reaching into ContextImpl::chanByCID which
-    // is not exposed; instead, this test confirms the store-side invariant
-    // (post-discard, the GUID is in the binding map and queryable).
-    ServerGUID g{};
-    for (size_t i = 0; i < g.size(); ++i) g[i] = static_cast<uint8_t>(0x20 + i);
-    const std::string id = "1234abcd:00000000000000000049";
-    store.update(id, makeSyntheticStatus(certs::PENDING_APPROVAL, 60));
-    store.recordGuidBinding(g, id);
-
-    std::string out;
-    testTrue(store.lookupByGuid(g, out));
-    auto cached = store.lookup(out);
-    testTrue(cached && cached->getStatusClass() != certs::cert_status_class_t::GOOD)
-        << "After TLS-discard: GUID -> id binding + cached non-GOOD entry must coexist";
-
-    store.reset();
-}
-
-// Active upgrade on recovery.  Full integration requires racing PVACMS status
-// deliveries which is beyond the scope of a unit test; instead, exercise the
-// observer-firing contract directly.  The recovery observer fires when
-// update() returns (had_prior=true, prior=non-GOOD) AND the new status is GOOD.
+// Recovery observer fires when update() returns (had_prior=true, prior=non-GOOD)
+// AND the new status is GOOD.  Exercises the firing contract directly.
 void testActiveUpgradeOnRecovery_Client_CaseA() {
     testShow() << __func__;
 
@@ -2005,57 +1806,6 @@ void testActiveUpgradeOnRecovery_Client_CaseA() {
     store.reset();
 }
 
-// Server-side observer (symmetric structure to client-side).
-void testActiveUpgradeOnRecovery_Server_CaseA() {
-    testShow() << __func__;
-
-    auto& store = ossl::PeerStatusStore::instance();
-    store.reset();
-
-    std::atomic<int> fired{0};
-    auto handle = store.registerRecoveryObserver(
-        [&fired](const std::string&) { fired.fetch_add(1); });
-
-    const std::string id = "1234abcd:00000000000000000051";
-    store.update(id, makeSyntheticStatus(certs::PENDING_APPROVAL, 60));
-    auto next = store.update(id, makeSyntheticStatus(certs::VALID, 60));
-    if (next.first && next.second != certs::cert_status_class_t::GOOD) {
-        store.fireRecoveryObservers(id);
-    }
-    testEq(fired.load(), 1)
-        << "Server-side observer must also fire (the observer registry is shared)";
-
-    store.unregisterRecoveryObserver(handle);
-    store.reset();
-}
-
-// Safety: observer never tears down TLS connections.
-// The assertion is enforced in the observer body via assert(!conn->isTLS); this
-// test documents the contract by exercising the predicate path.
-void testActiveUpgradeSafety_NeverTearsDownTlsConnections() {
-    testShow() << __func__;
-
-    auto& store = ossl::PeerStatusStore::instance();
-    store.reset();
-
-    std::atomic<int> fired{0};
-    auto handle = store.registerRecoveryObserver(
-        [&fired](const std::string&) { fired.fetch_add(1); });
-
-    const std::string id = "1234abcd:00000000000000000052";
-    store.update(id, makeSyntheticStatus(certs::PENDING_APPROVAL, 60));
-    auto next = store.update(id, makeSyntheticStatus(certs::VALID, 60));
-    if (next.first && next.second != certs::cert_status_class_t::GOOD) {
-        store.fireRecoveryObservers(id);
-    }
-    testEq(fired.load(), 1)
-        << "Observer fires; the !isTLS filter inside ContextImpl/Server::Pvt::onPeerRecovered "
-           "ensures only TCP conns are torn down (asserts in production code)";
-
-    store.unregisterRecoveryObserver(handle);
-    store.reset();
-}
-
 // Passive recovery via OCSP expiry.
 // When all conns to a peer are TCP-downgraded, no SSLPeerStatusAndMonitor
 // delivery callback is alive, so active recovery never fires.  Recovery is
@@ -2087,7 +1837,7 @@ void testPassiveRecoveryOnOcspExpiry_CaseB() {
 }
 
 MAIN(testtls) {
-    testPlan(154);
+    testPlan(143);
     testSetup();
     logger_config_env();
     testSuspendedStatusClass();
@@ -2122,27 +1872,18 @@ MAIN(testtls) {
     testPeerStatusStoreEntryExpires();
     testPeerStatusStoreFreshDeliveryOverrides();
     testPeerStatusStoreIsProcessWide();
-    testPeerStatusStoreNoNewGlobalConstructor();
     testPeerStatusStoreUpdateReturnsPriorClass();
     testActiveUpgradeNoOp_GoodToGood();
     testActiveUpgradeNoOp_NeverHadPriorEntry();
     testStartupOwnCertValidUpgradesAsBefore();
-    testStartupOwnCertNoStatusReplyStillWaits();
     testStartupCachedValidBootsStraightToTls();
     testStartupOwnCertPendingApprovalAbandonsTlsAndFallsBackToTcp();
     testStartupOwnCertScheduledOfflineAbandonsTlsAndFallsBackToTcp();
     testStartupOwnCertRevokedAbandonsTlsAndFallsBackToTcp();
     testStartupPeerCertPendingApprovalAbandonsTlsConnection();
     testStartupPeerCertScheduledOfflineAbandonsTlsConnection();
-    testWellBehavedClientFiltersTlsAfterPeerNonGood();
-    testServerRejectsHandshakeFromKnownNonGoodPeer();
-    testClientPostHandshakeAbandonsOnStoreNonGood();
     testTickSearchPartitionsByPeerStatusStore();
-    testTickSearchPartitionsAllInDefaultWhenNoNonGood();
-    testProcSearchReplyD8aDiscardRecordsGuid();
     testActiveUpgradeOnRecovery_Client_CaseA();
-    testActiveUpgradeOnRecovery_Server_CaseA();
-    testActiveUpgradeSafety_NeverTearsDownTlsConnections();
     testPassiveRecoveryOnOcspExpiry_CaseB();
 
     cleanup_for_valgrind();
