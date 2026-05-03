@@ -394,6 +394,19 @@ void Connection::peerStatusCallback(certs::cert_status_class_t status_class) {
         disconnect();
     } else if (status_class == certs::cert_status_class_t::SUSPENDED ||
                status_class == certs::cert_status_class_t::UNKNOWN) {
+        // Per cert-startup-tcp-bootstrap/design.md#D3: when the connection is
+        // paused at the peer-status gate (state < Validated) and the first
+        // authoritative peer status is non-GOOD, give up on TLS and let the
+        // channel re-search via TCP.  The live-SUSPENDED handling below
+        // (pause monitors) only applies once the connection is Validated.
+        if (state != Validated) {
+            log_warn_printf(certs, "Pre-Validated connection to %s gives up TLS: peer cert %s\n",
+                            peerName.c_str(),
+                            status_class == certs::cert_status_class_t::SUSPENDED ? "SUSPENDED" : "UNKNOWN");
+            cert_status_disconnect = true;
+            disconnect();
+            return;
+        }
         // SUSPENDED: PVACMS told us the peer cert is in a recoverable transient state
         //   (SCHEDULED_OFFLINE / PENDING_RENEWAL).
         // UNKNOWN: PVACMS is silent (validity expired, or status update not yet received).

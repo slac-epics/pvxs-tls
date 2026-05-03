@@ -1538,12 +1538,26 @@ void ContextImpl::onTlsReady() {
 }
 
 void ContextImpl::onTcpOnly() {
-    reconnect_for_tls_when_ready = true;
-    tcp_loop.call([this]() {
+    // Per cert-startup-tcp-bootstrap/design.md#D1+D2: tcp_only_event is fired
+    // not just on SUSPENDED-class transitions but also on BAD (DegradedMode)
+    // transitions, so that any deferred connection paused at
+    // proceedWithCreatingChannels waiting for TlsReady abandons the TLS attempt.
+    // For the BAD case, however, we must NOT set reconnect_for_tls_when_ready
+    // (TLS won't come back without an explicit reconfigure) and we must NOT
+    // pre-emptively poke for a TCP commit (the existing onLocalCertBadTearDown
+    // path already tore down live TLS conns; pre-emptive TCP commit would
+    // race with a subsequent reconfigure that wants to bring TLS back up).
+    const bool is_bad = tls_context && tls_context->state == ossl::SSLContext::DegradedMode;
+    if (!is_bad) {
+        reconnect_for_tls_when_ready = true;
+    }
+    tcp_loop.call([this, is_bad]() {
         removeTlsPeer();
-        lastPoke.secPastEpoch = 0;
-        lastPoke.nsec = 0;
-        poke();
+        if (!is_bad) {
+            lastPoke.secPastEpoch = 0;
+            lastPoke.nsec = 0;
+            poke();
+        }
     });
 }
 

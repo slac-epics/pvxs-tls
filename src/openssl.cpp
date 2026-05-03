@@ -284,8 +284,18 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
             break;
 
         case certs::cert_status_class_t::BAD:
+            // Per cert-startup-tcp-bootstrap/design.md#D2: also fire tcp_only_event
+            // so that any deferred connection paused at proceedWithCreatingChannels
+            // / proceedWithConnectionValidation waiting for TlsReady abandons the
+            // TLS attempt instead of waiting forever.  The live-BAD teardown path
+            // (degraded_event -> on_degraded_ -> onLocalCertBadTearDown) is
+            // unaffected; this is purely an additional give-up signal for the
+            // deferred-connection flow.
             was_suspended_ = false;
             setDegradedMode();
+            if (tcp_only_event.get()) {
+                event_active(tcp_only_event.get(), EV_TIMEOUT, 0);
+            }
             break;
 
         case certs::cert_status_class_t::SUSPENDED:
@@ -310,12 +320,19 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
                 case TcpOnly:
                 case TcpReady:
                 default:
-                    log_debug_printf(watcher, "Certificate SUSPENDED before TLS established — entering TcpOnly%s\n", "");
+                {
+                    bool fire_tcp_only = false;
                     {
                         Guard G(lock);
+                        fire_tcp_only = state != TcpOnly;
                         state = TcpOnly;
                         log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpOnly", "SSLContext::setTlsOrTcpMode()", this);
                     }
+                    log_debug_printf(watcher, "Certificate SUSPENDED before TLS established — entering TcpOnly%s\n", "");
+                    if (fire_tcp_only && tcp_only_event.get()) {
+                        event_active(tcp_only_event.get(), EV_TIMEOUT, 0);
+                    }
+                }
                     break;
             }
             break;
@@ -340,12 +357,19 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
             switch (state) {
                 case Init:
                 case TcpOnly:
-                    log_debug_printf(watcher, "Cert not yet usable — entering TcpOnly%s\n", "");
+                {
+                    bool fire_tcp_only = false;
                     {
                         Guard G(lock);
+                        fire_tcp_only = state != TcpOnly;
                         state = TcpOnly;
                         log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpOnly", "SSLContext::setTlsOrTcpMode()", this);
                     }
+                    log_debug_printf(watcher, "Cert not yet usable — entering TcpOnly%s\n", "");
+                    if (fire_tcp_only && tcp_only_event.get()) {
+                        event_active(tcp_only_event.get(), EV_TIMEOUT, 0);
+                    }
+                }
                     break;
                 case TlsReady:
                     log_warn_printf(watcher, "Own certificate status is UNKNOWN (%s) — keeping TlsReady, pausing active operations until status recovers\n", cert_status.status.s.c_str());
