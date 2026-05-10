@@ -9,7 +9,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y \
             build-essential \
-            git && \
+            git  \
+            libcrypt-dev && \
     mkdir -p ${PROJECT_HOME}
 
 # build EPICS Base
