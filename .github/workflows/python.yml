@@ -68,6 +68,7 @@ jobs:
         run: python ./gha-set-pre.py
 
       - name: Build
+        if: ${{ ! matrix.skip }}
         run: |
             # emit script to be executed in container.
             cat <<EOF > runit.sh
@@ -125,6 +126,7 @@ jobs:
                 /io/runit.sh
 
       - name: Result
+        if: ${{ ! matrix.skip }}
         run: ls -lhtr output
 
       - name: Save wheels
