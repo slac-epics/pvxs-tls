@@ -1099,15 +1099,23 @@ bool ContextImpl::onSearch(evutil_socket_t fd)
         return true;
     }
 
+    bool echoed_own_search = false;
     if(head.cmd==CMD_SEARCH_RESPONSE) {
         procSearchReply(*this, src, head.version, M, false);
 
     } else {
+        echoed_own_search = (head.cmd==CMD_SEARCH);
         M.fault(__FILE__, __LINE__);
     }
 
     if(!M.good()) {
-        log_hex_printf(io, Level::Err, &searchMsg[0], nrx,
+        // A CMD_SEARCH arriving on the search-reply socket is our own
+        // outbound search looped back to us on loopback / multicast.  It
+        // is benign and routinely happens when multiple pvxs Contexts run
+        // in one process.  Other fault kinds may indicate genuine wire
+        // corruption, so keep those at Err.
+        const auto lvl = echoed_own_search ? Level::Debug : Level::Err;
+        log_hex_printf(io, lvl, &searchMsg[0], nrx,
                 "%s:%d Invalid search reply %d from %s\n",
                 M.file(), M.line(), nrx, src.tostring().c_str());
     }
