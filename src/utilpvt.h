@@ -255,6 +255,12 @@ public:
 PVXS_API
 void osdGetRoles(const std::string& account, std::set<std::string>& roles);
 
+// Strip a leading "role/" or "x509/" prefix from a ca-method user string and
+// return the remainder; otherwise return the input unchanged. The reserved
+// prefix set MUST stay in lock-step with pvxs-cms src/authn/cnpolicy.h.
+PVXS_API
+std::string stripCaUserReservedPrefix(const std::string& user);
+
 void logger_shutdown();
 
 // std::max() isn't constexpr until c++14 :(

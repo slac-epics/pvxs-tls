@@ -39,6 +39,19 @@ std::set<std::string> PeerCredentials::roles() const
     return ret;
 }
 
+namespace impl {
+std::string stripCaUserReservedPrefix(const std::string& user)
+{
+    if (user.compare(0, 5, "role/") == 0) {
+        return user.substr(5);
+    }
+    if (user.compare(0, 5, "x509/") == 0) {
+        return user.substr(5);
+    }
+    return user;
+}
+} // namespace impl
+
 std::ostream& operator<<(std::ostream& strm, const PeerCredentials& cred)
 {
 #ifdef PVXS_ENABLE_OPENSSL
@@ -308,12 +321,7 @@ void ServerConn::handle_CONNECTION_VALIDATION()
 
             if(selected=="ca") {
                 auth["user"].as<std::string>([&C, &selected](const std::string& user) {
-            const auto pos = user.find_last_of('/');
-            if ( pos  == std::string::npos) {
-                C->account = user;
-            } else {
-                C->account = user.substr(pos + 1);
-            }
+                    C->account = stripCaUserReservedPrefix(user);
                     C->method = selected;
                 });
             }

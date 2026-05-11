@@ -42,6 +42,10 @@ TESTPROD_HOST += testbitmask
 testbitmask_SRCS += testbitmask.cpp
 TESTS += testbitmask
 
+TESTPROD_HOST += testcaingestpolicy
+testcaingestpolicy_SRCS += testcaingestpolicy.cpp
+TESTS += testcaingestpolicy
+
 TESTPROD_HOST += testxcode
 testxcode_SRCS += testxcode.cpp
 TESTS += testxcode
