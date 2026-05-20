@@ -311,7 +311,7 @@ directory are harmless — they will never be read without the cache code.
 
 This change is independent of the SAN-based access control feature
 (`documentation/SAN_SUPPORT.md`).  However, both features are developed on branches
-that build on top of the same base (`tls`), and the `feature/cert-caching` branch is
+that build on top of the same base (`main`, formerly `tls`), and the `feature/cert-caching` branch is
 rebased on top of `feature/san` so that both features can be reviewed together.
 
 There is no logical dependency: the cert status cache works identically regardless of

@@ -171,7 +171,7 @@ Separate per-type vectors (`san_ips`, `san_dns`) would be less extensible if fut
 types are needed.  A single formatted string would require downstream parsing.
 
 **ABI note:** Adding a field to `PeerCredentials` changes its layout.  Because pvxs is
-on the `tls` branch — not yet ABI-stable for TLS features — this is acceptable.  The
+on the `main` branch (formerly `tls`) — not yet ABI-stable for TLS features — this is acceptable.  The
 field is default-constructed to empty, so code that does not use it is unaffected.
 
 ### SAN extraction in getPeerCredentials()

@@ -53,7 +53,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
-    if: github.ref=='refs/heads/tls'
+    if: github.ref=='refs/heads/main'
     needs: generate
 
     permissions:
