@@ -761,28 +761,20 @@ using cert_status_ptr = ossl_shared_ptr<T, cert_status_delete<T>>;
  *  auto ocsp_status(CertStatusManager::parse(ocsp_response);
  * @endcode
  *
- * To get certificate status call the status `getStatus()` method with the
- * the certificate you want to get status for.  It will make a request
- * to the PVACMS to get certificate status for the certificate. After verifying the
- * authenticity of the response and checking that it is from a trusted
- * source, it will return `CertificateStatus`.
- * @code
- *  auto cert_status(CertStatusManager::getStatus(cert);
- * @endcode
- *
  * To subscribe, call the subscribe method with the certificate you want to
- * subscribe to status for and provide a callback that takes a `CertificateStatus`
+ * subscribe to status for and provide a callback that takes a `PVACertificateStatus`
  * to be notified of status changes.  It will subscribe to PVACMS to monitor changes to
  * to the certificate status for the given certificate. After verifying the
  * authenticity of each status update and checking that it is from a trusted
- * source it will call the callback with a `CertificateStatus` representing the
+ * source it will call the callback with a `PVACertificateStatus` representing the
  * updated status.
  * @code
- *  auto csm = CertStatusManager::subscribe(cert, [] (CertificateStatus &&cert_status) {
- *      std::cout << "STATUS DATE: " << cert_status.status_date.s << std::endl;
- *  });
+ *  auto csm = CertStatusManager::subscribe(client, trusted_store, status_pv, cert_id,
+ *      [] (const PVACertificateStatus &cert_status) {
+ *          std::cout << "STATUS DATE: " << cert_status.status_date.s << std::endl;
+ *      });
  *  ...
- *  csm.unsubscribe();
+ *  csm->unsubscribe();
  *  // unsubscribe() automatically called when csm goes out of scope
  * @endcode
  */
@@ -953,8 +945,11 @@ class CertStatusManager {
     std::shared_ptr<StatusCallback> callback_ref{};  // Option placeholder for ref to callback if used
     client::Context client_;
     std::shared_ptr<client::Subscription> sub_;
-    std::shared_ptr<CertificateStatus> status_;
-    std::vector<uint8_t> cached_ocsp_bytes_;  // last-written OCSP bytes, used to skip redundant cache writes
+    // Co-owned with the monitor-event lambda so the lambda holds only inert dedup state, never a
+    // strong ref to this manager (which would let a worker-thread callback destroy the manager and
+    // its by-value client::Context -> evbase self-join). last-written OCSP bytes, used to skip
+    // redundant cache writes.
+    std::shared_ptr<std::vector<uint8_t>> cached_ocsp_bytes_{std::make_shared<std::vector<uint8_t>>()};
 
     /**
      * @brief Get the custom status extension from the given certificate
