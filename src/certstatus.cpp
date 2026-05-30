@@ -408,7 +408,7 @@ ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_re
  * @param status_pv the status PV to subscribe to
  * @param callback the callback to call
  * @param cert_id the certificate ID that the we are subscribing to
- * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
+ * @return a manager of this subscription that you can use to `unsubscribe()`
  */
 cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Context &client, X509_STORE *trusted_store_ptr, const std::string &status_pv,
                                                                 const std::string& cert_id, StatusCallback &&callback) {
@@ -421,7 +421,15 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
     try {
         cert_status_ptr<CertStatusManager> cert_status_manager(new CertStatusManager(client));
         cert_status_manager->callback_ref = std::move(fn);
-        std::weak_ptr<CertStatusManager> weak_cert_status_manager(cert_status_manager);
+
+        // The monitor-event lambda must NEVER hold a strong ref to the manager: it runs on the
+        // client event-loop worker thread, and if the manager's external owner drops its handle
+        // mid-callback a transient strong ref would make the worker the last owner -> the
+        // manager (and its by-value client::Context -> evbase) would be destroyed on its own
+        // worker thread -> evbase self-join -> abort. So the lambda co-owns only inert state:
+        // a weak_ptr to the callback, and a shared_ptr to the dedup byte cache.
+        std::weak_ptr<StatusCallback> weak_callback(cert_status_manager->callback_ref);
+        auto cached_ocsp_bytes = cert_status_manager->cached_ocsp_bytes_;
 
         const std::string cache_dir = client.config().tls_status_cache_dir;
 
@@ -444,8 +452,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
                                         "cert-status: cache-hit pv=%s status=%s\n",
                                         status_pv.c_str(),
                                         cached_status.status.s.c_str());
-                        cert_status_manager->cached_ocsp_bytes_ = std::move(cached_bytes);
-                        cert_status_manager->status_ = std::make_shared<CertificateStatus>(cached_status);
+                        *cert_status_manager->cached_ocsp_bytes_ = std::move(cached_bytes);
                         (*cert_status_manager->callback_ref)(cached_status);
                     } else {
                         log_debug_printf(status, "Cached status for %s is expired, discarding\n", cert_id.c_str());
@@ -462,31 +469,32 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
         auto sub = cert_status_manager->client_.monitor(status_pv)
                        .maskConnected(true)
                        .maskDisconnected(true)
-                       .event([trusted_store_ptr, weak_cert_status_manager, cert_id, cache_dir](client::Subscription &s) {
+                       .event([trusted_store_ptr, weak_callback, cached_ocsp_bytes, cert_id, cache_dir](client::Subscription &s) {
                            try {
-                               const auto csm = weak_cert_status_manager.lock();
-                               if (!csm) return;
+                               // Lock only the callback, never the manager: the worker thread must
+                               // not be able to initiate destruction of the manager/Context.
+                               const auto cb = weak_callback.lock();
+                               if (!cb) return;
                                const auto update = s.pop();
                                if (update) {
                                    try {
                                         auto status_update{PVACertificateStatus(update, trusted_store_ptr, cert_id)};
                                         log_debug_printf(status, "Status subscription %s received: %s\n", s.name().c_str(), status_update.status.s.c_str());
-                                        csm->status_ = std::make_shared<CertificateStatus>(status_update);
-                                        log_debug_printf(status, "Calling (*csm->callback_ref)(status_update)%s\n", "");
-                                         (*csm->callback_ref)(status_update);
-                                         log_debug_printf(status, "Called (*csm->callback_ref)(status_update)%s\n", "");
+                                        log_debug_printf(status, "Calling (*cb)(status_update)%s\n", "");
+                                         (*cb)(status_update);
+                                         log_debug_printf(status, "Called (*cb)(status_update)%s\n", "");
                                           if (isStatusCacheEnabled() && status_update.isStatusCurrent()) {
                                               const auto *new_data = status_update.ocsp_bytes.data();
                                               const auto new_size = status_update.ocsp_bytes.size();
-                                              if (new_size != csm->cached_ocsp_bytes_.size() ||
-                                                  std::memcmp(new_data, csm->cached_ocsp_bytes_.data(), new_size) != 0) {
+                                              if (new_size != cached_ocsp_bytes->size() ||
+                                                  std::memcmp(new_data, cached_ocsp_bytes->data(), new_size) != 0) {
                                                   // Re-read from disk in case another process already wrote it
                                                   auto on_disk = readCacheFile(cert_id, cache_dir);
                                                   if (on_disk.size() != new_size ||
                                                       std::memcmp(on_disk.data(), new_data, new_size) != 0) {
                                                       writeCacheFile(cert_id, new_data, new_size, cache_dir);
                                                   }
-                                                  csm->cached_ocsp_bytes_.assign(new_data, new_data + new_size);
+                                                  cached_ocsp_bytes->assign(new_data, new_data + new_size);
                                               }
                                           }
                                    } catch (OCSPParseException &e) {
