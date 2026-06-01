@@ -309,7 +309,9 @@ void ServerConn::handle_SEARCH()
 
         } else
 #endif
-        if(foundtcp) {
+        // TLS-only transport: never emit the plaintext endpoint for a connected
+        // tcp-only search.
+        if(foundtcp && !iface->server->effective.tls_disable_plain_tcp) {
             to_wire(R, iface->server->effective.tcp_port);
             to_wire(R, "tcp");
         }

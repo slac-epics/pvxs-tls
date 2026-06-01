@@ -417,7 +417,9 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
         if ( sep == std::string::npos)
             sep = opt.size();
         auto key(opt.substr(0, sep));
-        auto val(sep<=key.size() ? opt.substr(sep+1) : std::string());
+        // sep<opt.size() means an '=' was present; otherwise the token is
+        // valueless (e.g. no_stapling, no_tcp) and val is empty.
+        auto val(sep < opt.size() ? opt.substr(sep+1) : std::string());
 
         if(key=="client_cert") {
             if(val=="require") {
@@ -447,6 +449,13 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
                 conf.disableStapling();
             else
                 log_warn_printf(config, "Ignore unknown TLS option `no_stapling` value %s.  no value expected\n", opt.c_str());
+        } else if (key == "no_tcp") {
+            // TLS-only transport policy: disable the plaintext TCP listener and
+            // advertise only the TLS endpoint.  Flag-style token, no value.
+            if ( val.empty())
+                conf.tls_disable_plain_tcp = true;
+            else
+                log_warn_printf(config, "Ignore unknown TLS option `no_tcp` value %s.  no value expected\n", opt.c_str());
         } else {
             log_warn_printf(config, "Ignore unknown TLS option key %s\n", opt.c_str());
         }
@@ -480,6 +489,8 @@ std::string printTLSOptions(const ConfigCommon& conf) {
         opts.push_back("no_revocation_check");
     if ( conf.isStaplingDisabled())
         opts.push_back("no_stapling");
+    if ( conf.tls_disable_plain_tcp)
+        opts.push_back("no_tcp");
     return join_addr(opts);
 }
 #endif

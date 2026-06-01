@@ -667,13 +667,17 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
         decltype(tcpifaces) tlsifaces(tcpifaces); // copy before any setPort()
 #endif
         bool firstiface = true;
-        for(auto& addr : tcpifaces) {
-                if (addr.port() == 0) addr.setPort(effective.tcp_port);
+        // TLS-only transport: do not bind any plaintext TCP listener.  The
+        // tlsifaces copy above preserves the interface list for the TLS bind.
+        if(!effective.tls_disable_plain_tcp) {
+            for(auto& addr : tcpifaces) {
+                    if (addr.port() == 0) addr.setPort(effective.tcp_port);
 
-            interfaces.emplace_back(addr, this, firstiface, false);
+                interfaces.emplace_back(addr, this, firstiface, false);
 
-                if (firstiface || effective.tcp_port == 0) effective.tcp_port = interfaces.back().bind_addr.port();
-            firstiface = false;
+                    if (firstiface || effective.tcp_port == 0) effective.tcp_port = interfaces.back().bind_addr.port();
+                firstiface = false;
+            }
         }
 
 #ifdef PVXS_ENABLE_OPENSSL
@@ -699,6 +703,29 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
                 log_debug_printf(serversetup, "Will send beacons to %s\n", std::string(SB() << beaconDest.back()).c_str());
         }
     });
+
+    if(effective.tls_disable_plain_tcp) {
+        // Startup diagnostics for TLS-only transport mode.  Name the mode and
+        // its consequence rather than the bare token, so an operator who has
+        // never seen `no_tcp` understands what is disabled.
+        log_info_printf(serversetup, "transport: tls-only (plaintext TCP listener disabled)%s", "\n");
+
+#ifdef PVXS_ENABLE_OPENSSL
+        // Security-posture nudge: TLS-only without client_cert=require still
+        // accepts anonymous TLS clients.  Emit once at startup.
+        if(effective.tls_client_cert_required != ConfigCommon::Require) {
+            log_warn_printf(serversetup, "tls-only transport active without client_cert=require"
+                            " -- anonymous TLS clients will still be accepted%s", "\n");
+        }
+
+        // If neither transport can serve (no usable TLS listener under no_tcp),
+        // the server is unreachable.  WARN-and-start, never abort.
+        if(!effective.isTlsConfigured()) {
+            log_warn_printf(serversetup, "TLS-only transport mode active but TLS listener"
+                            " could not start; this server is unreachable%s", "\n");
+        }
+#endif
+    }
 
     {
         // choose new GUID.
@@ -976,11 +1003,24 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
             nreply++;
     }
 
+    // TLS-only transport: a non-TLS search must get no reply, so the plaintext
+    // TCP arm is gated off.
+    const bool tlsOnly = effective.tls_disable_plain_tcp;
+
+    if(tlsOnly && nreply != 0 && msg.protoTCP && !msg.protoTLS && canRespondToTcpSearch()) {
+        // would have replied with a tcp endpoint; suppressed by policy.
+        log_debug_printf(serverio, "TLS-only policy suppresses tcp SEARCH reply%s", "\n");
+    }
+
     // "pvlist" breaks unless we honor mustReply flag
     if (nreply == 0 && msg.mustReply) {} // discover
-    else if(nreply != 0 && msg.protoTCP && canRespondToTcpSearch()) {} // regular TCP
+    else if(nreply != 0 && msg.protoTCP && !tlsOnly && canRespondToTcpSearch()) {} // regular TCP
     else if(nreply != 0 && msg.protoTLS && canRespondToTlsSearch()) {} // TLS
     else {
+        if(tlsOnly && nreply != 0 && msg.protoTLS && !canRespondToTlsSearch()) {
+            // cert-state gate (not the policy flag) is what blocks the TLS reply.
+            log_debug_printf(serverio, "TLS-only policy: no reply, TLS not currently usable%s", "\n");
+        }
         return; // do not send
     }
 
@@ -993,7 +1033,9 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     to_wire(M, msg.searchID);
     to_wire(M, SockAddr::any(AF_INET));
 
-    if(msg.protoTLS && canRespondToTlsSearch()) {
+    if((msg.protoTLS && canRespondToTlsSearch()) || tlsOnly) {
+        // TLS-only transport: only ever advertise the TLS endpoint; the tcp arm
+        // below is unreachable under the policy flag.
         to_wire(M, uint16_t(effective.tls_port));
         to_wire(M, "tls");
     } else{
@@ -1037,8 +1079,18 @@ void Server::Pvt::doBeacons(short evt)
     to_wire(M, uint16_t(beaconChange));// change count
 
     to_wire(M, SockAddr::any(AF_INET));
-    to_wire(M, uint16_t(effective.tcp_port));
-    to_wire(M, "tcp");
+    // TLS-only transport: advertise the TLS endpoint with proto "tls".  Pre-SPVA
+    // clients check the proto string against the literal "tcp" and discard
+    // anything else (pvAccessCPP clientContextImpl.cpp:2789-2791; phoebus
+    // ClientUDPHandler.java:253-258 logs a warning then discards), so they
+    // ignore these beacons.
+    if(effective.tls_disable_plain_tcp) {
+        to_wire(M, uint16_t(effective.tls_port));
+        to_wire(M, "tls");
+    } else {
+        to_wire(M, uint16_t(effective.tcp_port));
+        to_wire(M, "tcp");
+    }
     // "NULL" serverStatus
     to_wire(M, uint8_t(0xff));
 

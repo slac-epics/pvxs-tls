@@ -440,7 +440,9 @@ void UDPCollector::process_one(const uint8_t *buf, size_t nrx, origin_t origin,
             from_wire(M, chlen);
             // inject nil for previous PV name
             *mundge = '\0';
-            if(protoTCP && chlen.size<=M.size() && M.good()) {
+            // Collect names for tcp or tls searches.  A pure ["tls"] search must
+            // also collect names so a TLS-only server can answer it.
+            if((protoTCP || protoTLS) && chlen.size<=M.size() && M.good()) {
                 names.push_back(UDPManager::Search::Name{reinterpret_cast<const char*>(M.save()), id});
             }
             M.skip(chlen.size, __FILE__, __LINE__);

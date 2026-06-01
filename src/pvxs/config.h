@@ -53,6 +53,15 @@ struct PVXS_API ConfigCommon {
     //! @since UNRELEASED
     unsigned short tls_port = 5076;
 
+    /** @brief When true, the server does not bind the plaintext PVAccess TCP
+     *  listener and advertises only the TLS endpoint in SEARCH replies and
+     *  beacons.  Operator policy, fixed for the process lifetime.  Ignored by
+     *  clients (they have no plaintext listener to gate).
+     *  @since UNRELEASED
+     *  @see EPICS_PVAS_TLS_OPTIONS=no_tcp
+     */
+    bool tls_disable_plain_tcp = false;
+
     /** @brief Set to true to disable TLS.  This will override the environment TLS configuration
      *  settings and will also override config TLS configuration fields.  Suitable for testing.
      *  server
