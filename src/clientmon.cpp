@@ -103,9 +103,15 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
     // call must be from worker
     void doNotify()
     {
-        if(event) {
+        // Copy the callback before invoking it so it (and anything it captures)
+        // stays alive for the duration of the call.  A user callback may, on
+        // this same loop, re-entrantly cancel this subscription (or drop its
+        // owner), which move-destroys `event`; without the local copy that would
+        // free the running functor and its captures out from under us.
+        auto cb(event);
+        if(cb) {
             try {
-                event(*this);
+                cb(*this);
             }catch(std::exception& e){
                 log_exc_printf(io, "Unhandled user exception in Monitor %s %s : %s\n",
                                 __func__, typeid (e).name(), e.what());
