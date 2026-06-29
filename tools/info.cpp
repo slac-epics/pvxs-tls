@@ -83,11 +83,14 @@ int main(int argc, char *argv[])
         if(verbose)
             std::cout<<"Effective config\n"<<conf;
 
-        std::list<std::shared_ptr<client::Operation>> ops;
-        std::list<std::shared_ptr<client::Connect>> conns;
-
+        // Declared before ops/conns (and so destroyed after them) as they are
+        // referenced by the result callbacks owned by ops, which run on the
+        // client worker.
         std::atomic<int> remaining{argc-optind};
         epicsEvent done;
+
+        std::list<std::shared_ptr<client::Operation>> ops;
+        std::list<std::shared_ptr<client::Connect>> conns;
 
         for(auto n : range(optind, argc)) {
             if(verbose)
@@ -119,10 +122,16 @@ int main(int argc, char *argv[])
             done.signal();
         });
 
-        if(!done.wait(timeout)) {
+        const bool completed = done.wait(timeout);
+        const bool all_done = remaining.load()==0u;
+
+        ops.clear();   // implied cancel; synchronously stops in-flight callbacks
+        conns.clear(); // before remaining/done go out of scope
+
+        if(!completed) {
             std::cerr<<"Timeout\n";
             return 1;
-        } else if(remaining.load()==0u) {
+        } else if(all_done) {
             return 0;
         } else {
             if(verbose)
