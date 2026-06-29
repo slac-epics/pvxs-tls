@@ -124,6 +124,10 @@ int main(int argc, char *argv[])
             done.signal();
         });
 
+        // Declared before ops (and so destroyed after them) as it is referenced
+        // by the result callbacks owned by ops, which run on the client worker.
+        std::atomic<int> remaining{argc-optind};
+
         std::vector<std::shared_ptr<client::Operation>> ops;
         ops.reserve(argc-optind);
 
@@ -156,8 +160,6 @@ int main(int argc, char *argv[])
                           .exec());
 
         } else { // query mode, fetch info from specific servers
-
-            std::atomic<int> remaining{argc-optind};
 
             for(auto n : range(optind, argc)) {
                 ops.push_back(ctxt.rpc("server")
@@ -205,6 +207,9 @@ int main(int argc, char *argv[])
             done.wait(timeout);
         else
             done.wait();
+
+        ops.clear(); // implied cancel; synchronously stops in-flight callbacks
+                     // before remaining/done go out of scope
 
         return 0;
 
