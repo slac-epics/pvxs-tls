@@ -814,7 +814,7 @@ class CertStatusManager {
      * revoked status.
      * @param cert the certificate to check for the status PV extension
      * @return a blank string if no extension exists, otherwise contains the status PV
-     *         e.g. CERT:STATUS:0293823f:098294739483904875
+     *         e.g. CERT:STATUS:0293823f:00098294739483904875 (CERT is the default, operator-configurable prefix)
      */
     static std::string getStatusPvFromCert(const ossl_ptr<X509> &cert);
 
@@ -825,7 +825,7 @@ class CertStatusManager {
      * expired status.
      * @param cert the certificate to check for the config PV extension
      * @return a blank string if no extension exists, otherwise contains the config PV
-     *         e.g. CERT:CONFIG:0293823f:098294739483904875
+     *         e.g. CERT:CONFIG:0293823f:00098294739483904875 (CERT is the default, operator-configurable prefix)
      */
     static std::string getConfigPvFromCert(const ossl_ptr<X509> &cert);
 
@@ -850,7 +850,7 @@ class CertStatusManager {
      * @brief Get the certificate ID string from a Cert.
      * This function gets the certificate ID string from a certificate
      * @param cert_ptr the certificate ID string, made up of the issuer id and the serial number separated with a colon
-     *         e.g. 0293823f:098294739483904875
+     *         e.g. 0293823f:00098294739483904875
      */
     static std::string getCertIdFromCert(const X509 *cert_ptr);
     static std::string getCertIdFromSerialAndIssuer(const std::string &issuer_id, const std::string &serial);
@@ -861,7 +861,7 @@ class CertStatusManager {
      * This function gets the PVA certificate extension that holds the status PV
      * @param cert_ptr the certificate to check
      * @return a blank string if no extension exists, otherwise contains the status PV
-     *         e.g. CERT:STATUS:0293823f:098294739483904875
+     *         e.g. CERT:STATUS:0293823f:00098294739483904875 (CERT is the default, operator-configurable prefix)
      */
     static std::string getStatusPvFromCert(const X509 *cert_ptr);
 
@@ -870,7 +870,7 @@ class CertStatusManager {
      * This function gets the PVA certificate extension that holds the certificate configuration PV
      * @param cert_ptr the certificate to check
      * @return a blank string if no extension exists, otherwise contains the certificate configuration PV
-     *         e.g. CERT:CONFIG:0293823f:098294739483904875
+     *         e.g. CERT:CONFIG:0293823f:00098294739483904875 (CERT is the default, operator-configurable prefix)
      */
     static std::string getConfigPvFromCert(const X509 *cert_ptr);
 

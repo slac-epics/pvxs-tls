@@ -610,9 +610,16 @@ std::string CertStatusManager::getCertIdFromSerialAndIssuer(const std::string &i
 
 std::string CertStatusManager::getCertIdFromStatusPv(const std::string &status_pv) {
     if (status_pv.empty()) throw CertStatusNoExtensionException("status_pv cannot be empty.");
-    const size_t len = status_pv.length();
-    if (len < 30) throw CertStatusNoExtensionException("status_pv must be at least 30 characters long.");
-    return status_pv.substr(len - 29); // {prefix}{issuer_8}:{serial_20}
+    // Parse the trailing "<issuer>:<serial>" structurally (prefix-length-agnostic, serial-width-agnostic).
+    const size_t last = status_pv.rfind(':');
+    if (last == std::string::npos || last == 0) throw CertStatusNoExtensionException("status_pv missing serial separator.");
+    const size_t prev = status_pv.rfind(':', last - 1);
+    if (prev == std::string::npos) throw CertStatusNoExtensionException("status_pv missing issuer separator.");
+    const std::string issuer = status_pv.substr(prev + 1, last - prev - 1);
+    const std::string serial = status_pv.substr(last + 1);
+    if (issuer.empty() || serial.empty()) throw CertStatusNoExtensionException("status_pv has empty issuer or serial.");
+    // Re-canonicalise so the result is byte-identical to certIdFromOCSPCertId's output.
+    return getCertIdFromSerialAndIssuer(issuer, serial);
 }
 
 

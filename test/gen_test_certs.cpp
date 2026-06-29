@@ -212,6 +212,9 @@ void add_skid_extension(X509* cert, EVP_PKEY* pkey) {
     X509_EXTENSION_free(ext);
 }
 
+// Default, operator-configurable PVACMS PV prefix.
+static const char DEFAULT_CERT_PV_PREFIX[] = "CERT";
+
 /**
  * @brief Get the Certificate Status PV base.
  * e.g., CERT:STATUS
@@ -464,7 +467,7 @@ struct CertCreator {
 
         if ( add_status_extension) {
             const auto issuer_id = pvxs::certs::CertStatus::getSkId(root ? root : issuer);
-            addCustomExtensionByNid(cert, pvxs::ossl::NID_SPvaCertStatusURI, getCertStatusURI("CERT", issuer_id, serial));
+            addCustomExtensionByNid(cert, pvxs::ossl::NID_SPvaCertStatusURI, getCertStatusURI(DEFAULT_CERT_PV_PREFIX, issuer_id, serial));
         }
 
         auto nbytes(X509_sign(cert.get(), ikey, sig));
