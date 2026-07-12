@@ -13,6 +13,7 @@
 #define CERTTIME_H
 
 #include "ownedptr.h"
+#include "utilpvt.h"
 
 #define CERT_TIME_FORMAT "%a %b %d %H:%M:%S %Y UTC"
 
@@ -251,7 +252,7 @@ struct CertDate {
      * @throws CertTimeParseException if the duration string is invalid
      */
     static int64_t parseDuration(const std::string &duration_str) {
-        const auto now = std::time(nullptr);
+        const auto now = impl::timeNow();
 
         // String parts
         uint32_t years{0};   // 'y'
@@ -405,7 +406,7 @@ struct CertDate {
     const int64_t seconds = duration * 60;
 
     // Start from now
-    const auto now = std::time(nullptr);
+    const auto now = timeNow();
 
     // Try to represent this as calendar units (years, months, etc.)
     int years = 0, months = 0, days = 0, hours = 0, minutes = 0;

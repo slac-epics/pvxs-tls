@@ -95,7 +95,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
                 }
 
                 // Start a new timer based on the status validity period
-                const time_t now = time(nullptr);
+                const time_t now = timeNow();
                 const time_t valid_until = pva_status.status_valid_until_date.t;
                 const time_t valid_from = pva_status.status_date.t;
 
@@ -157,7 +157,7 @@ void SSLContext::restartStatusValidityTimerFromCertStatus() const {
 
     // Calculate the remaining time from the status validity date
     if (cert_status.status_valid_until_date.t > 0) {
-        const time_t now = time(nullptr);
+        const time_t now = timeNow();
         if (cert_status.status_valid_until_date.t > now) {
             timeval delay{};
             delay.tv_sec = cert_status.status_valid_until_date.t - now;
@@ -744,7 +744,7 @@ void SSLPeerStatusAndMonitor::restartStatusValidityTimerFromCertStatus() {
 
     // Calculate the remaining time from the status validity date
     if (!status.isPermanent() && status.status_valid_until_date.t > 0) {
-        const time_t now = time(nullptr);
+        const time_t now = timeNow();
         if (status.status_valid_until_date.t > now) {
             const auto status_validity_seconds_remaining = status.status_valid_until_date.t - now;
             log_debug_printf(watcher, "Counting down Peer Certificate validity: %ld seconds\n", status_validity_seconds_remaining);
@@ -943,7 +943,7 @@ const X509 *SSLContext::getEntityCertificate() const {
 
 bool SSLContext::hasExpired() const {
     if (!ctx) throw std::invalid_argument("NULL");
-    const auto now = time(nullptr);
+    const auto now = timeNow();
     const auto cert = getEntityCertificate();
     if (!cert) return false;
     const certs::CertDate expiry_date = X509_get_notAfter(cert);
