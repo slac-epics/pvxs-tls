@@ -66,6 +66,22 @@ class CertStatusNoExtensionException final : public CertStatusException {
     explicit CertStatusNoExtensionException(const std::string& message) : CertStatusException(message) {}
 };
 
+/** @brief Thrown when a certificate's status-PV extension IS present but its
+ * value cannot be decoded (a malformed extension value).
+ */
+class CertStatusExtensionDecodeException final : public CertStatusException {
+   public:
+    explicit CertStatusExtensionDecodeException(const std::string& message) : CertStatusException(message) {}
+};
+
+/** @brief Thrown when the certificate ID (issuer id + serial) cannot be derived
+ * from a certificate (unreadable Authority Key Identifier or serial number).
+ */
+class CertStatusIdException final : public CertStatusException {
+   public:
+    explicit CertStatusIdException(const std::string& message) : CertStatusException(message) {}
+};
+
 class CertStatusSubscriptionException final : public CertStatusException {
    public:
     explicit CertStatusSubscriptionException(const std::string& message) : CertStatusException(message) {}
@@ -854,7 +870,6 @@ class CertStatusManager {
      */
     static std::string getCertIdFromCert(const X509 *cert_ptr);
     static std::string getCertIdFromSerialAndIssuer(const std::string &issuer_id, const std::string &serial);
-    static std::string getCertIdFromStatusPv(const std::string &status_pv);
 
     /**
      * @brief Get the status PV from a Cert.

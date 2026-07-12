@@ -562,7 +562,7 @@ X509_EXTENSION *CertStatusManager::getConfigExtension(const X509 *certificate) {
 std::string CertStatusManager::getIssuerIdFromCert(const X509* cert_ptr) {
     const ossl_ptr<AUTHORITY_KEYID> akid(static_cast<AUTHORITY_KEYID*>(X509_get_ext_d2i(cert_ptr, NID_authority_key_identifier, nullptr, nullptr)),
                                        false);
-    if (!akid || !akid->keyid) throw CertStatusNoExtensionException("Failed to get Authority Key Identifier.");
+    if (!akid || !akid->keyid) throw CertStatusIdException("Failed to get Authority Key Identifier.");
 
     // Convert the first 8 chars to hex
     std::stringstream ss;
@@ -576,19 +576,19 @@ std::string CertStatusManager::getIssuerIdFromCert(const X509* cert_ptr) {
 std::string CertStatusManager::getSerialFromCert(const X509* cert_ptr) {
     const ASN1_INTEGER* serial = X509_get0_serialNumber(cert_ptr);
     if (!serial) {
-        throw CertStatusNoExtensionException("Failed to get Serial Number from certificate.");
+        throw CertStatusIdException("Failed to get Serial Number from certificate.");
     }
 
     // Convert ASN1_INTEGER to BIGNUM
     const ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr), false);
     if (!bn) {
-        throw CertStatusNoExtensionException("Failed to convert Serial Number to BIGNUM.");
+        throw CertStatusIdException("Failed to convert Serial Number to BIGNUM.");
     }
 
     // Convert BIGNUM to decimal string
     char* decimal_str = BN_bn2dec(bn.get());
     if (!decimal_str) {
-        throw CertStatusNoExtensionException("Failed to convert Serial Number to string.");
+        throw CertStatusIdException("Failed to convert Serial Number to string.");
     }
 
     // Create a C++ string and free the C string
@@ -608,21 +608,6 @@ std::string CertStatusManager::getCertIdFromSerialAndIssuer(const std::string &i
     return SB() << issuer_id << ":" << std::setw(20) << std::setfill('0') << serial;
 }
 
-std::string CertStatusManager::getCertIdFromStatusPv(const std::string &status_pv) {
-    if (status_pv.empty()) throw CertStatusNoExtensionException("status_pv cannot be empty.");
-    // Parse the trailing "<issuer>:<serial>" structurally (prefix-length-agnostic, serial-width-agnostic).
-    const size_t last = status_pv.rfind(':');
-    if (last == std::string::npos || last == 0) throw CertStatusNoExtensionException("status_pv missing serial separator.");
-    const size_t prev = status_pv.rfind(':', last - 1);
-    if (prev == std::string::npos) throw CertStatusNoExtensionException("status_pv missing issuer separator.");
-    const std::string issuer = status_pv.substr(prev + 1, last - prev - 1);
-    const std::string serial = status_pv.substr(last + 1);
-    if (issuer.empty() || serial.empty()) throw CertStatusNoExtensionException("status_pv has empty issuer or serial.");
-    // Re-canonicalise so the result is byte-identical to certIdFromOCSPCertId's output.
-    return getCertIdFromSerialAndIssuer(issuer, serial);
-}
-
-
 /**
  * @brief Get the string value of a custom extension by NID from a certificate.
  *
@@ -639,31 +624,31 @@ std::string CertStatusManager::getStatusPvFromCert(const X509 *cert) {
 
     // Retrieve the extension data which is an ASN1_OCTET_STRING object containing DER-encoded IA5String
     const ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(extension);
-    if (!ext_data) throw CertStatusNoExtensionException("Failed to get data from the Certificate-Status-PV extension.");
+    if (!ext_data) throw CertStatusExtensionDecodeException("Failed to get data from the Certificate-Status-PV extension.");
 
     // Get the DER-encoded data
     const unsigned char *data = ASN1_STRING_get0_data(ext_data);
-    if (!data) throw CertStatusNoExtensionException("Failed to extract data from ASN1_STRING.");
+    if (!data) throw CertStatusExtensionDecodeException("Failed to extract data from ASN1_STRING.");
 
     const int length = ASN1_STRING_length(ext_data);
-    if (length < 0) throw CertStatusNoExtensionException("Invalid length of ASN1_STRING data.");
+    if (length < 0) throw CertStatusExtensionDecodeException("Invalid length of ASN1_STRING data.");
 
     // Decode the DER-encoded IA5String
     const unsigned char *p = data;
     const ossl_ptr<ASN1_IA5STRING> ia5_str(d2i_ASN1_IA5STRING(nullptr, &p, length), false);
     if (!ia5_str) {
-        throw CertStatusNoExtensionException("Failed to decode DER-encoded IA5String from extension.");
+        throw CertStatusExtensionDecodeException("Failed to decode DER-encoded IA5String from extension.");
     }
 
     // Extract the string value from the IA5String
     const auto str_data = reinterpret_cast<const char *>(ASN1_STRING_get0_data(ia5_str.get()));
     if (!str_data) {
-        throw CertStatusNoExtensionException("Failed to get data from decoded IA5String.");
+        throw CertStatusExtensionDecodeException("Failed to get data from decoded IA5String.");
     }
 
     const size_t str_length = ASN1_STRING_length(ia5_str.get());
     if (str_length < 0) {
-        throw CertStatusNoExtensionException("Invalid length of decoded IA5String data.");
+        throw CertStatusExtensionDecodeException("Invalid length of decoded IA5String data.");
     }
 
     // Return the data as a std::string
