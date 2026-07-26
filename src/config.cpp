@@ -417,8 +417,7 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
         if ( sep == std::string::npos)
             sep = opt.size();
         auto key(opt.substr(0, sep));
-        // sep<opt.size() means an '=' was present; otherwise the token is
-        // valueless (e.g. no_stapling, no_tcp) and val is empty.
+        // valueless tokens (e.g. no_stapling) get an empty val
         auto val(sep < opt.size() ? opt.substr(sep+1) : std::string());
 
         if(key=="client_cert") {
@@ -449,13 +448,6 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
                 conf.disableStapling();
             else
                 log_warn_printf(config, "Ignore unknown TLS option `no_stapling` value %s.  no value expected\n", opt.c_str());
-        } else if (key == "no_tcp") {
-            // TLS-only transport policy: disable the plaintext TCP listener and
-            // advertise only the TLS endpoint.  Flag-style token, no value.
-            if ( val.empty())
-                conf.tls_disable_plain_tcp = true;
-            else
-                log_warn_printf(config, "Ignore unknown TLS option `no_tcp` value %s.  no value expected\n", opt.c_str());
         } else {
             log_warn_printf(config, "Ignore unknown TLS option key %s\n", opt.c_str());
         }
@@ -489,8 +481,6 @@ std::string printTLSOptions(const ConfigCommon& conf) {
         opts.push_back("no_revocation_check");
     if ( conf.isStaplingDisabled())
         opts.push_back("no_stapling");
-    if ( conf.tls_disable_plain_tcp)
-        opts.push_back("no_tcp");
     return join_addr(opts);
 }
 #endif
@@ -504,18 +494,26 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     PickOne pick_another_one{defs, useenv};
 
     if(pickone({"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
-        try {
-            self.tcp_port = parseTo<uint64_t>(pickone.val);
-        }catch(std::exception& e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+        if(pickone.val=="NO") {
+            self.tcp_disabled = true;
+        } else {
+            try {
+                self.tcp_port = parseTo<uint64_t>(pickone.val);
+            }catch(std::exception& e) {
+                log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+            }
         }
     }
 
     if(pickone({"EPICS_PVAS_BROADCAST_PORT", "EPICS_PVA_BROADCAST_PORT"})) {
-        try {
-            self.udp_port = parseTo<uint64_t>(pickone.val);
-        }catch(std::exception& e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+        if(pickone.val=="NO") {
+            self.udp_disabled = true;
+        } else {
+            try {
+                self.udp_port = parseTo<uint64_t>(pickone.val);
+            }catch(std::exception& e) {
+                log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+            }
         }
     }
 
@@ -581,10 +579,14 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 
     // EPICS_PVAS_TLS_PORT
     if (pickone({"EPICS_PVAS_TLS_PORT", "EPICS_PVA_TLS_PORT"})) {
-        try {
-            self.tls_port = parseTo<uint64_t>(pickone.val);
-        } catch (std::exception& e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+        if (pickone.val=="NO") {
+            self.tls_disabled = true;
+        } else {
+            try {
+                self.tls_port = parseTo<uint64_t>(pickone.val);
+            } catch (std::exception& e) {
+                log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+            }
         }
     }
 
@@ -641,8 +643,8 @@ Config& Config::applyDefs(const std::map<std::string, std::string>& defs) {
 }
 
 void Config::updateDefs(defs_t& defs) const {
-    defs["EPICS_PVA_BROADCAST_PORT"] = defs["EPICS_PVAS_BROADCAST_PORT"] = std::to_string(udp_port);
-    defs["EPICS_PVA_SERVER_PORT"] = defs["EPICS_PVAS_SERVER_PORT"] = std::to_string(tcp_port);
+    defs["EPICS_PVA_BROADCAST_PORT"] = defs["EPICS_PVAS_BROADCAST_PORT"] = udp_disabled ? "NO" : std::to_string(udp_port);
+    defs["EPICS_PVA_SERVER_PORT"] = defs["EPICS_PVAS_SERVER_PORT"] = tcp_disabled ? "NO" : std::to_string(tcp_port);
     defs["EPICS_PVA_AUTO_ADDR_LIST"] = defs["EPICS_PVAS_AUTO_BEACON_ADDR_LIST"] = auto_beacon ? "YES" : "NO";
 
     if (!beaconDestinations.empty()) defs["EPICS_PVA_ADDR_LIST"] = defs["EPICS_PVAS_BEACON_ADDR_LIST"] = join_addr(beaconDestinations);
@@ -664,7 +666,7 @@ void Config::updateDefs(defs_t& defs) const {
     defs["EPICS_PVAS_TLS_OPTIONS"] = printTLSOptions(*this);
 
     // EPICS_PVAS_TLS_PORT
-    defs["EPICS_PVA_TLS_PORT"] = defs["EPICS_PVAS_TLS_PORT"] = std::to_string(tls_port);
+    defs["EPICS_PVA_TLS_PORT"] = defs["EPICS_PVAS_TLS_PORT"] = tls_disabled ? "NO" : std::to_string(tls_port);
 
     // EPICS_PVAS_CERT_PV_PREFIX
     if (!getCertPvPrefix().empty()) defs["EPICS_PVAS_CERT_PV_PREFIX"] = getCertPvPrefix();

@@ -505,6 +505,15 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 #endif
     effective.expand();
 
+    if(effective.tcp_disabled) {
+#ifdef PVXS_ENABLE_OPENSSL
+        if(effective.tls_disabled)
+            throw std::runtime_error("EPICS_PVAS_SERVER_PORT=NO with EPICS_PVAS_TLS_PORT=NO: no transport left to serve");
+#else
+        throw std::runtime_error("EPICS_PVAS_SERVER_PORT=NO requires TLS support: no transport left to serve");
+#endif
+    }
+
     beaconSender4.set_broadcast(true);
 
     auto manager = UDPManager::instance(effective.shareUDP());
@@ -529,7 +538,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 
         addr.addr.setPort(effective.udp_port);
 
-        listeners.push_back(manager.onSearch(addr, cb));
+        if(!effective.udp_disabled) listeners.push_back(manager.onSearch(addr, cb));
 
         // update to allow udp_port==0
         effective.udp_port = addr.addr.port();
@@ -544,14 +553,14 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
             auto any6(addr);
             any6.addr = SockAddr::any(AF_INET6);
 
-            listeners.push_back(manager.onSearch(any6, cb));
+            if(!effective.udp_disabled) listeners.push_back(manager.onSearch(any6, cb));
 
         } else if(addr.addr.family()==AF_INET6 && addr.addr.isAny()) {
             // if listening on [::], also listen on 0.0.0.0
             auto any4(addr);
             any4.addr = SockAddr::any(AF_INET);
 
-            listeners.push_back(manager.onSearch(any4, cb));
+            if(!effective.udp_disabled) listeners.push_back(manager.onSearch(any4, cb));
         }
 
         if(evsocket::ipstack!=evsocket::Winsock
@@ -564,7 +573,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
              */
             for(auto bcast : dummy.broadcasts(&addr.addr)) {
                 bcast.setPort(addr.addr.port());
-                listeners.push_back(manager.onSearch(bcast, cb));
+                if(!effective.udp_disabled) listeners.push_back(manager.onSearch(bcast, cb));
             }
         }
     }
@@ -669,7 +678,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
         bool firstiface = true;
         // TLS-only transport: do not bind any plaintext TCP listener.  The
         // tlsifaces copy above preserves the interface list for the TLS bind.
-        if(!effective.tls_disable_plain_tcp) {
+        if(!effective.tcp_disabled) {
             for(auto& addr : tcpifaces) {
                     if (addr.port() == 0) addr.setPort(effective.tcp_port);
 
@@ -704,10 +713,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
         }
     });
 
-    if(effective.tls_disable_plain_tcp) {
-        // Startup diagnostics for TLS-only transport mode.  Name the mode and
-        // its consequence rather than the bare token, so an operator who has
-        // never seen `no_tcp` understands what is disabled.
+    if(effective.tcp_disabled) {
         log_info_printf(serversetup, "transport: tls-only (plaintext TCP listener disabled)%s", "\n");
 
 #ifdef PVXS_ENABLE_OPENSSL
@@ -718,8 +724,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
                             " -- anonymous TLS clients will still be accepted%s", "\n");
         }
 
-        // If neither transport can serve (no usable TLS listener under no_tcp),
-        // the server is unreachable.  WARN-and-start, never abort.
+        // TLS unconfigured (as opposed to explicitly disabled, which throws above)
         if(!effective.isTlsConfigured()) {
             log_warn_printf(serversetup, "TLS-only transport mode active but TLS listener"
                             " could not start; this server is unreachable%s", "\n");
@@ -828,7 +833,7 @@ void Server::Pvt::start()
     {
         timeval immediate = {0,0};
         // send first beacon immediately
-        if(event_add(beaconTimer.get(), &immediate))
+        if(!effective.udp_disabled && event_add(beaconTimer.get(), &immediate))
             log_err_printf(serversetup, "Error enabling beacon timer on\n%s", "");
 
         state = Running;
@@ -1005,7 +1010,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 
     // TLS-only transport: a non-TLS search must get no reply, so the plaintext
     // TCP arm is gated off.
-    const bool tlsOnly = effective.tls_disable_plain_tcp;
+    const bool tlsOnly = effective.tcp_disabled;
 
     if(tlsOnly && nreply != 0 && msg.protoTCP && !msg.protoTLS && canRespondToTcpSearch()) {
         // would have replied with a tcp endpoint; suppressed by policy.
@@ -1084,7 +1089,7 @@ void Server::Pvt::doBeacons(short evt)
     // anything else (pvAccessCPP clientContextImpl.cpp:2789-2791; phoebus
     // ClientUDPHandler.java:253-258 logs a warning then discards), so they
     // ignore these beacons.
-    if(effective.tls_disable_plain_tcp) {
+    if(effective.tcp_disabled) {
         to_wire(M, uint16_t(effective.tls_port));
         to_wire(M, "tls");
     } else {

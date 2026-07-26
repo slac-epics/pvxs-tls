@@ -1258,7 +1258,7 @@ void testClientLocalCertUnknownThenGood() {
 }
 
 // ----------------------------------------------------------------------------
-// TLS-only transport mode (EPICS_PVAS_TLS_OPTIONS=no_tcp)
+// TLS-only transport mode (EPICS_PVAS_SERVER_PORT=NO)
 // ----------------------------------------------------------------------------
 
 namespace {
@@ -1378,56 +1378,78 @@ struct LogCapture {
 };
 std::string LogCapture::buf;
 
-// 8.9 + 7a: token-parsing matrix and per-axis independence.
+// 8.9 + 7a: EPICS_PVAS_SERVER_PORT / EPICS_PVAS_TLS_PORT "NO" parsing.
 void testNoTcpTokenParsing() {
     testShow() << __func__;
 
     struct Case {
-        const char* opts;
-        bool expectNoTcp;
-        bool expectRequire;
+        const char* server_port;
+        const char* tls_port;
+        const char* bcast_port;
+        bool expectTcpDisabled;
+        bool expectTlsDisabled;
+        bool expectUdpDisabled;
     };
     const Case cases[] = {
-        {"", false, false},
-        {"no_tcp", true, false},
-        {"client_cert=require", false, true},
-        {"client_cert=require no_tcp", true, true},
-        {"no_tcp client_cert=require", true, true},
-        {"no_tcp no_stapling", true, false},
-        {"unknown_token no_tcp", true, false},
+        {"5075", "5076", "5076", false, false, false},
+        {"NO", "5076", "5076", true, false, false},
+        {"5075", "NO", "5076", false, true, false},
+        {"5075", "5076", "NO", false, false, true},
+        {"NO", "NO", "5076", true, true, false},
     };
 
     for(const auto& c : cases) {
         auto conf(server::Config::isolated());
-        conf.applyDefs({{"EPICS_PVAS_TLS_OPTIONS", c.opts}});
-        testEq(conf.tls_disable_plain_tcp, c.expectNoTcp)
-            << "no_tcp from \"" << c.opts << "\"";
-        testEq(conf.tls_client_cert_required == server::Config::Require, c.expectRequire)
-            << "client_cert=require from \"" << c.opts << "\"";
+        conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", c.server_port},
+                        {"EPICS_PVAS_TLS_PORT", c.tls_port},
+                        {"EPICS_PVAS_BROADCAST_PORT", c.bcast_port}});
+        testEq(conf.tcp_disabled, c.expectTcpDisabled)
+            << "EPICS_PVAS_SERVER_PORT=" << c.server_port;
+        testEq(conf.tls_disabled, c.expectTlsDisabled)
+            << "EPICS_PVAS_TLS_PORT=" << c.tls_port;
+        testEq(conf.udp_disabled, c.expectUdpDisabled)
+            << "EPICS_PVAS_BROADCAST_PORT=" << c.bcast_port;
+    }
+
+    // client_cert=require is independent of the port settings
+    {
+        auto conf(server::Config::isolated());
+        conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"},
+                        {"EPICS_PVAS_TLS_OPTIONS", "client_cert=require"}});
+        testTrue(conf.tcp_disabled) << "tcp disabled";
+        testTrue(conf.tls_client_cert_required == server::Config::Require) << "require kept";
     }
 }
 
-// 8.8(a): printTLSOptions round-trips the no_tcp token via updateDefs().
+// 8.8(a): updateDefs() round-trips the NO values.
 void testNoTcpPrintTLSOptions() {
     testShow() << __func__;
 
     {
         auto conf(server::Config::isolated());
-        conf.applyDefs({{"EPICS_PVAS_TLS_OPTIONS", "no_tcp"}});
+        conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}, {"EPICS_PVAS_BROADCAST_PORT", "NO"}});
         std::map<std::string, std::string> defs;
         conf.updateDefs(defs);
-        const auto& opts = defs["EPICS_PVAS_TLS_OPTIONS"];
-        testTrue(opts.find("no_tcp") != std::string::npos)
-            << "printTLSOptions must contain no_tcp when set: \"" << opts << "\"";
+        testEq(defs["EPICS_PVAS_SERVER_PORT"], "NO");
+        testEq(defs["EPICS_PVAS_BROADCAST_PORT"], "NO");
     }
     {
         auto conf(server::Config::isolated());
         std::map<std::string, std::string> defs;
         conf.updateDefs(defs);
-        const auto& opts = defs["EPICS_PVAS_TLS_OPTIONS"];
-        testTrue(opts.find("no_tcp") == std::string::npos)
-            << "printTLSOptions must NOT contain no_tcp when unset: \"" << opts << "\"";
+        testNotEq(defs["EPICS_PVAS_SERVER_PORT"], "NO");
     }
+}
+
+// Both transports disabled is fatal at server construction.
+void testNoTcpNoTlsFatal() {
+    testShow() << __func__;
+
+    auto conf(server::Config::isolated());
+    conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}, {"EPICS_PVAS_TLS_PORT", "NO"}});
+    testThrows<std::runtime_error>([&conf]() {
+        auto serv(conf.build());
+    });
 }
 
 // 8.8(b) + 7a: startup INFO transport line and dangerous-combo WARN capture.
@@ -1440,7 +1462,7 @@ void testNoTcpStartupDiagnostics() {
     {
         LogCapture cap;
         auto serv_conf(server::Config::isolated());
-        serv_conf.applyDefs({{"EPICS_PVAS_TLS_OPTIONS", "no_tcp"}});
+        serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
         serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
         auto serv(serv_conf.build());
         auto log = cap.flush();
@@ -1467,7 +1489,7 @@ void testNoTcpStartupDiagnostics() {
     {
         LogCapture cap;
         auto serv_conf(server::Config::isolated());
-        serv_conf.applyDefs({{"EPICS_PVAS_TLS_OPTIONS", "no_tcp client_cert=require"}});
+        serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}, {"EPICS_PVAS_TLS_OPTIONS", "client_cert=require"}});
         serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
         auto serv(serv_conf.build());
         auto log = cap.flush();
@@ -1486,7 +1508,7 @@ void testNoTcpListenerNotBound() {
     testShow() << __func__;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.applyDefs({{"EPICS_PVAS_TLS_OPTIONS", "no_tcp"}});
+    serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
     serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
 
     auto mbox(server::SharedPV::buildReadonly());
@@ -1511,7 +1533,7 @@ void testNoTcpListenerNotBound() {
     conn.reset();
 }
 
-// 8.7: no_tcp with no TLS keychain -> WARN, construction completes, nothing bound.
+// 8.7: tls-only mode with no TLS keychain -> WARN, construction completes, nothing bound.
 void testNoTcpNoKeychainWarns() {
     testShow() << __func__;
 
@@ -1519,7 +1541,7 @@ void testNoTcpNoKeychainWarns() {
     LogCapture cap;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.applyDefs({{"EPICS_PVAS_TLS_OPTIONS", "no_tcp"}});
+    serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
     // intentionally no keychain
     auto serv(serv_conf.build()); // must not throw
     auto log = cap.flush();
@@ -1527,7 +1549,7 @@ void testNoTcpNoKeychainWarns() {
     const auto eff(serv.config());
     testEq(eff.tcp_port, 0u) << "no plaintext listener bound";
     testTrue(log.find("unreachable") != std::string::npos)
-        << "unreachable WARN expected when no_tcp set and TLS not configured";
+        << "unreachable WARN expected in tls-only mode and TLS not configured";
 
     logger_level_clear();
     logger_config_env();
@@ -1538,7 +1560,7 @@ void testNoTcpSearchGating() {
     testShow() << __func__;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.applyDefs({{"EPICS_PVAS_TLS_OPTIONS", "no_tcp"}});
+    serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
     serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
 
     auto mbox(server::SharedPV::buildReadonly());
@@ -1553,7 +1575,7 @@ void testNoTcpSearchGating() {
     // 8.3: tcp-only SEARCH -> no reply
     {
         auto r = probeSearch(udp, {"tcp"});
-        testTrue(!r.replied) << "no reply to a tcp-only SEARCH under no_tcp";
+        testTrue(!r.replied) << "no reply to a tcp-only SEARCH in tls-only mode";
     }
     // 8.4: tls+tcp SEARCH -> reply with TLS endpoint only
     {
@@ -1613,12 +1635,12 @@ void captureBeaconInto(server::Config& serv_conf, std::string& gotProto,
     got = rx.wait(30.0);
 }
 
-// 6.4: beacon emitted with proto="tls" and tls_port when no_tcp set.
+// 6.4: beacon emitted with proto="tls" and tls_port in tls-only mode.
 void testNoTcpBeacon() {
     testShow() << __func__;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.applyDefs({{"EPICS_PVAS_TLS_OPTIONS", "no_tcp"}});
+    serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
     serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
 
     std::string gotProto; uint16_t gotPort=0; ServerGUID gotGuid{}; bool got=false;
@@ -1633,9 +1655,9 @@ void testNoTcpBeacon() {
     }
 }
 
-// 8.2a: no_tcp x non-GOOD cert state -> ZERO replies (no tcp fallback).
+// 8.2a: tls-only mode x non-GOOD cert state -> ZERO replies (no tcp fallback).
 // When the server's entity-cert status gate makes canRespondToTlsSearch() false,
-// the TLS search arm is blocked; under no_tcp the plaintext tcp arm is also gated
+// the TLS search arm is blocked; in tls-only mode the plaintext tcp arm is also gated
 // off by policy, so a SEARCH gets no reply at all -- neither a tcp nor a tls
 // endpoint.  This proves the policy gate and the cert-state gate compose (the
 // server does NOT silently fall back to plaintext).
@@ -1649,14 +1671,14 @@ void testNoTcpBeacon() {
 // UNKNOWN here produced a tls reply).  The state that actually drives
 // canRespondToTlsSearch() false (state < TcpReady) on a live server is BAD, which
 // enters DegradedMode permanently.  We therefore inject BAD to exercise the
-// cert-state-gate x no_tcp composition.  (Recovery is not asserted because BAD ->
+// cert-state-gate x tls-only composition.  (Recovery is not asserted because BAD ->
 // DegradedMode is permanent; the healthy TLS search path is covered by
 // testNoTcpSearchGating.)
 void testNoTcpTcpOnlyState() {
     testShow() << __func__;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.applyDefs({{"EPICS_PVAS_TLS_OPTIONS", "no_tcp"}});
+    serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
     serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
 
     auto mbox(server::SharedPV::buildReadonly());
@@ -1667,7 +1689,7 @@ void testNoTcpTcpOnlyState() {
     const auto eff(serv.config());
     const uint16_t udp = eff.udp_port;
     testTrue(udp != 0u) << "server has a UDP port";
-    testEq(eff.tcp_port, 0u) << "no plaintext listener bound under no_tcp";
+    testEq(eff.tcp_port, 0u) << "no plaintext listener bound in tls-only mode";
 
     // drive entity-cert status to a non-GOOD gate state so canRespondToTlsSearch()
     // is now false (state drops below TcpReady).
@@ -1675,31 +1697,31 @@ void testNoTcpTcpOnlyState() {
     epicsThread::sleep(0.5);
 
     // tls+tcp SEARCH: tls arm blocked by the cert-state gate, tcp arm removed by
-    // the no_tcp policy -> no reply at all.
+    // the tls-only policy -> no reply at all.
     {
         auto r = probeSearch(udp, {"tls", "tcp"});
-        testTrue(!r.replied) << "no reply to tls+tcp SEARCH while TLS gated under no_tcp";
+        testTrue(!r.replied) << "no reply to tls+tcp SEARCH while TLS gated in tls-only mode";
     }
     // tcp-only SEARCH: tcp arm removed by policy -> no reply (no plaintext fallback).
     {
         auto r = probeSearch(udp, {"tcp"});
-        testTrue(!r.replied) << "no reply to tcp-only SEARCH while TLS gated under no_tcp";
+        testTrue(!r.replied) << "no reply to tcp-only SEARCH while TLS gated in tls-only mode";
     }
 }
 
 // 5.5: connected-search gate (serverchan.cpp handle_SEARCH).  A SEARCH arriving
 // over an *established* connection must not advertise a plaintext tcp endpoint
-// under no_tcp.  Driven from the public API by configuring the no_tcp server as a
+// in tls-only mode.  Driven from the public API by configuring the tls-only server as a
 // TLS name server (pvas://): the client opens a TLS connection and sends its
 // SEARCH over it (ContextImpl tx to nameServers), exercising
-// ServerConn::handle_SEARCH.  With tcp_port==0 and the no_tcp policy gate, the
+// ServerConn::handle_SEARCH.  With tcp_port==0 and the tls-only policy gate, the
 // only way the channel can resolve is via the advertised tls endpoint -- which is
 // what the successful TLS connect below confirms.
 void testNoTcpConnectedSearch() {
     testShow() << __func__;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.applyDefs({{"EPICS_PVAS_TLS_OPTIONS", "no_tcp"}});
+    serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
     serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
 
     auto mbox(server::SharedPV::buildReadonly());
@@ -1708,7 +1730,7 @@ void testNoTcpConnectedSearch() {
     serv.start();
 
     const auto eff(serv.config());
-    testEq(eff.tcp_port, 0u) << "no plaintext listener bound under no_tcp";
+    testEq(eff.tcp_port, 0u) << "no plaintext listener bound in tls-only mode";
 
     // Connect only via the server's TLS endpoint as a name server: no UDP/bcast
     // discovery, so the channel can only resolve through a connected SEARCH.
@@ -1749,7 +1771,7 @@ void testDefaultBeaconUnchanged() {
 } // namespace
 
 MAIN(testtls) {
-    testPlan(129);
+    testPlan(134);
     testSetup();
     logger_config_env();
     testSuspendedStatusClass();
@@ -1776,9 +1798,10 @@ MAIN(testtls) {
     testClientLocalCertBadThenReconfigureGood();
     testServerLocalCertUnknownThenGood();
     testClientLocalCertUnknownThenGood();
-    // TLS-only transport mode (EPICS_PVAS_TLS_OPTIONS=no_tcp)
+    // TLS-only transport mode (EPICS_PVAS_SERVER_PORT=NO)
     testNoTcpTokenParsing();
     testNoTcpPrintTLSOptions();
+    testNoTcpNoTlsFatal();
     testNoTcpStartupDiagnostics();
     testNoTcpListenerNotBound();
     testNoTcpNoKeychainWarns();
