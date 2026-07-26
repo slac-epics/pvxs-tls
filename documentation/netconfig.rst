@@ -49,6 +49,53 @@ or fallback to use the associated ``$EPICS_PVA_*`` if set.
 +----------------------------------+--------+--------+
 
 
+.. _tlsoptions:
+
+TLS Options
+-----------
+
+A server's TLS behavior can be tuned through the ``$EPICS_PVAS_TLS_OPTIONS`` environment
+variable (clients use ``$EPICS_PVA_TLS_OPTIONS``).  Its value is a space-separated list of
+tokens.  Unknown tokens are logged with a warning and ignored, so configuration files
+containing newer tokens remain safe to read with older PVXS binaries.
+
+Disabling transports
+--------------------
+
+The server port variables accept the special value ``NO`` to disable the corresponding
+transport for the lifetime of the process (read once at server construction; changing the
+policy requires a restart):
+
+* ``EPICS_PVAS_SERVER_PORT=NO`` disables the plaintext PVAccess TCP listener.  The server
+  only accepts TLS connections: its SEARCH replies and beacons advertise only the TLS
+  endpoint, and a ``tcp``-only SEARCH receives no answer at all, as if the plaintext port
+  were blocked by a firewall.  A startup log line, ``transport: tls-only (plaintext TCP
+  listener disabled)``, confirms the policy is in effect.
+* ``EPICS_PVAS_TLS_PORT=NO`` disables TLS.
+* ``EPICS_PVAS_BROADCAST_PORT=NO`` disables the UDP search listeners and beacons; discovery
+  then requires a name server.
+
+Disabling both TCP and TLS leaves no transport to serve and is a fatal error at server
+construction.
+
+Disabling TCP is a *transport*-axis control, independent of the ``client_cert=require``
+*authentication*-axis control:
+
+* neither — both transports, anonymous TLS clients accepted (the default).
+* ``client_cert=require`` only — plaintext TCP is still up, so anonymous clients can still
+  reach the server over TCP.  Requiring a client certificate does **not** by itself stop
+  plaintext access; disabling TCP exists to close that gap.
+* ``EPICS_PVAS_SERVER_PORT=NO`` only — plaintext TCP is closed, but anonymous TLS clients
+  are still accepted.  The server logs a single startup warning for this weakened posture.
+* both — fully locked down: TLS transport only, every client must present a valid
+  certificate.  No warning is emitted.
+
+Disabling TCP is *operator policy* and must not be confused with the cert-status-driven
+``TcpOnly`` state (``tcp-only-cert-state``), which is dynamic cert *state* driven by PVACMS
+status notifications.  A server with TCP disabled whose certificate resolves to ``TcpOnly``
+is unreachable until the certificate becomes valid; this is the intended security posture
+(never fall back to plaintext), and the server logs a warning so the condition is visible.
+
 .. _addrspec:
 
 Address Spec.
