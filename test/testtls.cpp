@@ -1208,6 +1208,7 @@ void testNoTcpTokenParsing() {
         {"5075", "NO", "5076", false, true, false},
         {"5075", "5076", "NO", false, false, true},
         {"NO", "NO", "5076", true, true, false},
+        {"no", "Off", "FALSE", true, true, true},
     };
 
     for(const auto& c : cases) {
@@ -1530,7 +1531,7 @@ void testDefaultBeaconUnchanged() {
 
 
 MAIN(testtls) {
-    testPlan(126);
+    testPlan(129);
     testSetup();
     logger_config_env();
     testSubjectIdentity();

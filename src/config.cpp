@@ -185,6 +185,13 @@ bool operator==(const SockEndpoint& lhs, const SockEndpoint& rhs) { return lhs.a
 
 namespace {
 
+// case-insensitive negative token, for port variables that accept "NO"
+bool isNegated(const std::string& s) {
+    std::string lower;
+    std::transform(s.begin(), s.end(), std::back_inserter(lower), ::tolower);
+    return lower=="no" || lower=="false" || lower=="off" || lower=="disabled";
+}
+
 /* Historically pvAccessJava used $EPICS_PVA_CONN_TMO as the period
  * between sending CMD_ECHO.  To avoid meta-stability apply a scaling
  * factor.
@@ -493,7 +500,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     PickOne pickone{defs, useenv};
 
     if(pickone({"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
-        if(pickone.val=="NO") {
+        if(isNegated(pickone.val)) {
             self.tcp_disabled = true;
         } else {
             try {
@@ -505,7 +512,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     }
 
     if(pickone({"EPICS_PVAS_BROADCAST_PORT", "EPICS_PVA_BROADCAST_PORT"})) {
-        if(pickone.val=="NO") {
+        if(isNegated(pickone.val)) {
             self.udp_disabled = true;
         } else {
             try {
@@ -564,7 +571,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 
     // EPICS_PVAS_TLS_PORT
     if (pickone({"EPICS_PVAS_TLS_PORT", "EPICS_PVA_TLS_PORT"})) {
-        if (pickone.val=="NO") {
+        if (isNegated(pickone.val)) {
             self.tls_disabled = true;
         } else {
             try {
