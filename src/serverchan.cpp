@@ -314,13 +314,7 @@ void ServerConn::handle_CREATE_CHANNEL()
 
         bool claimed = false;
 
-        if(iface->server->effective.tcp_disabled && !iface->isTLS) {
-            // tls-only data transport: plaintext serves search only
-            sts.code = Status::Error;
-            sts.msg = "TLS required";
-            sts.trace = "pvx:serv:tlsonly:";
-
-        } else if(chanBySID.size()==0xffffffff) {
+        if(chanBySID.size()==0xffffffff) {
             sts.code = Status::Error;
             sts.msg = "Too many Server channels";
             sts.trace = "pvx:serv:chanidoverflow:";

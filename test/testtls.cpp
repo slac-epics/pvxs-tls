@@ -1018,13 +1018,6 @@ void testNoTcpTokenParsing() {
         {"no", "Off", "FALSE", true, true, true},
     };
 
-    // NO,<alt_search_port> sets the search-only listener port
-    {
-        auto conf(server::Config::isolated());
-        conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "no,5080"}});
-        testTrue(conf.tcp_disabled) << "tcp disabled via no,<port>";
-        testEq(conf.tcp_port, 5080u) << "alternative search port applied";
-    }
 
     for(const auto& c : cases) {
         auto conf(server::Config::isolated());
@@ -1058,7 +1051,7 @@ void testNoTcpPrintTLSOptions() {
         conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}, {"EPICS_PVAS_BROADCAST_PORT", "NO"}});
         std::map<std::string, std::string> defs;
         conf.updateDefs(defs);
-        testTrue(defs["EPICS_PVAS_SERVER_PORT"].rfind("NO,", 0) == 0) << "SERVER_PORT round-trips as NO,<port>";
+        testEq(defs["EPICS_PVAS_SERVER_PORT"], "NO");
         testEq(defs["EPICS_PVAS_BROADCAST_PORT"], "NO");
     }
     {
@@ -1145,7 +1138,7 @@ void testNoTcpListenerNotBound() {
     serv.start();
 
     const auto eff(serv.config());
-    testTrue(eff.tcp_port != 0u) << "plaintext listener still bound (search-only)";
+    testEq(eff.tcp_port, 0u) << "no plaintext listener bound";
     testTrue(eff.tls_port != 0u) << "TLS listener bound on a real port";
 
     auto cli_conf(serv.clientConfig());
@@ -1160,8 +1153,7 @@ void testNoTcpListenerNotBound() {
     conn.reset();
 }
 
-// name-server discovery: TLS client searches over the plaintext connection,
-// gets the tls endpoint, and connects over TLS
+// name-server discovery for a tls-only server via a TLS name-server connection
 void testNoTcpNameServerSearch() {
     testShow() << __func__;
 
@@ -1178,25 +1170,15 @@ void testNoTcpNameServerSearch() {
     cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
     cli_conf.addressList.clear();
     cli_conf.autoAddrList = false;
-    cli_conf.nameServers = {SB() << "127.0.0.1:" << eff.tcp_port};
+    cli_conf.nameServers = {SB() << "pvas://127.0.0.1:" << eff.tls_port};
     auto cli(cli_conf.build());
     bool is_tls=false;
     auto conn(cli.connect(TEST_PV)
         .onConnect([&is_tls](const client::Connected& c){ is_tls = c.cred && c.cred->isTLS; })
         .exec());
     testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
-    testTrue(is_tls) << "name-server search over plaintext resolved to a TLS connection";
+    testTrue(is_tls) << "search and data both over TLS via pvas:// name server";
     conn.reset();
-
-    // a plain (no TLS) client via the same name server must get no claim
-    auto plain_conf(serv.clientConfig());
-    plain_conf.addressList.clear();
-    plain_conf.autoAddrList = false;
-    plain_conf.nameServers = {SB() << "127.0.0.1:" << eff.tcp_port};
-    auto plain(plain_conf.build());
-    testThrows<client::Timeout>([&plain]() {
-        plain.get(TEST_PV).exec()->wait(1.5);
-    }) << "plaintext-only client gets no claim from a tls-only server";
 }
 
 // 8.7: tls-only mode with no TLS keychain -> WARN, construction completes, nothing bound.
@@ -1213,7 +1195,7 @@ void testNoTcpNoKeychainWarns() {
     auto log = cap.flush();
 
     const auto eff(serv.config());
-    testTrue(eff.tcp_port != 0u) << "plaintext listener still bound (search-only)";
+    testEq(eff.tcp_port, 0u) << "no plaintext listener bound";
     testTrue(log.find("unreachable") != std::string::npos)
         << "unreachable WARN expected in tls-only mode and TLS not configured";
 
@@ -1301,7 +1283,7 @@ void captureBeaconInto(server::Config& serv_conf, std::string& gotProto,
     got = rx.wait(30.0);
 }
 
-// 6.4: beacon keeps proto="tcp"/tcp_port in tls-only mode (search-only port).
+// 6.4: beacon keeps proto="tcp"/tcp_port in tls-only mode (liveness ping only).
 void testNoTcpBeacon() {
     testShow() << __func__;
 
@@ -1314,8 +1296,8 @@ void testNoTcpBeacon() {
     captureBeaconInto(serv_conf, gotProto, gotPort, gotGuid, got, tcpPort, tlsPort, guid);
 
     if(testTrue(got) << "captured a beacon") {
-        testStrEq(gotProto, std::string("tcp")) << "beacon proto stays tcp (search-only port)";
-        testEq(gotPort, tcpPort) << "beacon port is the search-only tcp_port";
+        testStrEq(gotProto, std::string("tcp")) << "beacon proto stays tcp";
+        testEq(gotPort, tcpPort) << "beacon port is the configured tcp_port";
         testTrue(std::equal(gotGuid.begin(), gotGuid.end(), guid.begin()))
             << "beacon GUID matches server";
     }
@@ -1342,7 +1324,7 @@ void testNoTcpConnectedSearch() {
     serv.start();
 
     const auto eff(serv.config());
-    testTrue(eff.tcp_port != 0u) << "plaintext listener still bound (search-only)";
+    testEq(eff.tcp_port, 0u) << "no plaintext listener bound";
 
     // Connect only via the server's TLS endpoint as a name server: no UDP/bcast
     // discovery, so the channel can only resolve through a connected SEARCH.
@@ -1381,7 +1363,7 @@ void testNoTcpReconfigure() {
     serv.reconfigure(newconf);
 
     const auto eff(serv.config());
-    testTrue(eff.tcp_port != 0u) << "plaintext search-only listener after reconfigure";
+    testEq(eff.tcp_port, 0u) << "no plaintext listener after reconfigure";
     testTrue(eff.tls_port != 0u) << "TLS listener bound after reconfigure";
 
     auto cli_conf(serv.clientConfig());
@@ -1434,7 +1416,7 @@ void testDefaultBeaconUnchanged() {
 
 
 MAIN(testtls) {
-    testPlan(112);
+    testPlan(109);
     testSetup();
     logger_config_env();
     testLegacyMode();

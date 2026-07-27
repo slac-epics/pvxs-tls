@@ -591,15 +591,17 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
         decltype(tcpifaces) tlsifaces(tcpifaces); // copy before any setPort()
 #endif
         bool firstiface = true;
-        // The plaintext TCP listener is always bound; under tcp_disabled it
-        // serves SEARCH only (name-server use) and refuses data channels.
-        for(auto& addr : tcpifaces) {
-                if (addr.port() == 0) addr.setPort(effective.tcp_port);
+        // tls-only: no plaintext listener.  Discovery still works via UDP (if
+        // enabled) or a TLS name-server connection (pvas://host:tls_port).
+        if(!effective.tcp_disabled) {
+            for(auto& addr : tcpifaces) {
+                    if (addr.port() == 0) addr.setPort(effective.tcp_port);
 
-            interfaces.emplace_back(addr, this, firstiface, false);
+                interfaces.emplace_back(addr, this, firstiface, false);
 
-                if (firstiface || effective.tcp_port == 0) effective.tcp_port = interfaces.back().bind_addr.port();
-            firstiface = false;
+                    if (firstiface || effective.tcp_port == 0) effective.tcp_port = interfaces.back().bind_addr.port();
+                firstiface = false;
+            }
         }
 
 #ifdef PVXS_ENABLE_OPENSSL
