@@ -942,16 +942,7 @@ void Server::Pvt::doBeacons(short evt)
 {
     log_debug_printf(serversetup, "Server beacon timer expires\n%s", "");
 
-#ifdef PVXS_ENABLE_OPENSSL
-    // tls-only with TLS not usable: nothing to advertise; keep the timer alive
-    if(effective.tcp_disabled && !canRespondToTlsSearch()) {
-        log_debug_printf(serversetup, "Beacon suppressed: tls-only and TLS not usable\n%s", "");
-        timeval interval(beaconIntervalLong);
-        if(event_add(beaconTimer.get(), &interval))
-            log_err_printf(serversetup, "Error re-enabling beacon timer\n%s", "");
-        return;
-    }
-#endif
+
 
     beaconMsg.clear();
     VectorOutBuf M(true, beaconMsg);
@@ -963,18 +954,11 @@ void Server::Pvt::doBeacons(short evt)
     to_wire(M, uint16_t(beaconChange));// change count
 
     to_wire(M, SockAddr::any(AF_INET));
-    // TLS-only transport: advertise the TLS endpoint with proto "tls".  Pre-SPVA
-    // clients check the proto string against the literal "tcp" and discard
-    // anything else (pvAccessCPP clientContextImpl.cpp:2789-2791; phoebus
-    // ClientUDPHandler.java:253-258 logs a warning then discards), so they
-    // ignore these beacons.
-    if(effective.tcp_disabled) {
-        to_wire(M, uint16_t(effective.tls_port));
-        to_wire(M, "tls");
-    } else {
-        to_wire(M, uint16_t(effective.tcp_port));
-        to_wire(M, "tcp");
-    }
+    // Always "tcp": under tcp_disabled the port serves search, which is all a
+    // beacon prompts.  Advertising "tls" here would be a separate protocol
+    // decision (and makes phoebus log a warning per beacon).
+    to_wire(M, uint16_t(effective.tcp_port));
+    to_wire(M, "tcp");
     // "NULL" serverStatus
     to_wire(M, uint8_t(0xff));
 
