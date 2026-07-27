@@ -1301,7 +1301,7 @@ void captureBeaconInto(server::Config& serv_conf, std::string& gotProto,
     got = rx.wait(30.0);
 }
 
-// 6.4: beacon emitted with proto="tls" and tls_port in tls-only mode.
+// 6.4: beacon keeps proto="tcp"/tcp_port in tls-only mode (search-only port).
 void testNoTcpBeacon() {
     testShow() << __func__;
 
@@ -1314,8 +1314,8 @@ void testNoTcpBeacon() {
     captureBeaconInto(serv_conf, gotProto, gotPort, gotGuid, got, tcpPort, tlsPort, guid);
 
     if(testTrue(got) << "captured a beacon") {
-        testStrEq(gotProto, std::string("tls")) << "beacon proto is tls";
-        testEq(gotPort, tlsPort) << "beacon port is tls_port";
+        testStrEq(gotProto, std::string("tcp")) << "beacon proto stays tcp (search-only port)";
+        testEq(gotPort, tcpPort) << "beacon port is the search-only tcp_port";
         testTrue(std::equal(gotGuid.begin(), gotGuid.end(), guid.begin()))
             << "beacon GUID matches server";
     }
