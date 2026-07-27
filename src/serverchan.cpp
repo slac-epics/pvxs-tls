@@ -243,8 +243,11 @@ void ServerConn::handle_SEARCH()
 
 #ifdef PVXS_ENABLE_OPENSSL
     // no usable transport arm: a reply would carry no endpoint (malformed); stay silent
-    if(!foundtcp && !foundtls)
+    if(!foundtcp && !foundtls) {
+        if(mustReply)
+            log_debug_printf(connio, "%s suppressing discover reply: no usable transport arm\n", peerName.c_str());
         return;
+    }
 #else
     if(nreply==0 && !mustReply && !foundtcp)
         return;
