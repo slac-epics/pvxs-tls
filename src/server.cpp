@@ -591,17 +591,15 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
         decltype(tcpifaces) tlsifaces(tcpifaces); // copy before any setPort()
 #endif
         bool firstiface = true;
-        // TLS-only transport: do not bind any plaintext TCP listener.  The
-        // tlsifaces copy above preserves the interface list for the TLS bind.
-        if(!effective.tcp_disabled) {
-            for(auto& addr : tcpifaces) {
-                    if (addr.port() == 0) addr.setPort(effective.tcp_port);
+        // The plaintext TCP listener is always bound; under tcp_disabled it
+        // serves SEARCH only (name-server use) and refuses data channels.
+        for(auto& addr : tcpifaces) {
+                if (addr.port() == 0) addr.setPort(effective.tcp_port);
 
-                interfaces.emplace_back(addr, this, firstiface, false);
+            interfaces.emplace_back(addr, this, firstiface, false);
 
-                    if (firstiface || effective.tcp_port == 0) effective.tcp_port = interfaces.back().bind_addr.port();
-                firstiface = false;
-            }
+                if (firstiface || effective.tcp_port == 0) effective.tcp_port = interfaces.back().bind_addr.port();
+            firstiface = false;
         }
 
 #ifdef PVXS_ENABLE_OPENSSL
