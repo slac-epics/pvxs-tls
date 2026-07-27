@@ -192,27 +192,14 @@ bool isNegated(const std::string& s) {
     return lower=="no" || lower=="false" || lower=="off" || lower=="disabled";
 }
 
-// port variable value "NO[,<alt_port>]": returns true when negated;
-// alt_port (if non-null) receives the optional port after the comma.
-// name==nullptr suppresses warnings (client side ignores these values).
-bool isNegatedPort(const std::string& s, unsigned short* alt_port, const char* name) {
+// port variable negation ("NO" etc.); a stray ",<port>" suffix is ignored.
+// name==nullptr suppresses the warning (client side ignores these values).
+bool isNegatedPort(const std::string& s, const char* name) {
     const auto comma(s.find(','));
     if(!isNegated(s.substr(0, comma)))
         return false;
-    if(comma!=std::string::npos && name) {
-        if(alt_port) {
-            try {
-                const auto v = pvxs::parseTo<uint64_t>(s.substr(comma+1));
-                if(v > 0xffffu)
-                    throw std::runtime_error("port out of range");
-                *alt_port = static_cast<unsigned short>(v);
-            } catch(std::exception& e) {
-                log_warn_printf(config, "%s ignoring invalid port after NO, : %s\n", name, e.what());
-            }
-        } else {
-            log_warn_printf(config, "%s ignoring port after NO, (not applicable)\n", name);
-        }
-    }
+    if(comma!=std::string::npos && name)
+        log_warn_printf(config, "%s ignoring text after NO\n", name);
     return true;
 }
 
@@ -524,7 +511,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     PickOne pickone{defs, useenv};
 
     if(pickone({"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
-        if(isNegatedPort(pickone.val, &self.tcp_port, pickone.name.c_str())) {
+        if(isNegatedPort(pickone.val, pickone.name.c_str())) {
             self.tcp_disabled = true;
         } else {
             try {
@@ -536,7 +523,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     }
 
     if(pickone({"EPICS_PVAS_BROADCAST_PORT", "EPICS_PVA_BROADCAST_PORT"})) {
-        if(isNegatedPort(pickone.val, nullptr, pickone.name.c_str())) {
+        if(isNegatedPort(pickone.val, pickone.name.c_str())) {
             self.udp_disabled = true;
         } else {
             try {
@@ -595,7 +582,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 
     // EPICS_PVAS_TLS_PORT
     if (pickone({"EPICS_PVAS_TLS_PORT", "EPICS_PVA_TLS_PORT"})) {
-        if (isNegatedPort(pickone.val, nullptr, pickone.name.c_str())) {
+        if (isNegatedPort(pickone.val, pickone.name.c_str())) {
             self.tls_disabled = true;
         } else {
             try {
@@ -655,7 +642,7 @@ Config& Config::applyDefs(const std::map<std::string, std::string>& defs) {
 
 void Config::updateDefs(defs_t& defs) const {
     defs["EPICS_PVA_BROADCAST_PORT"] = defs["EPICS_PVAS_BROADCAST_PORT"] = udp_disabled ? "NO" : std::to_string(udp_port);
-    defs["EPICS_PVA_SERVER_PORT"] = defs["EPICS_PVAS_SERVER_PORT"] = tcp_disabled ? "NO,"+std::to_string(tcp_port) : std::to_string(tcp_port);
+    defs["EPICS_PVA_SERVER_PORT"] = defs["EPICS_PVAS_SERVER_PORT"] = tcp_disabled ? "NO" : std::to_string(tcp_port);
     defs["EPICS_PVA_AUTO_ADDR_LIST"] = defs["EPICS_PVAS_AUTO_BEACON_ADDR_LIST"] = auto_beacon ? "YES" : "NO";
 
     if (!beaconDestinations.empty()) defs["EPICS_PVA_ADDR_LIST"] = defs["EPICS_PVAS_BEACON_ADDR_LIST"] = join_addr(beaconDestinations);
@@ -760,7 +747,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     PickOne pickone{defs, useenv};
 
     // negated port values (NO/off/...) are server-only; clients ignore them
-    if(pickone({"EPICS_PVA_BROADCAST_PORT"}) && !isNegatedPort(pickone.val, nullptr, nullptr)) {
+    if(pickone({"EPICS_PVA_BROADCAST_PORT"}) && !isNegatedPort(pickone.val, nullptr)) {
         try {
             self.udp_port = parseTo<uint64_t>(pickone.val);
         }catch(std::exception& e) {
@@ -772,7 +759,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         self.udp_port = 5076;
     }
 
-    if(pickone({"EPICS_PVA_SERVER_PORT", "EPICS_PVAS_SERVER_PORT"}) && !isNegatedPort(pickone.val, nullptr, nullptr)) {
+    if(pickone({"EPICS_PVA_SERVER_PORT", "EPICS_PVAS_SERVER_PORT"}) && !isNegatedPort(pickone.val, nullptr)) {
         try {
             self.tcp_port = parseTo<uint64_t>(pickone.val);
         }catch(std::exception& e) {
@@ -829,7 +816,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     }
 
     // EPICS_PVA_TLS_PORT (negated values are server-only; clients ignore them)
-    if (pickone({"EPICS_PVA_TLS_PORT"}) && !isNegatedPort(pickone.val, nullptr, nullptr)) {
+    if (pickone({"EPICS_PVA_TLS_PORT"}) && !isNegatedPort(pickone.val, nullptr)) {
         try {
             self.tls_port = parseTo<uint64_t>(pickone.val);
         } catch (std::exception& e) {

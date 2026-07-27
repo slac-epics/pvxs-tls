@@ -66,12 +66,13 @@ The server port variables accept the special value ``NO`` to disable the corresp
 transport for the lifetime of the process (read once at server construction; changing the
 policy requires a restart):
 
-* ``EPICS_PVAS_SERVER_PORT=NO[,<search_port>]`` disables plaintext PVAccess *data*: the TCP
-  listener stays bound (on ``<search_port>`` if given, otherwise the default port) but serves
-  SEARCH requests only, so name-server discovery keeps working; channel creation over
-  plaintext is refused with "TLS required".  SEARCH replies advertise only the TLS endpoint,
-  and a ``tcp``-only SEARCH receives no claim.  Beacons continue to advertise the plaintext
-  port with protocol ``tcp`` (they only prompt searches).  A startup log line,
+* ``EPICS_PVAS_SERVER_PORT=NO`` disables the plaintext PVAccess TCP listener.  The server
+  only accepts TLS connections; SEARCH replies advertise only the TLS endpoint, and a
+  ``tcp``-only SEARCH receives no claim.  Discovery works via UDP (if enabled) or a TLS
+  name-server connection: ``EPICS_PVA_NAME_SERVERS=pvas://host[:tls_port]`` (the TLS port
+  accepts ordinary TCP connections and runs the TLS handshake on each; SEARCH is served
+  over the established TLS connection).  Beacons continue to advertise the configured
+  plaintext port with protocol ``tcp`` (liveness ping only).  A startup log line,
   ``transport: tls-only (plaintext TCP listener disabled)``, confirms the policy is in
   effect.
 * ``EPICS_PVAS_TLS_PORT=NO`` disables TLS.
