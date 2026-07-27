@@ -631,6 +631,15 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
 void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw)
 {
     auto self = static_cast<ServIface*>(raw);
+#ifdef PVXS_ENABLE_OPENSSL
+    // fail fast: refuse TLS connections while the context can't complete a handshake
+    if(self->isTLS && (!self->server->tls_context || !self->server->tls_context->ctx
+                       || self->server->tls_context->state == ossl::SSLContext::DegradedMode)) {
+        log_debug_printf(connsetup, "Interface %s refusing TLS connection: context degraded\n", self->name.c_str());
+        evutil_closesocket(sock);
+        return;
+    }
+#endif
     try {
         auto conn(std::make_shared<ServerConn>(self, sock, peer, socklen));
         self->server->connections[conn.get()] = std::move(conn);
