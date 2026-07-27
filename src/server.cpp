@@ -452,14 +452,9 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 #endif
     effective.expand();
 
-    if(effective.tcp_disabled) {
-#ifdef PVXS_ENABLE_OPENSSL
-        if(effective.tls_disabled)
-            throw std::runtime_error("EPICS_PVAS_SERVER_PORT=NO with EPICS_PVAS_TLS_PORT=NO: no transport left to serve");
-#else
-        throw std::runtime_error("EPICS_PVAS_SERVER_PORT=NO requires TLS support: no transport left to serve");
-#endif
-    }
+    // expand() forces tls_disabled when built without TLS support
+    if(effective.tcp_disabled && effective.tls_disabled)
+        throw std::runtime_error("TCP disabled with TLS disabled or unavailable: no transport left to serve");
 
     beaconSender4.set_broadcast(true);
 
@@ -574,6 +569,14 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 
                 tls_context = ossl::SSLContext::for_server(effective, inner_client, acceptor_loop);
                 log_debug_printf(osslsetup, "Created server TLS context for: %s\n", effective.tls_keychain_file.c_str());
+                if(effective.tcp_disabled) {
+                    // TLS is the only data transport; a permanent (BAD cert) degrade leaves nothing
+                    const bool dark = effective.udp_disabled;
+                    tls_context->setOnDegraded([dark]() {
+                        log_crit_printf(serversetup, "TLS certificate BAD with TCP disabled%s: no transport remains; server is unreachable%s",
+                                        dark ? " and UDP disabled" : "", "\n");
+                    });
+                }
             } catch (std::exception& e) {
                 log_debug_printf(osslsetup, "Failed to configure TLS for server: %s\n", e.what());
                 log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
@@ -885,7 +888,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     }
 
     // "pvlist" breaks unless we honor mustReply flag
-    if (nreply == 0 && msg.mustReply) {} // discover
+    if (nreply == 0 && msg.mustReply && (!tlsOnly || canRespondToTlsSearch())) {} // discover
     else if(nreply != 0 && msg.protoTCP && !tlsOnly && canRespondToTcpSearch()) {} // regular TCP
     else if(nreply != 0 && msg.protoTLS && canRespondToTlsSearch()) {} // TLS
     else {
@@ -940,6 +943,17 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 void Server::Pvt::doBeacons(short evt)
 {
     log_debug_printf(serversetup, "Server beacon timer expires\n%s", "");
+
+#ifdef PVXS_ENABLE_OPENSSL
+    // tls-only with TLS not usable: nothing to advertise; keep the timer alive
+    if(effective.tcp_disabled && !canRespondToTlsSearch()) {
+        log_debug_printf(serversetup, "Beacon suppressed: tls-only and TLS not usable\n%s", "");
+        timeval interval(beaconIntervalLong);
+        if(event_add(beaconTimer.get(), &interval))
+            log_err_printf(serversetup, "Error re-enabling beacon timer\n%s", "");
+        return;
+    }
+#endif
 
     beaconMsg.clear();
     VectorOutBuf M(true, beaconMsg);
@@ -1023,6 +1037,10 @@ void Server::reconfigure(const Config& inconf) {
     auto newconf(inconf);
     newconf.expand();  // maybe catch some errors early
 
+    // reject before destroying the running server
+    if(newconf.tcp_disabled && newconf.tls_disabled)
+        throw std::invalid_argument("TCP disabled with TLS disabled or unavailable: no transport left to serve");
+
     log_info_printf(serversetup, "Reconfiguring Server Context%s", "\n");
 
     // is the current server running?
@@ -1053,7 +1071,9 @@ void Server::reconfigure(const Config& inconf) {
         Server newsrv(newconf);
         pvt = std::move(newsrv.pvt);
     } catch (std::exception& e) {
-        log_warn_printf(serversetup, "Server Reconfiguration failed: %s\n", e.what());
+        // old server is already destroyed; surface rather than continue with null pvt
+        log_err_printf(serversetup, "Server Reconfiguration failed, server stopped: %s\n", e.what());
+        throw;
     }
 
     {

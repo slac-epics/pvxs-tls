@@ -198,7 +198,7 @@ void ServerConn::handle_SEARCH()
         if(proto=="tcp")
             foundtcp = true;
 #else
-        if(proto=="tcp" && iface->server->canRespondToTcpSearch() )
+        if(proto=="tcp" && !iface->server->effective.tcp_disabled && iface->server->canRespondToTcpSearch())
             foundtcp = true;
         else if(proto=="tls" && iface->server->canRespondToTlsSearch())
             foundtls = true;
@@ -241,11 +241,14 @@ void ServerConn::handle_SEARCH()
             nreply++;
     }
 
-    if(nreply==0 && !mustReply && !foundtcp )
 #ifdef PVXS_ENABLE_OPENSSL
-      if (!foundtls)
-#endif
+    // no usable transport arm: a reply would carry no endpoint (malformed); stay silent
+    if(!foundtcp && !foundtls)
         return;
+#else
+    if(nreply==0 && !mustReply && !foundtcp)
+        return;
+#endif
 
     {
         (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
@@ -262,9 +265,7 @@ void ServerConn::handle_SEARCH()
 
         } else
 #endif
-        // TLS-only transport: never emit the plaintext endpoint for a connected
-        // tcp-only search.
-        if(foundtcp && !iface->server->effective.tcp_disabled) {
+        if(foundtcp) {
             to_wire(R, iface->server->effective.tcp_port);
             to_wire(R, "tcp");
         }

@@ -401,6 +401,9 @@ struct SSLContext {
     void setTlsOrTcpMode();
     void setTlsOrTcpMode(certs::cert_status_class_t cert_status_class);
 
+    //! Invoked once when the context permanently enters DegradedMode
+    void setOnDegraded(std::function<void()>&& fn) { on_degraded_ = std::move(fn); }
+
     /**
      * @brief Creates a client TLS context
      * @param conf - The client configuration
@@ -467,6 +470,9 @@ struct SSLContext {
     std::function<void()> on_tls_ready_;
     evevent tls_ready_event;
     static void tlsReadyEventCallback(evutil_socket_t fd, short evt, void* raw);
+
+    // Callback invoked once when the context permanently enters DegradedMode
+    std::function<void()> on_degraded_;
 };
 
 PVXS_API void configureServerOCSPCallback(void* server_ptr, SSL* ssl);

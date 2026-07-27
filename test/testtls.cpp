@@ -1510,6 +1510,56 @@ void testNoTcpConnectedSearch() {
     conn.reset();
 }
 
+// reconfigure into tls-only: full rebuild honors the flags
+void testNoTcpReconfigure() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+    auto mbox(server::SharedPV::buildReadonly());
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+    mbox.open(nt::NTScalar{TypeCode::Int32}.create().update(TEST_PV_FIELD, 42));
+    serv.start();
+    testTrue(serv.config().tcp_port != 0u) << "plaintext listener bound before reconfigure";
+
+    auto newconf(serv.config());
+    newconf.tcp_disabled = true;
+    newconf.tcp_port = 0;
+    serv.reconfigure(newconf);
+
+    const auto eff(serv.config());
+    testEq(eff.tcp_port, 0u) << "no plaintext listener after reconfigure";
+    testTrue(eff.tls_port != 0u) << "TLS listener bound after reconfigure";
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+    auto cli(cli_conf.build());
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+}
+
+// reconfigure into a transportless config is rejected without touching the server
+void testNoTcpReconfigureRejected() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+    auto mbox(server::SharedPV::buildReadonly());
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+    mbox.open(nt::NTScalar{TypeCode::Int32}.create().update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    auto badconf(serv.config());
+    badconf.tcp_disabled = true;
+    badconf.tls_disabled = true;
+    testThrows<std::invalid_argument>([&serv, &badconf]() { serv.reconfigure(badconf); });
+
+    // original server must still be serving
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+    auto cli(cli_conf.build());
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+}
+
 // 6.5: default (flag unset) beacon retains proto="tcp" / tcp_port.
 void testDefaultBeaconUnchanged() {
     testShow() << __func__;
@@ -1531,7 +1581,7 @@ void testDefaultBeaconUnchanged() {
 
 
 MAIN(testtls) {
-    testPlan(129);
+    testPlan(135);
     testSetup();
     logger_config_env();
     testSubjectIdentity();
@@ -1563,6 +1613,8 @@ MAIN(testtls) {
     testNoTcpSearchGating();
     testNoTcpConnectedSearch();
     testNoTcpBeacon();
+    testNoTcpReconfigure();
+    testNoTcpReconfigureRejected();
     testDefaultBeaconUnchanged();
     cleanup_for_valgrind();
     return testDone();

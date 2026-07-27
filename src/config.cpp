@@ -662,6 +662,9 @@ void Config::updateDefs(defs_t& defs) const {
 }
 
 void Config::expand() {
+#ifndef PVXS_ENABLE_OPENSSL
+    tls_disabled = true;  // no TLS support compiled in
+#endif
     auto ifaces(parseAddresses(interfaces));
     auto bdest(parseAddresses(beaconDestinations));
 
@@ -857,6 +860,9 @@ void Config::updateDefs(defs_t& defs) const {
 
 void Config::expand()
 {
+#ifndef PVXS_ENABLE_OPENSSL
+    tls_disabled = true;  // no TLS support compiled in
+#endif
     auto ifmap(IfaceMap::instance());
 
     if(udp_port==0)
