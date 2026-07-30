@@ -65,7 +65,7 @@ void OCSPStatus::init(X509_STORE* trusted_store_ptr, const std::string& issuer_i
  * @param rhs The PVACertificateStatus to convert
  * @return CertificateStatus The converted CertificateStatus
  */
-PVACertificateStatus::operator CertificateStatus() const noexcept {
+PVACertificateStatus::operator CertificateStatus() const {
     return (status == UNKNOWN) ? static_cast<CertificateStatus>(UnknownCertificateStatus{}) : static_cast<CertificateStatus>(CertifiedCertificateStatus{*this});
 }
 
@@ -75,7 +75,7 @@ PVACertificateStatus::operator CertificateStatus() const noexcept {
  * @param rhs The OCSPStatus to convert
  * @return CertificateStatus The converted CertificateStatus
  */
-OCSPStatus::operator CertificateStatus() const noexcept {
+OCSPStatus::operator CertificateStatus() const {
     return (ocsp_status == OCSP_CERTSTATUS_UNKNOWN) ? static_cast<CertificateStatus>(UnknownCertificateStatus{})
                                                     : static_cast<CertificateStatus>(CertifiedCertificateStatus{*this});
 }

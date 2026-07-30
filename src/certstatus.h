@@ -387,8 +387,9 @@ struct OCSPStatus {
      * the associated certificate is in the VALID vs EXPIRED/REVOKED/etc. state.
      *
      * @return true if the OCSP status validity period has not expired
+     * @throws std::runtime_error if the EPICS time source is unavailable
      */
-    bool isStatusCurrent() const noexcept { // NOLINT(*-convert-member-functions-to-static)
+    bool isStatusCurrent() const { // NOLINT(*-convert-member-functions-to-static)
         const auto now(timeNow());
         return status_valid_until_date.t > now;
     }
@@ -404,10 +405,11 @@ struct OCSPStatus {
      * @brief Check if the status is GOOD
      *
      * @return true if the status is GOOD, false otherwise
+     * @throws std::runtime_error if the EPICS time source is unavailable
      */
-    bool isGood() const noexcept { return isStatusCurrent() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
+    bool isGood() const { return isStatusCurrent() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
 
-    virtual explicit operator CertificateStatus() const noexcept;
+    virtual explicit operator CertificateStatus() const;
 
    private:
     friend struct PVACertificateStatus;
@@ -481,7 +483,7 @@ struct PVACertificateStatus final : OCSPStatus {
 
     // To set an UNKNOWN status to indicate errors
     PVACertificateStatus() : OCSPStatus() {}
-    explicit operator CertificateStatus() const noexcept override;
+    explicit operator CertificateStatus() const override;
 
    private:
     friend class CertStatusFactory;
@@ -567,8 +569,9 @@ struct CertificateStatus {
       * @brief Get the cert status class
       *
       * @return cert_status_class_t::GOOD (VALID), cert_status_class_t::BAD (REVOKED, EXPIRED), or cert_status_class_t::UNKNOWN (everything else)
+      * @throws std::runtime_error if the EPICS time source is unavailable
       */
-     cert_status_class_t getStatusClass() const noexcept {
+     cert_status_class_t getStatusClass() const {
          if (isRevokedOrExpired()) return cert_status_class_t::BAD;
          if (!isStatusCurrent()) return cert_status_class_t::UNKNOWN;
          return status == VALID ? cert_status_class_t::GOOD : cert_status_class_t::UNKNOWN;
@@ -588,8 +591,9 @@ struct CertificateStatus {
       * the certificate's status enumerator is VALID vs EXPIRED/REVOKED/etc.
       *
       * @return true if the status validity period has not expired
+      * @throws std::runtime_error if the EPICS time source is unavailable
       */
-     bool isStatusCurrent() const noexcept { // NOLINT(*-convert-member-functions-to-static)
+     bool isStatusCurrent() const { // NOLINT(*-convert-member-functions-to-static)
          const auto now(timeNow());
          return status_valid_until_date.t > now;
      }

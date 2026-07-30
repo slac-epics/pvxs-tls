@@ -276,7 +276,7 @@ SSLContext::SSLContext(const SSLContext &o)
     }
 }
 
-SSLContext::SSLContext(SSLContext &o) noexcept
+SSLContext::SSLContext(SSLContext &o)
     : loop(o.loop)
     , ctx(std::move(o.ctx))
     , is_client(o.is_client)
