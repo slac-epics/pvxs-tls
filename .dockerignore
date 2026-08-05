@@ -6,3 +6,7 @@ bin
 lib
 cfg
 .DS_Store
+# Git bookkeeping changes on every commit, fetch, even git status - none of
+# which affect the compiled result. Cost: the in-image version header falls
+# back to a generic string instead of the git description.
+.git
