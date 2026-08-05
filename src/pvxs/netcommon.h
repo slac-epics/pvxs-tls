@@ -54,6 +54,35 @@ struct PVXS_API PeerCredentials {
     std::string serial;
     //! Remote user account name.  Meaning depends upon method.
     std::string account;
+    /** The peer certificate subject, written as a list of key and value pairs.
+     *
+     * Empty for every method except "x509", and empty for an "x509" peer whose
+     * subject cannot be written (see below).
+     *
+     * Carries the common name, the organizational units, the organization and
+     * the country, in that order.  Every other field of the subject is left
+     * out.  Organizational units are repeated as the certificate carries them
+     * and keep their relative order; the grouping is imposed here, so that two
+     * certificates naming the same four values in different orders produce the
+     * same string.
+     *
+     * Pairs are separated by a comma and key from value by an equals sign,
+     * with no spaces around either, and keys are upper case.  A value is
+     * wrapped in single quotes when it contains a comma, an equals sign, a
+     * space or a tab.  For example:
+     *
+     *     CN=alice,OU=staff,OU=beamline,O='Acme, Inc.',C=US
+     *
+     * A value that itself contains a single quote, or an embedded null, cannot
+     * be written in that form and no escape is defined for it.  Such a subject
+     * produces an empty string rather than a partial one.
+     *
+     * This is the form an entry in a user access group is written in, so the
+     * string can be pasted into an access security file.
+     *
+     * @since UNRELEASED
+     */
+    std::string subject;
     /** Lookup (locally) roles associated with the account.
      *
      * On *nix targets this is the list of primary and secondary groups

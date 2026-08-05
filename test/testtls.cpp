@@ -7,6 +7,9 @@
 
 #include <cstring>
 #include <sstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 #include <epicsUnitTest.h>
 #include <testMain.h>
@@ -21,6 +24,8 @@
 
 #include "certcontext.h"
 #include "certstatus.h"
+#include "openssl.h"
+#include "ownedptr.h"
 #include "utilpvt.h"
 
 using namespace pvxs;
@@ -66,6 +71,37 @@ struct WhoAmI final : server::Source {
             strm << cred->method << '/' << cred->account;
 
             sub->post(resultType.cloneEmpty().update(TEST_PV_FIELD, strm.str()));
+        });
+    }
+};
+
+/**
+ * @brief WhatIsMySubject is a server::Source that returns the peer's subject
+ *
+ * Reports the credentials the server itself sees for the peer, which is the
+ * direction that matters for access control: this is the string a user access
+ * group entry is matched against.
+ */
+struct WhatIsMySubject final : server::Source {
+    const Value resultType;
+
+    WhatIsMySubject() : resultType(nt::NTScalar(TypeCode::String).create()) {}
+
+    void onSearch(Search& op) override {
+        for (auto& pv : op) {
+            if (strcmp(pv.name(), WHAT_IS_MY_SUBJECT_PV) == 0) pv.claim();
+        }
+    }
+
+    void onCreate(std::unique_ptr<server::ChannelControl>&& op) override {
+        if (op->name() != WHAT_IS_MY_SUBJECT_PV) return;
+
+        op->onOp([this](std::unique_ptr<server::ConnectOp>&& cop) {
+            cop->onGet([this](std::unique_ptr<server::ExecOp>&& eop) {
+                eop->reply(resultType.cloneEmpty().update(TEST_PV_FIELD, eop->credentials()->subject));
+            });
+
+            cop->connect(resultType);
         });
     }
 };
@@ -623,6 +659,165 @@ void testServerOnlyAuthWithMatchingTrustAnchor() {
 }
 
 /**
+ * @brief One field of a subject built for a test
+ *
+ * A length of -1 means the value is read up to its terminating null, as
+ * X509_NAME_add_entry_by_txt reads it by default.
+ */
+struct SubjectField {
+    const char* key;
+    const char* value;
+    int length;
+
+    SubjectField(const char* key, const char* value, int length = -1) : key(key), value(value), length(length) {}
+};
+
+/**
+ * @brief Write the given fields as a subject and return what makeSubjectIdentity makes of it
+ */
+std::string subjectIdentityOf(const std::vector<SubjectField>& fields) {
+    const ossl_ptr<X509_NAME> subject(X509_NAME_new());
+    for (const auto& field : fields) {
+        // OpenSSL will not write an empty value itself, so one is put in place
+        // and then emptied.  Another implementation can produce such a subject
+        // and this is the only way to build one here to try it against.
+        const auto empty = field.length == 0;
+        if (!X509_NAME_add_entry_by_txt(subject.get(), field.key, MBSTRING_ASC,
+                                        reinterpret_cast<const unsigned char*>(empty ? "placeholder" : field.value),
+                                        empty ? -1 : field.length, -1, 0))
+            throw std::runtime_error(SB() << "could not add subject field " << field.key);
+        if (empty) {
+            const auto entry = X509_NAME_get_entry(subject.get(), X509_NAME_entry_count(subject.get()) - 1);
+            if (!ASN1_STRING_set(X509_NAME_ENTRY_get_data(entry), "", 0))
+                throw std::runtime_error(SB() << "could not empty subject field " << field.key);
+        }
+    }
+    return ossl::makeSubjectIdentity(subject.get());
+}
+
+/**
+ * @brief testSubjectIdentity checks how a certificate subject is written as key and value pairs
+ */
+void testSubjectIdentity() {
+    testShow() << __func__;
+
+    // An empty subject, and a subject with no field worth keeping, give nothing
+    testEq(ossl::makeSubjectIdentity(nullptr), "");
+    testEq(subjectIdentityOf({}), "");
+
+    testEq(subjectIdentityOf({{"CN", "alice"}}), "CN=alice");
+    testEq(subjectIdentityOf({{"CN", "alice"}, {"O", "acme"}}), "CN=alice,O=acme");
+    testEq(subjectIdentityOf({{"CN", "alice"}, {"C", "US"}}), "CN=alice,C=US");
+
+    // Both organizational units are kept, in the relative order the subject
+    // carries them.  X509_NAME_get_text_by_NID would have seen only the first.
+    testEq(subjectIdentityOf({{"CN", "alice"}, {"OU", "staff"}, {"OU", "beamline"}}), "CN=alice,OU=staff,OU=beamline");
+
+    // Every other field is left out
+    testEq(subjectIdentityOf({{"CN", "alice"}, {"ST", "California"}, {"L", "Menlo Park"}, {"O", "acme"}}), "CN=alice,O=acme");
+
+    // A value carrying a comma, an equals sign or a space is wrapped in quotes
+    testEq(subjectIdentityOf({{"O", "Acme, Inc."}}), "O='Acme, Inc.'");
+    testEq(subjectIdentityOf({{"CN", "a=b"}}), "CN='a=b'");
+    testEq(subjectIdentityOf({{"CN", "alice smith"}}), "CN='alice smith'");
+
+    // A value that cannot be written at all costs the whole string, so that no
+    // identity is offered rather than one missing a field
+    testEq(subjectIdentityOf({{"CN", "alice"}, {"O", "O'Brien Ltd"}}), "");
+    testEq(subjectIdentityOf({{"CN", "good"}, {"O", "acme\0evil", 9}}), "");
+
+    // An empty value is left out: the reader rejects a whole string that carries
+    // one, which would cost the peer its keyed identity altogether
+    testEq(subjectIdentityOf({{"CN", "alice"}, {"O", "", 0}}), "CN=alice");
+
+    // The four kept fields come out in the same order however the subject
+    // carries them.  The first is the order PVACMS used to issue, the second is
+    // leaf first, the third is the ordinary X.500 direction.
+    const std::string expected("CN=alice,OU=staff,O=lbnl,C=US");
+    testEq(subjectIdentityOf({{"CN", "alice"}, {"C", "US"}, {"O", "lbnl"}, {"OU", "staff"}}), expected);
+    testEq(subjectIdentityOf({{"CN", "alice"}, {"OU", "staff"}, {"O", "lbnl"}, {"C", "US"}}), expected);
+    testEq(subjectIdentityOf({{"C", "US"}, {"O", "lbnl"}, {"OU", "staff"}, {"CN", "alice"}}), expected);
+
+    // Only the relative order of the organizational units survives
+    testEq(subjectIdentityOf({{"OU", "staff"}, {"CN", "alice"}, {"OU", "beamline"}}), "CN=alice,OU=staff,OU=beamline");
+    testEq(subjectIdentityOf({{"OU", "beamline"}, {"CN", "alice"}, {"OU", "staff"}}), "CN=alice,OU=beamline,OU=staff");
+}
+
+/**
+ * @brief testCommonNameLength checks that a long common name is read whole
+ *
+ * A common name may be 64 characters, the upper bound X.500 sets and OpenSSL
+ * enforces.  This code used to read it with X509_NAME_get_text_by_NID into a
+ * 64-byte buffer, which cut anything past 62 characters without saying so, and
+ * left the account disagreeing with the same name in the written subject.
+ */
+void testCommonNameLength() {
+    testShow() << __func__;
+
+    const std::string longest(64, 'a');
+
+    const ossl_ptr<X509_NAME> subject(X509_NAME_new());
+    if (!X509_NAME_add_entry_by_txt(subject.get(), "CN", MBSTRING_ASC,
+                                    reinterpret_cast<const unsigned char*>(longest.c_str()), -1, -1, 0))
+        throw std::runtime_error("could not add a 64 character common name");
+
+    std::string read_back;
+    testTrue(ossl::getSubjectCommonName(subject.get(), read_back));
+    testEq(read_back, longest);
+
+    // The account and the written subject have to carry the same name, since an
+    // access security file may be written against either
+    testEq(ossl::makeSubjectIdentity(subject.get()), "CN=" + longest);
+
+    // A subject with no common name, and one whose common name is empty, are
+    // both reported as carrying none
+    std::string untouched("unchanged");
+    testFalse(ossl::getSubjectCommonName(nullptr, untouched));
+    const ossl_ptr<X509_NAME> no_common_name(X509_NAME_new());
+    if (!X509_NAME_add_entry_by_txt(no_common_name.get(), "O", MBSTRING_ASC,
+                                    reinterpret_cast<const unsigned char*>("acme"), -1, -1, 0))
+        throw std::runtime_error("could not add an organization");
+    testFalse(ossl::getSubjectCommonName(no_common_name.get(), untouched));
+    testEq(untouched, "unchanged");
+}
+
+/**
+ * @brief testSubjectCredentials checks that a mutual TLS connection reports each peer's subject
+ *
+ * Both directions are checked, because the server's view of the client is what
+ * access control is decided on, and the client's view of the server is what a
+ * client-side check would read.  In both the bare common name has to be
+ * untouched, since every access security file already written names it.
+ */
+void testSubjectCredentials() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addSource(WHAT_IS_MY_SUBJECT_PV, std::make_shared<WhatIsMySubject>()));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    serv.start();
+
+    // What the client sees of the server
+    auto conn(cli.connect(WHAT_IS_MY_SUBJECT_PV).onConnect([](const client::Connected& c) {
+        testTrue(c.cred && c.cred->isTLS);
+        testEq(c.cred->account, CERT_CN_SERVER1);
+        testEq(c.cred->subject, CERT_SUBJECT_OF(CERT_CN_SERVER1));
+    }).exec());
+
+    // What the server sees of the client
+    const auto reply(cli.get(WHAT_IS_MY_SUBJECT_PV).exec()->wait(5.0));
+    testEq(reply[TEST_PV_FIELD].as<std::string>(), CERT_SUBJECT_OF(CERT_CN_CLIENT1));
+    conn.reset();
+}
+
+/**
  * @brief testMutualTLSWithMatchingTrustAnchors is a positive test that
  * mutual TLS succeeds when both client and server use matching trust anchors.
  */
@@ -866,9 +1061,12 @@ void testFakeCertificateNameMatchingAttack() {
 }  // namespace
 
 MAIN(testtls) {
-    testPlan(47);
+    testPlan(75);
     testSetup();
     logger_config_env();
+    testSubjectIdentity();
+    testCommonNameLength();
+    testSubjectCredentials();
     testLegacyMode();
     testClientBackwardsCompatibility();
     testServerBackwardsCompatibility();
