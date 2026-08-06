@@ -987,8 +987,15 @@ bool subjectValueNeedsQuoting(const std::string &value) {
     return value.find_first_of(",= \t") != std::string::npos;
 }
 
-//! Characters a subject value cannot be written with, there being no escape for either
-const std::string kUnwritableInSubjectValue("'\0", 2);
+/** Characters a subject value cannot be written with, there being no escape for either.
+ *
+ * Held as a plain array rather than a std::string because a string here would be built when
+ * the library loads and taken down when it unloads, and this library does not allow either:
+ * the order against every other translation unit is unspecified, and on unload it can run
+ * after the code that would use it. It also has to carry an embedded NUL, so its length is
+ * passed rather than measured.
+ */
+constexpr char kUnwritableInSubjectValue[] = {'\'', '\0'};
 
 }  // namespace
 
@@ -1074,7 +1081,7 @@ std::string makeSubjectIdentity(const X509_NAME *subject) {
         // field, so nothing is written at all: an identity that is not there
         // denies, while one missing a field could grant more than the
         // certificate says.
-        if (value.find_first_of(kUnwritableInSubjectValue) != std::string::npos) {
+        if (value.find_first_of(kUnwritableInSubjectValue, 0, sizeof(kUnwritableInSubjectValue)) != std::string::npos) {
             char oneline[256];
             X509_NAME_oneline(subject, oneline, sizeof(oneline));
             log_warn_printf(io, "Peer certificate subject carries a single quote or a null and cannot be written as key and value pairs: %s\n",
