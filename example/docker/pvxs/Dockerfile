@@ -33,6 +33,9 @@ RUN echo "EPICS_BASE = \$(TOP)/../epics-base" >> ${PROJECT_HOME}/RELEASE.local
 # build PVXS
 WORKDIR ${PROJECT_HOME}/pvxs
 COPY . .
-RUN make -j$(nproc) all
+# How many compiler processes to run at once. Each can take most of a gigabyte,
+# so a machine with little memory and no swap needs this lowered.
+ARG JOBS
+RUN make -j${JOBS:-$(nproc)} all
 
 CMD ["/bin/bash"]
