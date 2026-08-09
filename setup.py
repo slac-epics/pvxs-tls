@@ -38,6 +38,46 @@ from epicscorelibs.config import get_config_var
 import epicscorelibs.path
 import epicscorelibs.version
 
+class Probe(ProbeToolchain):
+    """A toolchain probe whose questions answer, and whose measurements still fail.
+
+    The two are asked differently here. `try_compile`, `check_include`, `check_symbol` and
+    `check_member` ask whether something is there, and the caller reads the answer as a bool -
+    a header that is absent is a no, and every build image is missing several. `sizeof` asks
+    how big something is, and there is no answer when the type does not exist, so the caller
+    catches the failure and picks another type: that is how Windows arrives at SSIZE_T.
+
+    setuptools_dso turned a failed compile into a false for the first group, by catching the
+    class setuptools raised when it was written. setuptools 84 raises a different one, so those
+    questions started stopping the build instead of answering it. They are answered here.
+    `sizeof` is left alone, because its failure is the answer.
+    """
+
+    def try_compile(self, *args, **kws):
+        try:
+            return ProbeToolchain.try_compile(self, *args, **kws)
+        except CompileError:
+            return False
+
+    def check_include(self, *args, **kws):
+        try:
+            return ProbeToolchain.check_include(self, *args, **kws)
+        except CompileError:
+            return False
+
+    def check_symbol(self, *args, **kws):
+        try:
+            return ProbeToolchain.check_symbol(self, *args, **kws)
+        except CompileError:
+            return False
+
+    def check_member(self, *args, **kws):
+        try:
+            return ProbeToolchain.check_member(self, *args, **kws)
+        except CompileError:
+            return False
+
+
 def pvxsversion():
     with open(os.path.join('configure', 'CONFIG_PVXS_VERSION'), 'r') as F:
         return {M.group(1):M.group(2) for M in re.finditer(r'([A-Z_]+)\s*=\s*(\d+)', F.read())}
@@ -163,7 +203,7 @@ class Expand(Command):
             'EVENT__HAVE_MBEDTLS':None,
         }
 
-        probe = ProbeToolchain()
+        probe = Probe()
 
         with open('configure/probe-openssl.c', 'r') as F:
             if probe.try_compile(F.read()):
@@ -642,7 +682,7 @@ def define_DSOS(self):
         "ioc/pvalink_lset.cpp",
     ]
 
-    probe = ProbeToolchain()
+    probe = Probe()
 
     cxx11_flags = []
     if probe.try_compile('int probefn() { auto x=1; return x; }',
