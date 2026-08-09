@@ -6,7 +6,32 @@ import re
 from glob import glob
 
 from distutils import log
-from distutils.errors import CompileError
+from subprocess import CalledProcessError
+
+
+def _compile_error_types():
+    """Every class that means a probe program did not compile.
+
+    setuptools has moved this class between releases - 75 raises it from one place and 84 from
+    another - and the probes below are run by whichever setuptools is installed. Naming one
+    location means the `except` clauses stop matching when it moves, and a probe that was meant
+    to answer a question stops the build instead: on Windows the fallback from ssize_t to
+    SSIZE_T is chosen that way, and without it libevent is built for a type that is not there.
+    """
+    types = []
+    for module, name in (('setuptools._distutils.compilers.C.errors', 'CompileError'),
+                         ('setuptools._distutils.errors', 'CompileError'),
+                         ('distutils.errors', 'CompileError')):
+        try:
+            types.append(getattr(__import__(module, fromlist=[name]), name))
+        except (ImportError, AttributeError):
+            pass
+    types.append(CalledProcessError)
+    return tuple(types)
+
+
+# A tuple, so every spelling of the same failure is caught where it is expected.
+CompileError = _compile_error_types()
 from setuptools import Command, Distribution
 from setuptools_dso import DSO, Extension, setup, build_dso, ProbeToolchain
 from epicscorelibs.config import get_config_var
@@ -89,61 +114,6 @@ def logexc(fn):
             raise
     return wrapit
 
-def _probe_build_failures():
-    """The exceptions that mean a probe program did not build.
-
-    setuptools moved the class it raises for that between releases - 75 and 84 do not agree -
-    and setuptools_dso catches the one it was built against, so on a newer setuptools the
-    failure escapes. Collect whichever of the names exist here, so it is caught wherever it
-    lives, and so that nothing else is caught along with it.
-    """
-    found = []
-    for module, name in (('setuptools._distutils.compilers.C.errors', 'CompileError'),
-                         ('setuptools._distutils.errors', 'CompileError'),
-                         ('distutils.errors', 'CompileError')):
-        try:
-            found.append(getattr(__import__(module, fromlist=[name]), name))
-        except (ImportError, AttributeError):
-            pass
-    from subprocess import CalledProcessError
-    found.append(CalledProcessError)
-    return tuple(found)
-
-
-class AnswersInsteadOfErrors(object):
-    """A toolchain probe that reports a program which did not build as a false answer.
-
-    That is what the questions are for: whether a header is there, whether a symbol is defined.
-    A build that cannot be made is the answer no, and the definitions are settled accordingly.
-
-    Only that is turned into an answer. Anything else a probe raises is a real fault and is
-    left to stop the build, so this cannot quietly turn a broken toolchain into a wheel built
-    with half its features missing.
-    """
-
-    _build_failures = _probe_build_failures()
-
-    def __init__(self, probe):
-        object.__setattr__(self, '_probe', probe)
-
-    def __getattr__(self, name):
-        attr = getattr(object.__getattribute__(self, '_probe'), name)
-        if not callable(attr):
-            return attr
-
-        def answered(*args, **kws):
-            try:
-                return attr(*args, **kws)
-            except AnswersInsteadOfErrors._build_failures as e:
-                log.info('probe did not build, taking that as no: %s', e)
-                return False
-
-        return answered
-
-    def __setattr__(self, name, value):
-        setattr(object.__getattribute__(self, '_probe'), name, value)
-
-
 class Expand(Command):
     user_options = [
         ('build-lib=', 't',
@@ -193,7 +163,7 @@ class Expand(Command):
             'EVENT__HAVE_MBEDTLS':None,
         }
 
-        probe = AnswersInsteadOfErrors(ProbeToolchain())
+        probe = ProbeToolchain()
 
         with open('configure/probe-openssl.c', 'r') as F:
             if probe.try_compile(F.read()):
@@ -672,7 +642,7 @@ def define_DSOS(self):
         "ioc/pvalink_lset.cpp",
     ]
 
-    probe = AnswersInsteadOfErrors(ProbeToolchain())
+    probe = ProbeToolchain()
 
     cxx11_flags = []
     if probe.try_compile('int probefn() { auto x=1; return x; }',
