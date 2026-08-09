@@ -89,16 +89,39 @@ def logexc(fn):
             raise
     return wrapit
 
-class AnswersInsteadOfErrors(object):
-    """A toolchain probe whose failures are answers.
+def _probe_build_failures():
+    """The exceptions that mean a probe program did not build.
 
-    Every question asked of a probe has a false answer: the header is not there, the symbol is
-    not defined. `ProbeToolchain` reports that either by returning false or by raising, and
-    which one depends on the setuptools that happens to be installed, because the class raised
-    when a compile fails has moved between its releases. An unanswered question then stops the
-    build instead of settling a definition, and the build fails naming a header it is meant to
-    be able to do without.
+    setuptools moved the class it raises for that between releases - 75 and 84 do not agree -
+    and setuptools_dso catches the one it was built against, so on a newer setuptools the
+    failure escapes. Collect whichever of the names exist here, so it is caught wherever it
+    lives, and so that nothing else is caught along with it.
     """
+    found = []
+    for module, name in (('setuptools._distutils.compilers.C.errors', 'CompileError'),
+                         ('setuptools._distutils.errors', 'CompileError'),
+                         ('distutils.errors', 'CompileError')):
+        try:
+            found.append(getattr(__import__(module, fromlist=[name]), name))
+        except (ImportError, AttributeError):
+            pass
+    from subprocess import CalledProcessError
+    found.append(CalledProcessError)
+    return tuple(found)
+
+
+class AnswersInsteadOfErrors(object):
+    """A toolchain probe that reports a program which did not build as a false answer.
+
+    That is what the questions are for: whether a header is there, whether a symbol is defined.
+    A build that cannot be made is the answer no, and the definitions are settled accordingly.
+
+    Only that is turned into an answer. Anything else a probe raises is a real fault and is
+    left to stop the build, so this cannot quietly turn a broken toolchain into a wheel built
+    with half its features missing.
+    """
+
+    _build_failures = _probe_build_failures()
 
     def __init__(self, probe):
         object.__setattr__(self, '_probe', probe)
@@ -111,7 +134,7 @@ class AnswersInsteadOfErrors(object):
         def answered(*args, **kws):
             try:
                 return attr(*args, **kws)
-            except Exception as e:
+            except AnswersInsteadOfErrors._build_failures as e:
                 log.info('probe did not build, taking that as no: %s', e)
                 return False
 
