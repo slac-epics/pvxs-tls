@@ -89,6 +89,38 @@ def logexc(fn):
             raise
     return wrapit
 
+class AnswersInsteadOfErrors(object):
+    """A toolchain probe whose failures are answers.
+
+    Every question asked of a probe has a false answer: the header is not there, the symbol is
+    not defined. `ProbeToolchain` reports that either by returning false or by raising, and
+    which one depends on the setuptools that happens to be installed, because the class raised
+    when a compile fails has moved between its releases. An unanswered question then stops the
+    build instead of settling a definition, and the build fails naming a header it is meant to
+    be able to do without.
+    """
+
+    def __init__(self, probe):
+        object.__setattr__(self, '_probe', probe)
+
+    def __getattr__(self, name):
+        attr = getattr(object.__getattribute__(self, '_probe'), name)
+        if not callable(attr):
+            return attr
+
+        def answered(*args, **kws):
+            try:
+                return attr(*args, **kws)
+            except Exception as e:
+                log.info('probe did not build, taking that as no: %s', e)
+                return False
+
+        return answered
+
+    def __setattr__(self, name, value):
+        setattr(object.__getattribute__(self, '_probe'), name, value)
+
+
 class Expand(Command):
     user_options = [
         ('build-lib=', 't',
@@ -138,24 +170,14 @@ class Expand(Command):
             'EVENT__HAVE_MBEDTLS':None,
         }
 
-        probe = ProbeToolchain()
+        probe = AnswersInsteadOfErrors(ProbeToolchain())
 
         with open('configure/probe-openssl.c', 'r') as F:
-            probe_openssl = F.read()
-        # A probe that does not compile is the answer, not an error: it means the headers are
-        # not there and the build goes on without transport security. Whether the failure comes
-        # back as False or as an exception depends on which setuptools is installed, since the
-        # class it raises has moved between releases, so both are treated the same way here.
-        try:
-            have_openssl = bool(probe.try_compile(probe_openssl))
-        except Exception as e:
-            log.info('OpenSSL probe did not compile: %s', e)
-            have_openssl = False
-        if have_openssl:
-            DEFS['EVENT__HAVE_OPENSSL'] = '1'
-            log.info('Enable OpenSSL Support')
-        else:
-            log.info('No OpenSSL Support')
+            if probe.try_compile(F.read()):
+                DEFS['EVENT__HAVE_OPENSSL'] = '1'
+                log.info('Enable OpenSSL Support')
+            else:
+                log.info('No OpenSSL Support')
 
         DEFS.update(pvxsversion) # PVXS_*_VERSION
         DEFS.update(eventversion) # EVENT*VERSION
@@ -627,7 +649,7 @@ def define_DSOS(self):
         "ioc/pvalink_lset.cpp",
     ]
 
-    probe = ProbeToolchain()
+    probe = AnswersInsteadOfErrors(ProbeToolchain())
 
     cxx11_flags = []
     if probe.try_compile('int probefn() { auto x=1; return x; }',
