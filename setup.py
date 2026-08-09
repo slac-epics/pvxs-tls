@@ -141,11 +141,21 @@ class Expand(Command):
         probe = ProbeToolchain()
 
         with open('configure/probe-openssl.c', 'r') as F:
-            if probe.try_compile(F.read()):
-                DEFS['EVENT__HAVE_OPENSSL'] = '1'
-                log.info('Enable OpenSSL Support')
-            else:
-                log.info('No OpenSSL Support')
+            probe_openssl = F.read()
+        # A probe that does not compile is the answer, not an error: it means the headers are
+        # not there and the build goes on without transport security. Whether the failure comes
+        # back as False or as an exception depends on which setuptools is installed, since the
+        # class it raises has moved between releases, so both are treated the same way here.
+        try:
+            have_openssl = bool(probe.try_compile(probe_openssl))
+        except Exception as e:
+            log.info('OpenSSL probe did not compile: %s', e)
+            have_openssl = False
+        if have_openssl:
+            DEFS['EVENT__HAVE_OPENSSL'] = '1'
+            log.info('Enable OpenSSL Support')
+        else:
+            log.info('No OpenSSL Support')
 
         DEFS.update(pvxsversion) # PVXS_*_VERSION
         DEFS.update(eventversion) # EVENT*VERSION
