@@ -554,9 +554,30 @@ struct FailingSource : public server::Source
     }
 };
 
+// Quietens the server search logger while a test deliberately fails a channel creation.
+// The server reports that failure at Level::Crit, and a test run with _PVXS_ABORT_ON_CRIT
+// set turns any message at that level into an abort().  One step below Level::Crit is the
+// lowest level the logging code accepts, so it drops everything, and the level goes back to
+// the Level::Warn default when this object dies.
+struct QuietServerSearch
+{
+    QuietServerSearch()
+    {
+        logger_level_set("pvxs.svr.search", int(Level::Crit)-1);
+    }
+
+    ~QuietServerSearch()
+    {
+        logger_level_set("pvxs.svr.search", Level::Warn);
+    }
+};
+
 void testRefusedChannelCloses()
 {
     testShow()<<__func__;
+
+    // declared first so the logger is still quiet while the server and the client shut down
+    QuietServerSearch quiet;
 
     epicsEvent closed;
 
