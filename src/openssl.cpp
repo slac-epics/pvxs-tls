@@ -177,13 +177,20 @@ void SSLContext::restartStatusValidityTimerFromCertStatus() const {
  */
 void SSLContext::setDegradedMode(const bool clear) {
     log_debug_printf(watcher, "Permanently switching TLS state to Degraded%s\n", "");
-    Guard G(lock);
-    if (clear) {
-        cert_monitor.reset();   // Unsubscribe from the certificate status monitor if any
-        cert_status = {};    // Set the certificate status to be UNKNOWN
+    std::function<void()> notify;
+    {
+        Guard G(lock);
+        if (clear) {
+            cert_monitor.reset();   // Unsubscribe from the certificate status monitor if any
+            cert_status = {};    // Set the certificate status to be UNKNOWN
+        }
+        if (state != DegradedMode)
+            notify = std::move(on_degraded_);
+        state = DegradedMode;
     }
-    state = DegradedMode;
     log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-11s : SSLContext::setDegradedMode()\n", "SSLContext::state", "DegradedMode");
+    if (notify)
+        notify();
 }
 
 /**

@@ -307,6 +307,27 @@ void parse_timeout(double& dest, const std::string& name, const std::string& val
     }
 }
 
+// case-insensitive negative token for the port variables that can disable a
+// transport (eg. EPICS_PVAS_SERVER_PORT=NO).
+bool is_port_disable(const std::string& val) {
+    return epicsStrCaseCmp(val.c_str(), "NO")==0
+        || epicsStrCaseCmp(val.c_str(), "FALSE")==0
+        || epicsStrCaseCmp(val.c_str(), "OFF")==0
+        || epicsStrCaseCmp(val.c_str(), "DISABLED")==0;
+}
+
+void parse_port(unsigned short& dport, bool& ddisable, const std::string& name, const std::string& val) {
+    if(is_port_disable(val)) {
+        ddisable = true;
+    } else {
+        try {
+            dport = parseTo<uint64_t>(val);
+        }catch(std::exception& e) {
+            log_err_printf(config, "%s invalid port value (integer or NO) : '%s'\n", name.c_str(), val.c_str());
+        }
+    }
+}
+
 std::vector<SockEndpoint> parseAddresses(const std::vector<std::string>& addrs) {
     std::vector<SockEndpoint> ret;
     for(const auto& addr : addrs) {
@@ -417,7 +438,8 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
         if ( sep == std::string::npos)
             sep = opt.size();
         auto key(opt.substr(0, sep));
-        auto val(sep<=key.size() ? opt.substr(sep+1) : std::string());
+        // valueless tokens (e.g. no_stapling) get an empty val
+        auto val(sep < opt.size() ? opt.substr(sep+1) : std::string());
 
         if(key=="client_cert") {
             if(val=="require") {
@@ -492,19 +514,11 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     PickOne pickone{defs, useenv};
 
     if(pickone({"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
-        try {
-            self.tcp_port = parseTo<uint64_t>(pickone.val);
-        }catch(std::exception& e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
-        }
+        parse_port(self.tcp_port, self.tcp_disabled, pickone.name, pickone.val);
     }
 
     if(pickone({"EPICS_PVAS_BROADCAST_PORT", "EPICS_PVA_BROADCAST_PORT"})) {
-        try {
-            self.udp_port = parseTo<uint64_t>(pickone.val);
-        }catch(std::exception& e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
-        }
+        parse_port(self.udp_port, self.udp_disabled, pickone.name, pickone.val);
     }
 
     if(pickone({"EPICS_PVAS_INTF_ADDR_LIST"})) {
@@ -555,11 +569,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 
     // EPICS_PVAS_TLS_PORT
     if (pickone({"EPICS_PVAS_TLS_PORT", "EPICS_PVA_TLS_PORT"})) {
-        try {
-            self.tls_port = parseTo<uint64_t>(pickone.val);
-        } catch (std::exception& e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
-        }
+        parse_port(self.tls_port, self.tls_disabled, pickone.name, pickone.val);
     }
 
     if (pickone({"EPICS_PVAS_CERT_PV_PREFIX", "EPICS_PVA_CERT_PV_PREFIX"})) self.setCertPvPrefix(pickone.val);
@@ -610,8 +620,8 @@ Config& Config::applyDefs(const std::map<std::string, std::string>& defs) {
 }
 
 void Config::updateDefs(defs_t& defs) const {
-    defs["EPICS_PVA_BROADCAST_PORT"] = defs["EPICS_PVAS_BROADCAST_PORT"] = std::to_string(udp_port);
-    defs["EPICS_PVA_SERVER_PORT"] = defs["EPICS_PVAS_SERVER_PORT"] = std::to_string(tcp_port);
+    defs["EPICS_PVA_BROADCAST_PORT"] = defs["EPICS_PVAS_BROADCAST_PORT"] = udp_disabled ? "NO" : std::to_string(udp_port);
+    defs["EPICS_PVA_SERVER_PORT"] = defs["EPICS_PVAS_SERVER_PORT"] = tcp_disabled ? "NO" : std::to_string(tcp_port);
     defs["EPICS_PVA_AUTO_ADDR_LIST"] = defs["EPICS_PVAS_AUTO_BEACON_ADDR_LIST"] = auto_beacon ? "YES" : "NO";
 
     if (!beaconDestinations.empty()) defs["EPICS_PVA_ADDR_LIST"] = defs["EPICS_PVAS_BEACON_ADDR_LIST"] = join_addr(beaconDestinations);
@@ -634,7 +644,7 @@ void Config::updateDefs(defs_t& defs) const {
     defs["EPICS_PVAS_TLS_OPTIONS"] = printTLSOptions(*this);
 
     // EPICS_PVAS_TLS_PORT
-    defs["EPICS_PVA_TLS_PORT"] = defs["EPICS_PVAS_TLS_PORT"] = std::to_string(tls_port);
+    defs["EPICS_PVA_TLS_PORT"] = defs["EPICS_PVAS_TLS_PORT"] = tls_disabled ? "NO" : std::to_string(tls_port);
 
     // EPICS_PVAS_CERT_PV_PREFIX
     if (!getCertPvPrefix().empty()) defs["EPICS_PVAS_CERT_PV_PREFIX"] = getCertPvPrefix();
@@ -642,6 +652,9 @@ void Config::updateDefs(defs_t& defs) const {
 }
 
 void Config::expand() {
+#ifndef PVXS_ENABLE_OPENSSL
+    tls_disabled = true;  // no TLS support compiled in
+#endif
     auto ifaces(parseAddresses(interfaces));
     auto bdest(parseAddresses(beaconDestinations));
 
@@ -712,7 +725,8 @@ namespace client {
 void Config::fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
     PickOne pickone{defs, useenv};
 
-    if(pickone({"EPICS_PVA_BROADCAST_PORT"})) {
+    // negated port values (NO/off/...) are server-only; clients ignore them
+    if(pickone({"EPICS_PVA_BROADCAST_PORT"}) && !is_port_disable(pickone.val)) {
         try {
             self.udp_port = parseTo<uint64_t>(pickone.val);
         }catch(std::exception& e) {
@@ -724,7 +738,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         self.udp_port = 5076;
     }
 
-    if(pickone({"EPICS_PVA_SERVER_PORT", "EPICS_PVAS_SERVER_PORT"})) {
+    if(pickone({"EPICS_PVA_SERVER_PORT", "EPICS_PVAS_SERVER_PORT"}) && !is_port_disable(pickone.val)) {
         try {
             self.tcp_port = parseTo<uint64_t>(pickone.val);
         }catch(std::exception& e) {
@@ -780,8 +794,8 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         parseTLSOptions(self, pickone.val);
     }
 
-    // EPICS_PVA_TLS_PORT
-    if (pickone({"EPICS_PVA_TLS_PORT"})) {
+    // EPICS_PVA_TLS_PORT (negated values are server-only; clients ignore them)
+    if (pickone({"EPICS_PVA_TLS_PORT"}) && !is_port_disable(pickone.val)) {
         try {
             self.tls_port = parseTo<uint64_t>(pickone.val);
         } catch (std::exception& e) {
@@ -837,6 +851,9 @@ void Config::updateDefs(defs_t& defs) const {
 
 void Config::expand()
 {
+#ifndef PVXS_ENABLE_OPENSSL
+    tls_disabled = true;  // no TLS support compiled in
+#endif
     auto ifmap(IfaceMap::instance());
 
     if(udp_port==0)
