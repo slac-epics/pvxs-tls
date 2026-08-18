@@ -324,6 +324,21 @@ struct ShowX509 {
 
 PVXS_API std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
 
+/** Read a certificate subject's first common name, whatever its length.
+ *
+ * Returns false, leaving the value untouched, when the subject carries no
+ * common name or an empty one.
+ */
+PVXS_API bool getSubjectCommonName(const X509_NAME* subject, std::string& value);
+
+/** Write a certificate subject as a list of key and value pairs.
+ *
+ * See PeerCredentials::subject for the form and for which fields are kept.
+ * Returns an empty string when the subject carries no kept field, or carries a
+ * value that cannot be written.
+ */
+PVXS_API std::string makeSubjectIdentity(const X509_NAME* subject);
+
 /**
  * @brief SSL context for TLS communication
  *

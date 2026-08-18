@@ -11,7 +11,10 @@
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
+#include <string>
 #include <tuple>
+#include <utility>
+#include <vector>
 
 #include <epicsExit.h>
 
@@ -954,6 +957,172 @@ bool SSLContext::hasExpired() const {
     return expiry_date.t < now;
 }
 
+namespace {
+
+/**
+ * @brief Read one subject entry's value as text
+ *
+ * @param entry the subject entry to read
+ * @param value set to the entry's value on success, untouched on failure
+ * @return true if the value was read
+ */
+bool getSubjectEntryValue(const X509_NAME_ENTRY *entry, std::string &value) {
+    const auto data = X509_NAME_ENTRY_get_data(entry);
+    if (!data) return false;
+
+    unsigned char *utf8 = nullptr;
+    const auto length = ASN1_STRING_to_UTF8(&utf8, data);
+    if (length < 0 || !utf8) return false;
+
+    value.assign(reinterpret_cast<const char *>(utf8), static_cast<size_t>(length));
+    OPENSSL_free(utf8);
+    return true;
+}
+
+/**
+ * @brief Whether a subject value has to be wrapped in single quotes to be read back
+ *
+ * A comma ends a pair and an equals sign separates key from value, so either
+ * has to be quoted.  Spaces and tabs are dropped from the ends of an unquoted
+ * value, so a value containing one is quoted too rather than risk it coming
+ * back shorter than it went in.
+ */
+bool subjectValueNeedsQuoting(const std::string &value) {
+    return value.find_first_of(",= \t") != std::string::npos;
+}
+
+/** Characters a subject value cannot be written with, there being no escape for either.
+ *
+ * Held as a plain array rather than a std::string because a string here would be built when
+ * the library loads and taken down when it unloads, and this library does not allow either:
+ * the order against every other translation unit is unspecified, and on unload it can run
+ * after the code that would use it. It also has to carry an embedded NUL, so its length is
+ * passed rather than measured.
+ */
+constexpr char kUnwritableInSubjectValue[] = {'\'', '\0'};
+
+}  // namespace
+
+/**
+ * @brief Read a subject's first common name
+ *
+ * X509_NAME_get_text_by_NID does this in one call but copies into a buffer of
+ * the caller's choosing and cuts the value to fit without saying so, and copies
+ * the bytes verbatim rather than decoding them.  A common name may be 64
+ * characters, which is longer than the buffer this code used to give it, and
+ * may be held in a string type that is not plain bytes.  Reading the entry
+ * directly avoids both, and means the account and the written subject are read
+ * out of the certificate the same way and cannot disagree.
+ *
+ * @param subject the subject to read
+ * @param value set to the common name on success, untouched on failure
+ * @return true if the subject carries a common name that is not empty
+ */
+bool getSubjectCommonName(const X509_NAME *subject, std::string &value) {
+    if (!subject) return false;
+
+    const auto index = X509_NAME_get_index_by_NID(subject, NID_commonName, -1);
+    if (index < 0) return false;
+
+    const auto entry = X509_NAME_get_entry(subject, index);
+    if (!entry) return false;
+
+    std::string text;
+    if (!getSubjectEntryValue(entry, text) || text.empty()) return false;
+
+    value = std::move(text);
+    return true;
+}
+
+/**
+ * @brief Write a peer certificate's subject as a list of key and value pairs
+ *
+ * Keeps the common name, the organizational units, the organization and the
+ * country, and skips every other field.  The kept fields are written in that
+ * order whatever order the certificate carries them in, so that certificates
+ * that name the same values in different orders produce the same string.  Only
+ * the relative order of the organizational units among themselves is taken from
+ * the certificate, because it says which unit contains which: a subject is read
+ * innermost first.
+ *
+ * Repeats are preserved.  X509_NAME_get_text_by_NID cannot be used here because
+ * it returns only the first entry with a given identifier, and a certificate may
+ * well carry several organizational units.
+ *
+ * @param subject the subject to write
+ * @return the written subject, or an empty string if it carries no kept field or
+ *         carries a value that cannot be written
+ */
+std::string makeSubjectIdentity(const X509_NAME *subject) {
+    if (!subject) return {};
+
+    std::vector<std::string> common_names, units, organizations, countries;
+
+    const auto count = X509_NAME_entry_count(subject);
+    for (auto i = 0; i < count; i++) {
+        const auto entry = X509_NAME_get_entry(subject, i);
+        if (!entry) continue;
+        const auto object = X509_NAME_ENTRY_get_object(entry);
+        if (!object) continue;
+
+        std::vector<std::string> *kept;
+        switch (OBJ_obj2nid(object)) {
+            case NID_commonName: kept = &common_names; break;
+            case NID_organizationalUnitName: kept = &units; break;
+            case NID_organizationName: kept = &organizations; break;
+            case NID_countryName: kept = &countries; break;
+            default: continue;  // every other field is left out
+        }
+
+        std::string value;
+        if (!getSubjectEntryValue(entry, value)) continue;
+        // An empty value cannot be written: the reader rejects the whole string
+        // when it meets one, which would cost the peer its keyed identity.
+        if (value.empty()) continue;
+
+        // Neither a single quote nor an embedded null can be written, and there
+        // is no escape for either.  Writing the rest would silently drop a
+        // field, so nothing is written at all: an identity that is not there
+        // denies, while one missing a field could grant more than the
+        // certificate says.
+        if (value.find_first_of(kUnwritableInSubjectValue, 0, sizeof(kUnwritableInSubjectValue)) != std::string::npos) {
+            char oneline[256];
+            X509_NAME_oneline(subject, oneline, sizeof(oneline));
+            log_warn_printf(io, "Peer certificate subject carries a single quote or a null and cannot be written as key and value pairs: %s\n",
+                            oneline);
+            return {};
+        }
+
+        kept->push_back(std::move(value));
+    }
+
+    // Canonical order: common name, then the organizational units innermost
+    // first, then organization, then country.
+    const std::pair<const char *, const std::vector<std::string> *> groups[] = {
+        {"CN", &common_names},
+        {"OU", &units},
+        {"O", &organizations},
+        {"C", &countries},
+    };
+
+    std::string out;
+    for (const auto &group : groups) {
+        for (const auto &value : *group.second) {
+            if (!out.empty()) out += ',';
+            out += group.first;
+            out += '=';
+            if (subjectValueNeedsQuoting(value)) {
+                out += '\'';
+                out += value;
+                out += '\'';
+            } else {
+                out += value;
+            }
+        }
+    }
+    return out;
+}
+
 /**
  * @brief Get the peer credentials from the SSL context
  *
@@ -970,12 +1139,12 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
     if (const auto cert = SSL_get0_peer_certificate(ctx)) {
         PeerCredentials temp(C);  // copy current as initial (don't overwrite isTLS)
         const auto subj = X509_get_subject_name(cert);
-        char name[64];
-        if (subj && X509_NAME_get_text_by_NID(subj, NID_commonName, name, sizeof(name) - 1)) {
-            name[sizeof(name) - 1] = '\0';
-            log_debug_printf(io, "Peer CN=%s\n", name);
+        std::string name;
+        if (getSubjectCommonName(subj, name)) {
+            log_debug_printf(io, "Peer CN=%s\n", name.c_str());
             temp.method = "x509";
             temp.account = name;
+            temp.subject = makeSubjectIdentity(subj);
 
             // Get serial number
             const ASN1_INTEGER* serial_asn1 = X509_get_serialNumber(cert);
@@ -990,7 +1159,6 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
 
                 if (N > 0) {
                     std::string authority;
-                    char common_name[256];
 
                     // Start from index 1 to skip the entity certificate (first in chain)
                     // But if there's only one certificate, we don't skip it
@@ -999,10 +1167,10 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
                     // Process certificates in the chain in reverse order, from root to issuer
                     for (int i = N - 1; i >= start_index; i--) {
                         const auto chain_cert = sk_X509_value(chain, i);
-                        const X509_NAME *certName = X509_get_subject_name(chain_cert);
+                        if (!chain_cert) continue;
 
-                        if (chain_cert && certName &&
-                            X509_NAME_get_text_by_NID(certName, NID_commonName, common_name, sizeof(common_name) - 1)) {
+                        std::string common_name;
+                        if (getSubjectCommonName(X509_get_subject_name(chain_cert), common_name)) {
 
                             // Add this name to the authority string
                             if (!authority.empty()) {

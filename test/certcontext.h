@@ -99,6 +99,7 @@
 #define FAKE_CLIENT1_KEYCHAIN_FILE_PWD ""
 
 #define WHO_AM_I_PV "whoami"
+#define WHAT_IS_MY_SUBJECT_PV "whatismysubject"
 #define TLS_METHOD_STRING "x509"
 #define TCP_METHOD_STRING "ca"
 #define ANON_METHOD_STRING "anonymous"
@@ -109,6 +110,18 @@
 #define CERT_CN_CLIENT1 "client1"
 #define CERT_CN_CLIENT2 "client2"
 #define CERT_CN_SUPERSERVER1 "superserver1"
+
+/**
+ * @brief The subject of a gen_test_certs certificate, written as key and value pairs
+ *
+ * Every generated certificate carries the same country, organization and
+ * organizational unit, and differs only in its common name.  The unit contains
+ * spaces so it comes back wrapped in single quotes.  Note that the certificates
+ * encode these fields common name, country, organization, unit, while the string
+ * puts them in canonical order.
+ */
+#define CERT_SUBJECT_TAIL ",OU='epics.org Certificate Authority',O=certs.epics.org,C=US"
+#define CERT_SUBJECT_OF(CN) "CN=" CN CERT_SUBJECT_TAIL
 
 #define TEST_PV "TESTPV"
 #define TEST_PV1 "TESTPV1"
