@@ -597,6 +597,10 @@ int main(int argc, char *argv[])
 
         // remaining certificates issued by intermediate.
         // extendedKeyUsage derived from name: client, server, or IOC (both client and server)
+        // client1 is kept past the loop because the keychains holding it alongside more
+        // than one trust anchor cannot be written until the alternate root below exists.
+        pvxs::ossl_ptr<X509> client1_cert;
+        pvxs::ossl_ptr<EVP_PKEY> client1_key;
         for(const char *name : {"server1", "server2", "ioc1", "client1", "client2"}) {
             CertCreator cc;
             cc.root = root_cert.get();
@@ -629,6 +633,11 @@ int main(int argc, char *argv[])
                 pw = "oraclesucks"; // java keytool forces non-interactive IOCs to deal with passwords...
 
             p12.write(fname.c_str(), pw);
+
+            if(strcmp(name, "client1")==0) {
+                client1_cert = std::move(cert);
+                client1_key = std::move(key);
+            }
         }
 
         // ============================================================
@@ -707,6 +716,20 @@ int main(int argc, char *argv[])
             MUST(1, sk_X509_push(p12.cacerts.get(), alt_i_cert.get()));
             MUST(2, sk_X509_push(p12.cacerts.get(), alt_root_cert.get()));
             p12.write("alt_server1.p12");
+
+            // alt_server1_two_anchors.p12 - the same identity, trusting both roots.
+            // The chain is laid out the way the pvxs-cms tools write one: the identity's
+            // issuer first, then the root the identity chains to, then the other anchor.
+            {
+                PKCS12Writer p12_two_anchors(outdir);
+                p12_two_anchors.friendlyName = cc.CN;
+                p12_two_anchors.key = key.get();
+                p12_two_anchors.cert = cert.get();
+                MUST(1, sk_X509_push(p12_two_anchors.cacerts.get(), alt_i_cert.get()));
+                MUST(2, sk_X509_push(p12_two_anchors.cacerts.get(), alt_root_cert.get()));
+                MUST(3, sk_X509_push(p12_two_anchors.cacerts.get(), root_cert.get()));
+                p12_two_anchors.write("alt_server1_two_anchors.p12");
+            }
         }
 
         // Alternate client certificate (signed by alt_intermediate)
@@ -748,6 +771,50 @@ int main(int argc, char *argv[])
                 MUST(1, sk_X509_push(p12_alt.cacerts.get(), root_cert.get()));
                 p12_alt.write("alt_client1_with_main_root.p12");
             }
+        }
+
+        // ============================================================
+        // Keychains holding the client1 identity and more than one trust anchor
+        // ============================================================
+        {
+            // client1_two_anchors.p12 - the layout the pvxs-cms tools write: the identity's
+            // issuer first, then the root the identity chains to, then the other anchor.
+            PKCS12Writer p12(outdir);
+            p12.friendlyName = "client1";
+            p12.key = client1_key.get();
+            p12.cert = client1_cert.get();
+            MUST(1, sk_X509_push(p12.cacerts.get(), i_cert.get()));
+            MUST(2, sk_X509_push(p12.cacerts.get(), root_cert.get()));
+            MUST(3, sk_X509_push(p12.cacerts.get(), alt_root_cert.get()));
+            p12.write("client1_two_anchors.p12");
+        }
+
+        {
+            // client1_two_anchors_reversed.p12 - the same identity and the same two anchors,
+            // with the foreign root written ahead of the root the identity chains to.  The
+            // pvxs-cms tools never write this layout, because the root the identity chains to
+            // always follows element 0.  It is written by hand so that the tests can show that
+            // anchors are found by the self-signed flag rather than by where they sit, and that
+            // no anchor carries more weight for being written earlier.
+            PKCS12Writer p12(outdir);
+            p12.friendlyName = "client1";
+            p12.key = client1_key.get();
+            p12.cert = client1_cert.get();
+            MUST(1, sk_X509_push(p12.cacerts.get(), i_cert.get()));
+            MUST(2, sk_X509_push(p12.cacerts.get(), alt_root_cert.get()));
+            MUST(3, sk_X509_push(p12.cacerts.get(), root_cert.get()));
+            p12.write("client1_two_anchors_reversed.p12");
+        }
+
+        {
+            // client1_no_anchor.p12 - the identity and its issuing intermediate authority, with
+            // no self-signed certificate at all, so the keychain carries no trust anchor.
+            PKCS12Writer p12(outdir);
+            p12.friendlyName = "client1";
+            p12.key = client1_key.get();
+            p12.cert = client1_cert.get();
+            MUST(1, sk_X509_push(p12.cacerts.get(), i_cert.get()));
+            p12.write("client1_no_anchor.p12");
         }
 
         // ============================================================

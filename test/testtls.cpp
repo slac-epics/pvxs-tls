@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iomanip>
 #include <map>
 #include <sstream>
 #include <stdexcept>
@@ -921,6 +922,386 @@ void testClientWithMismatchedChainFallback() {
 }
 
 /**
+ * @brief What a keychain file holds: an identity, its key, and the authority chain
+ *
+ * Either of the identity and the key may be absent, since some of the generated
+ * keychains carry nothing but certificate authority certificates.
+ */
+struct Keychain {
+    ossl_ptr<X509> cert;
+    ossl_ptr<EVP_PKEY> key;
+    ossl_shared_ptr<STACK_OF(X509)> chain;
+};
+
+/**
+ * @brief Reads a keychain file with libcrypto, without going through a TLS context
+ *
+ * The tests below need the raw certificates out of a keychain so they can compare
+ * them against what a context ended up presenting, and need an authority's key so
+ * they can sign a certificate status reply with it.
+ */
+Keychain readKeychain(const char* filename, const char* password = "") {
+    ossl::osslInit();
+
+    const file_ptr fp(fopen(filename, "rb"), false);
+    if (!fp) throw std::runtime_error(SB() << "could not open keychain file " << filename);
+
+    const ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), nullptr));
+    if (!p12) throw std::runtime_error(SB() << "could not read " << filename << " as a PKCS#12 file");
+
+    Keychain out;
+    STACK_OF(X509)* chain_ptr = nullptr;
+    if (!PKCS12_parse(p12.get(), password, out.key.acquire(), out.cert.acquire(), &chain_ptr))
+        throw std::runtime_error(SB() << "could not parse keychain file " << filename);
+
+    out.chain = chain_ptr ? ossl_shared_ptr<STACK_OF(X509)>(chain_ptr) : ossl_shared_ptr<STACK_OF(X509)>(sk_X509_new_null());
+    return out;
+}
+
+/**
+ * @brief Builds a client TLS context from a keychain, the way a client does
+ *
+ * The status check is turned off so that no status subscription is started, which
+ * is why the empty client context handed to the builder is never used.
+ */
+std::shared_ptr<ossl::SSLContext> buildClientContext(const impl::evbase& loop, const char* keychain_file) {
+    client::Config conf;
+    conf.tls_keychain_file = keychain_file;
+    conf.disableStatusCheck();
+    conf.disableStapling();
+
+    const client::Context unused_status_client;
+    return ossl::SSLContext::for_client(conf, unused_status_client, loop);
+}
+
+/**
+ * @brief Whether a certificate is among those in a stack
+ */
+bool stackHolds(const STACK_OF(X509)* certificates, const X509* wanted) {
+    for (int i = 0, N = sk_X509_num(certificates); i < N; i++) {
+        if (X509_cmp(sk_X509_value(certificates, i), wanted) == 0) return true;
+    }
+    return false;
+}
+
+/**
+ * @brief Signs a certificate status reply for a certificate, under the authority that issued it
+ *
+ * pvxs cannot mint one of these on its own, because the factory that does lives in
+ * pvxs-cms, so the reply is built here straight from libcrypto.  It says the
+ * certificate is good, from now until the usual status validity period is up.
+ */
+std::vector<uint8_t> signStatusReply(const Keychain& authority, const X509* subject) {
+    const ossl_ptr<OCSP_CERTID> cert_id(OCSP_cert_to_id(EVP_sha1(), subject, authority.cert.get()));
+
+    const time_t now(time(nullptr));
+    const ossl_ptr<ASN1_TIME> this_update(ASN1_TIME_set(nullptr, now));
+    const ossl_ptr<ASN1_TIME> next_update(ASN1_TIME_set(nullptr, now + STATUS_VALID_FOR_SECS));
+
+    const ossl_ptr<OCSP_BASICRESP> basic_response(OCSP_BASICRESP_new());
+    if (!OCSP_basic_add1_status(basic_response.get(), cert_id.get(), V_OCSP_CERTSTATUS_GOOD, 0, nullptr, this_update.get(), next_update.get()))
+        throw std::runtime_error("could not add a certificate status to the reply");
+
+    // The signing certificate goes into the reply, which is where the verifier looks for it
+    if (!OCSP_basic_sign(basic_response.get(), authority.cert.get(), authority.key.get(), EVP_sha256(), nullptr, 0))
+        throw std::runtime_error("could not sign the certificate status reply");
+
+    const ossl_ptr<OCSP_RESPONSE> response(OCSP_response_create(OCSP_RESPONSE_STATUS_SUCCESSFUL, basic_response.get()));
+    unsigned char* der = nullptr;
+    const int der_len = i2d_OCSP_RESPONSE(response.get(), &der);
+    if (der_len <= 0) throw std::runtime_error("could not encode the certificate status reply");
+    const ossl_ptr<unsigned char> der_holder(der);
+
+    return std::vector<uint8_t>(der, der + der_len);
+}
+
+/**
+ * @brief The certificate identifier that a status reply signed by this authority carries
+ *
+ * The identifier names the authority by the hash of its public key and the certificate by
+ * its serial number, which is how pvxs-cms builds one (`createOCSPCertId`).  It cannot be
+ * read off the subject certificate with getCertIdFromCert here, because gen_test_certs
+ * writes every certificate a subject key identifier taken from its issuer's key rather
+ * than from its own, so what a generated certificate advertises is not the hash a reply
+ * about it carries.
+ */
+std::string statusReplyCertId(const X509* authority, const X509* subject) {
+    unsigned char key_hash[EVP_MAX_MD_SIZE];
+    unsigned int key_hash_len = 0;
+
+    const ASN1_BIT_STRING* authority_key = X509_get0_pubkey_bitstr(authority);
+    const ossl_ptr<EVP_MD_CTX> digest(EVP_MD_CTX_new());
+    if (!EVP_DigestInit_ex(digest.get(), EVP_sha1(), nullptr) ||
+        !EVP_DigestUpdate(digest.get(), authority_key->data, authority_key->length) ||
+        !EVP_DigestFinal_ex(digest.get(), key_hash, &key_hash_len))
+        throw std::runtime_error("could not hash the authority's public key");
+
+    std::ostringstream issuer_id;
+    for (unsigned i = 0; i < key_hash_len && issuer_id.tellp() < 8; i++) {
+        issuer_id << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(key_hash[i]);
+    }
+
+    return certs::CertStatusManager::getCertIdFromSerialAndIssuer(issuer_id.str(), certs::CertStatusManager::getSerialFromCert(subject));
+}
+
+/**
+ * @brief testTwoAnchorsConnectsUnderOwnRoot checks that a keychain carrying a foreign
+ * anchor still reaches a server under the root the identity itself chains to.
+ *
+ * This is the case that would have failed while the context was being built, if
+ * SSL_CTX_build_cert_chain had refused the foreign anchor added to the presented chain
+ * instead of dropping it.
+ */
+void testTwoAnchorsConnectsUnderOwnRoot() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_TWO_ANCHORS_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    auto is_tls{false};
+    auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) {
+        is_tls = c.cred && c.cred->isTLS;
+    }).exec());
+
+    auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+    testTrue(is_tls) << "a two anchor keychain still secures the connection to its own root";
+    testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+    conn.reset();
+}
+
+/**
+ * @brief testTwoAnchorsConnectsAcrossRoots checks the point of the whole feature:
+ * two holders whose identities chain to roots neither issues under still reach each other,
+ * because each keychain carries both roots as anchors.
+ */
+void testTwoAnchorsConnectsAcrossRoots() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    // The server's identity chains to the alternate root, and it holds both roots
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = ALT_SERVER1_TWO_ANCHORS_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    // The client's identity chains to the main root, and it holds both roots
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_TWO_ANCHORS_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    auto is_tls{false};
+    auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) {
+        is_tls = c.cred && c.cred->isTLS;
+    }).exec());
+
+    auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+    testTrue(is_tls) << "each side verifies the other under a root it does not issue under";
+    testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+    conn.reset();
+}
+
+/**
+ * @brief testTwoAnchorsOrderDoesNotMatter repeats the case above with the client's two
+ * anchors written the other way round in the chain, and expects the identical result.
+ *
+ * Anchors are found by the self-signed flag, so no anchor carries more weight for being
+ * written earlier.
+ */
+void testTwoAnchorsOrderDoesNotMatter() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = ALT_SERVER1_TWO_ANCHORS_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_TWO_ANCHORS_REVERSED_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    auto is_tls{false};
+    auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) {
+        is_tls = c.cred && c.cred->isTLS;
+    }).exec());
+
+    auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+    testTrue(is_tls) << "the order the anchors are written in makes no difference";
+    testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+    conn.reset();
+}
+
+/**
+ * @brief testKeychainWithNoAnchorRefused checks that a keychain carrying no trust anchor
+ * at all is still refused, with the message it has always had.
+ */
+void testKeychainWithNoAnchorRefused() {
+    testShow() << __func__;
+
+    static const char expected[] = "Could not find Trusted Root Certificate Authority Certificate in keychain";
+
+    const impl::evbase loop("noanchor");
+
+    std::string message;
+    try {
+        const auto tls_context(buildClientContext(loop, CLIENT1_NO_ANCHOR_KEYCHAIN_FILE));
+        testDiag("a context was built from a keychain holding no trust anchor");
+    } catch (std::exception& e) {
+        message = e.what();
+        testDiag("refused with: %s", message.c_str());
+    }
+
+    testTrue(!message.empty()) << "a keychain holding no trust anchor is refused";
+    testTrue(message.find(expected) != std::string::npos) << "refused with the message it has always had";
+}
+
+/**
+ * @brief testPresentedChainExcludesForeignAnchor checks that the handshake presents this
+ * identity's own chain and nothing else.
+ *
+ * extractCAs adds every certificate in the keychain to the presented chain, foreign
+ * anchors included, and SSL_CTX_build_cert_chain then rebuilds that chain from the identity
+ * certificate and drops whatever is not on its certification path.
+ */
+void testPresentedChainExcludesForeignAnchor() {
+    testShow() << __func__;
+
+    const impl::evbase loop("presented");
+    const auto tls_context(buildClientContext(loop, CLIENT1_TWO_ANCHORS_KEYCHAIN_FILE));
+
+    const auto intermediate(readKeychain(INTERMEDIATE_SERVER_KEYCHAIN_FILE));
+    const auto main_root(readKeychain(CERT_AUTH_CERT_FILE));
+    const auto alt_root(readKeychain(ALT_CERT_AUTH_KEYCHAIN_FILE));
+
+    STACK_OF(X509)* presented = nullptr;
+    SSL_CTX_get0_chain_certs(tls_context->ctx.get(), &presented);
+
+    testEq(sk_X509_num(presented), 2) << "only the identity's issuer and its own root are presented";
+    testTrue(stackHolds(presented, intermediate.cert.get())) << "the identity's issuer is presented";
+    testTrue(stackHolds(presented, sk_X509_value(main_root.chain.get(), 0))) << "the identity's own root is presented";
+    testTrue(!stackHolds(presented, sk_X509_value(alt_root.chain.get(), 0))) << "the foreign anchor is not presented";
+}
+
+/**
+ * @brief testStatusReplyUnderOwnRootVerifies checks that a status reply signed under the
+ * authority this identity chains to verifies against a store built from a two anchor keychain.
+ */
+void testStatusReplyUnderOwnRootVerifies() {
+    testShow() << __func__;
+
+    const impl::evbase loop("ownroot");
+    const auto tls_context(buildClientContext(loop, CLIENT1_TWO_ANCHORS_KEYCHAIN_FILE));
+    const auto trusted_store_ptr(tls_context->getCertStatusExData()->trusted_store_ptr);
+
+    const auto authority(readKeychain(INTERMEDIATE_SERVER_KEYCHAIN_FILE));
+    const auto subject(readKeychain(CLIENT1_KEYCHAIN_FILE));
+    const auto reply(signStatusReply(authority, subject.cert.get()));
+    const auto cert_id(statusReplyCertId(authority.cert.get(), subject.cert.get()));
+
+    auto verified{false};
+    uint32_t reported_status{~0u};
+    try {
+        const auto parsed(certs::CertStatusManager::parse(reply.data(), reply.size(), trusted_store_ptr, cert_id));
+        verified = true;
+        reported_status = parsed.ocsp_status.i;
+    } catch (std::exception& e) {
+        testDiag("refused: %s", e.what());
+    }
+
+    testTrue(verified) << "a reply signed under the root the identity chains to verifies";
+    testEq(reported_status, static_cast<uint32_t>(certs::OCSP_CERTSTATUS_GOOD));
+}
+
+/**
+ * @brief testStatusReplyUnderOtherAnchorVerifies checks that a status reply signed under the
+ * other anchor in the keychain, which this identity does not chain to, verifies from the
+ * very same store.  This is the requirement in one case.
+ */
+void testStatusReplyUnderOtherAnchorVerifies() {
+    testShow() << __func__;
+
+    const impl::evbase loop("otheranchor");
+    const auto tls_context(buildClientContext(loop, CLIENT1_TWO_ANCHORS_KEYCHAIN_FILE));
+    const auto trusted_store_ptr(tls_context->getCertStatusExData()->trusted_store_ptr);
+
+    const auto authority(readKeychain(ALT_INTERMEDIATE_KEYCHAIN_FILE));
+    const auto subject(readKeychain(ALT_SERVER1_KEYCHAIN_FILE));
+    const auto reply(signStatusReply(authority, subject.cert.get()));
+    const auto cert_id(statusReplyCertId(authority.cert.get(), subject.cert.get()));
+
+    auto verified{false};
+    uint32_t reported_status{~0u};
+    try {
+        const auto parsed(certs::CertStatusManager::parse(reply.data(), reply.size(), trusted_store_ptr, cert_id));
+        verified = true;
+        reported_status = parsed.ocsp_status.i;
+    } catch (std::exception& e) {
+        testDiag("refused: %s", e.what());
+    }
+
+    testTrue(verified) << "a reply signed under the other anchor verifies from the same store";
+    testEq(reported_status, static_cast<uint32_t>(certs::OCSP_CERTSTATUS_GOOD));
+}
+
+/**
+ * @brief testStatusReplyUnderUnknownAuthorityRefused checks that trusting more anchors has
+ * not made the store trust everything: a reply signed by an authority reachable from no
+ * anchor in the keychain is still refused.
+ */
+void testStatusReplyUnderUnknownAuthorityRefused() {
+    testShow() << __func__;
+
+    const impl::evbase loop("unknown");
+    const auto tls_context(buildClientContext(loop, CLIENT1_TWO_ANCHORS_KEYCHAIN_FILE));
+    const auto trusted_store_ptr(tls_context->getCertStatusExData()->trusted_store_ptr);
+
+    // The fake hierarchy carries the same names as the real one but no anchor reaches it
+    const auto authority(readKeychain(FAKE_INTERMEDIATE_KEYCHAIN_FILE));
+    const auto subject(readKeychain(FAKE_CLIENT1_KEYCHAIN_FILE));
+    const auto reply(signStatusReply(authority, subject.cert.get()));
+    const auto cert_id(statusReplyCertId(authority.cert.get(), subject.cert.get()));
+
+    std::string message;
+    try {
+        const auto parsed(certs::CertStatusManager::parse(reply.data(), reply.size(), trusted_store_ptr, cert_id));
+        testDiag("accepted a reply signed by an authority no anchor reaches");
+    } catch (std::exception& e) {
+        message = e.what();
+        testDiag("refused: %s", message.c_str());
+    }
+
+    testTrue(!message.empty()) << "a reply signed by an authority no anchor reaches is refused";
+    // The refusal has to come from verifying the signature against the store, not from the
+    // reply naming a different certificate than the one asked about
+    testTrue(message.find("OCSP_basic_verify failed") != std::string::npos) << "refused because it does not verify against the store";
+}
+
+/**
  * @brief testFakeCertificateNameMatchingAttack tests that TLS authentication
  * is based on cryptographic verification, not just CN name matching.
  *
@@ -1609,7 +1990,7 @@ void testDefaultBeaconUnchanged() {
 
 
 MAIN(testtls) {
-    testPlan(137);
+    testPlan(155);
     testSetup();
     logger_config_env();
     testSubjectIdentity();
@@ -1630,6 +2011,14 @@ MAIN(testtls) {
     testServerOnlyAuthWithMatchingTrustAnchor();
     testMutualTLSWithMatchingTrustAnchors();
     testClientWithMismatchedChainFallback();
+    testTwoAnchorsConnectsUnderOwnRoot();
+    testTwoAnchorsConnectsAcrossRoots();
+    testTwoAnchorsOrderDoesNotMatter();
+    testKeychainWithNoAnchorRefused();
+    testPresentedChainExcludesForeignAnchor();
+    testStatusReplyUnderOwnRootVerifies();
+    testStatusReplyUnderOtherAnchorVerifies();
+    testStatusReplyUnderUnknownAuthorityRefused();
     testFakeCertificateNameMatchingAttack();
     // TLS-only transport mode (EPICS_PVAS_SERVER_PORT=NO)
     testNoTcpTokenParsing();
