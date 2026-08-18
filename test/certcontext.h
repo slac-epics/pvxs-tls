@@ -72,6 +72,18 @@
 #define ALT_CLIENT1_WITH_MAIN_ROOT_KEYCHAIN_FILE_PWD ""
 #define ALT_CERT_AUTH_KEYCHAIN_FILE "alt_cert_auth.p12"
 #define ALT_CERT_AUTH_KEYCHAIN_FILE_PWD ""
+#define ALT_INTERMEDIATE_KEYCHAIN_FILE "alternateIntermediateCA.p12"
+#define ALT_INTERMEDIATE_KEYCHAIN_FILE_PWD ""
+
+/* Keychains holding one identity and more than one trust anchor */
+#define CLIENT1_TWO_ANCHORS_KEYCHAIN_FILE "client1_two_anchors.p12"
+#define CLIENT1_TWO_ANCHORS_KEYCHAIN_FILE_PWD ""
+#define CLIENT1_TWO_ANCHORS_REVERSED_KEYCHAIN_FILE "client1_two_anchors_reversed.p12"
+#define CLIENT1_TWO_ANCHORS_REVERSED_KEYCHAIN_FILE_PWD ""
+#define CLIENT1_NO_ANCHOR_KEYCHAIN_FILE "client1_no_anchor.p12"
+#define CLIENT1_NO_ANCHOR_KEYCHAIN_FILE_PWD ""
+#define ALT_SERVER1_TWO_ANCHORS_KEYCHAIN_FILE "alt_server1_two_anchors.p12"
+#define ALT_SERVER1_TWO_ANCHORS_KEYCHAIN_FILE_PWD ""
 
 /* Fake certificate hierarchy for name-matching attack tests */
 /* These have the SAME CNs as real certs but are signed by different (fake) CAs */

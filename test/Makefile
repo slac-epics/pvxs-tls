@@ -136,6 +136,9 @@ testtls_SRCS += testtls.cpp
 testtls_SRCS += certstatus.cpp
 TESTS += testtls
 TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12 alt_server1.p12 alt_client1.p12 alt_client1_with_main_root.p12 alt_cert_auth.p12
+TESTFILES += client1_two_anchors.p12 client1_two_anchors_reversed.p12 client1_no_anchor.p12 alt_server1_two_anchors.p12
+# read by the certificate status tests to sign a status reply under each authority
+TESTFILES += alternateIntermediateCA.p12 fake_intermediateCA.p12 fake_client1.p12
 
 TESTPROD_HOST += testtlstime
 testtlstime_SRCS += testtlstime.cpp

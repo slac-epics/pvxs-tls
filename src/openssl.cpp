@@ -419,15 +419,18 @@ void verifyKeyUsage(const ossl_ptr<X509> &cert,
  * is trusted.  However, PKCS12_parse() circa 3.1 does not know about
  * this, and gives us all the certs. in one blob for us to sort through.
  *
- * We _assume_ that any root certificate authority included in a keychain file is meant to
- * be trusted.  Otherwise, such a cert. could never appear in a valid
- * chain.
+ * Every self-signed certificate in a keychain file is a trust anchor, and all of
+ * them are trusted equally.  A keychain may hold the roots of several certificate
+ * authorities that share no common root, so that holders certificated under any
+ * one of them can check each other, and no anchor carries more weight than
+ * another for where it happens to sit in the chain.
  *
  * @param ctx the context to add the CAs to
  * @param CAs the stack of X509 Certificate Authority certificates
+ * @return how many trust anchors were found and added to the context's trust store
  */
-ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr<STACK_OF(X509)> &CAs) {
-    ossl_ptr<X509> trusted_root_ca{};
+size_t extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr<STACK_OF(X509)> &CAs) {
+    size_t anchor_count = 0u;
     for (int i = 0, N = sk_X509_num(CAs.get()); i < N; i++) {
         const auto cert_auth = sk_X509_value(CAs.get(), i);
 
@@ -442,12 +445,12 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
         }
 
         if (flags & EXFLAG_SS) {  // self-signed (aka. root)
-            trusted_root_ca = ossl_ptr<X509>(X509_dup(cert_auth));
             assert(flags & EXFLAG_SI);  // circa OpenSSL, self-signed implies self-issued
 
             // populate the context's trust store with the self-signed root cert
             X509_STORE *trusted_store = SSL_CTX_get_cert_store(ctx->ctx.get());
             if (!X509_STORE_add_cert(trusted_store, cert_auth)) throw SSLError("X509_STORE_add_cert");
+            anchor_count++;
         } else {
             // signed by another certificate authority
             // note: chain certs added this way are ignored unless SSL_BUILD_CHAIN_FLAG_UNTRUSTED is used
@@ -455,7 +458,7 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
         }
         if (!SSL_CTX_add0_chain_cert(ctx->ctx.get(), cert_auth)) throw SSLError("SSL_CTX_add0_chain_cert");
     }
-    return trusted_root_ca;
+    return anchor_count;
 }
 
 /**
@@ -523,9 +526,10 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     const std::string &filename = conf.tls_keychain_file, password = conf.getKeychainPassword();
     auto cert_data = certs::IdFileReader::createReader(filename, password)->getCertDataFromFile();
 
-    log_debug_printf(setup, "Getting trusted root from certificate chain. %s\n", "");
-    const ossl_ptr<X509> trusted_root_ca(extractCAs(tls_context, cert_data.cert_auth_chain));
-    if (!trusted_root_ca) throw SSLError("Could not find Trusted Root Certificate Authority Certificate in keychain");
+    log_debug_printf(setup, "Getting trusted roots from certificate chain. %s\n", "");
+    const auto anchor_count = extractCAs(tls_context, cert_data.cert_auth_chain);
+    if (anchor_count == 0) throw SSLError("Could not find Trusted Root Certificate Authority Certificate in keychain");
+    log_debug_printf(setup, "Keychain contributed %zu trust anchor(s)\n", anchor_count);
 
     // Get the context's trust store that has been established by reading the CAs from the file
     X509_STORE *store_ptr = SSL_CTX_get_cert_store(tls_context->ctx.get());
