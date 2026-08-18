@@ -16,6 +16,9 @@ RUN apt-get update && \
 WORKDIR ${PROJECT_HOME}
 COPY epics-base ./epics-base
 WORKDIR ${PROJECT_HOME}/epics-base
-RUN make -j$(nproc) all
+# How many compiler processes to run at once. Each can take most of a gigabyte,
+# so a machine with little memory and no swap needs this lowered.
+ARG JOBS
+RUN make -j${JOBS:-$(nproc)} all
 
 CMD ["/bin/bash"]
