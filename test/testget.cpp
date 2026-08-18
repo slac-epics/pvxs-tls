@@ -521,11 +521,88 @@ void testError(bool phase)
     }
 }
 
+// Registers a close handler, then fails part way through onCreate().
+// ServerConn::handle_CREATE_CHANNEL() catches that, no Source ends up claiming the channel,
+// and so the channel is refused while the close handler is still attached to it.
+struct FailingSource : public server::Source
+{
+    epicsEvent& closed;
+
+    explicit FailingSource(epicsEvent& closed)
+        :closed(closed)
+    {}
+
+    virtual void onSearch(Search &op) override final
+    {
+        for(auto& name : op) {
+            name.claim();
+        }
+    }
+
+    virtual void onCreate(std::unique_ptr<server::ChannelControl> &&op) override final
+    {
+        // Keep this handler small enough to sit in std::function's inline storage.  A large
+        // handler is heap allocated, and moving one of those does clear the source function,
+        // which would hide half of what this test is checking.
+        op->onClose([this](const std::string&) {
+            closed.signal();
+        });
+
+        // A Source is allowed to fail here.  Whatever it set up beforehand still has to be
+        // torn down, and the close handler is the only place it can hear about that.
+        throw std::runtime_error("no channel for you");
+    }
+};
+
+// Quietens the server search logger while a test deliberately fails a channel creation.
+// The server reports that failure at Level::Crit, and a test run with _PVXS_ABORT_ON_CRIT
+// set turns any message at that level into an abort().  One step below Level::Crit is the
+// lowest level the logging code accepts, so it drops everything, and the level goes back to
+// the Level::Warn default when this object dies.
+struct QuietServerSearch
+{
+    QuietServerSearch()
+    {
+        logger_level_set("pvxs.svr.search", int(Level::Crit)-1);
+    }
+
+    ~QuietServerSearch()
+    {
+        logger_level_set("pvxs.svr.search", Level::Warn);
+    }
+};
+
+void testRefusedChannelCloses()
+{
+    testShow()<<__func__;
+
+    // declared first so the logger is still quiet while the server and the client shut down
+    QuietServerSearch quiet;
+
+    epicsEvent closed;
+
+    auto serv = server::Config::isolated()
+            .build()
+            .addSource("failing", std::make_shared<FailingSource>(closed))
+            .start();
+
+    auto cli = serv.clientConfig().build();
+
+    auto op = cli.get("mailbox")
+            .result([](client::Result&&) {})
+            .exec();
+
+    cli.hurryUp();
+
+    // a refused channel is retried by the client, we only care about the first refusal
+    testOk1(closed.wait(5.0));
+}
+
 } // namespace
 
 MAIN(testget)
 {
-    testPlan(63);
+    testPlan(64);
     testSetup();
     logger_config_env();
     const bool canIPv6 = pvxs::impl::evsocket::canIPv6;
@@ -549,6 +626,7 @@ MAIN(testget)
     Tester().ordering();
     testError(false);
     testError(true);
+    testRefusedChannelCloses();
     cleanup_for_valgrind();
     return testDone();
 }

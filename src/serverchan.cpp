@@ -57,7 +57,11 @@ void ServerChan::cleanup()
         }
     }
 
+    // Moving out of a std::function is not required to leave it empty, and libc++ does not
+    // when the handler is small enough to live in the function's inline storage.  Clear it
+    // here so the channel really is detached from its Source, whatever the handler's size.
     auto fn(std::move(onClose));
+    onClose = nullptr;
     if(fn)
         fn("");
 }
@@ -360,8 +364,12 @@ void ServerConn::handle_CREATE_CHANNEL()
                 sts.code = Status::Fatal;
                 sts.msg = "Refused to create Channel";
                 sts.trace = "pvx:serv:refusechan:";
-                chan->state = ServerChan::Destroy;
-                log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %s\n", "ServerChan::state", "Destroy", "ServerChan::handle_CREATE_CHANNEL()", chan->name.c_str());
+                // A Source may already have registered handlers and per-channel state while
+                // its onCreate() ran, so go through cleanup() to detach the handlers and let
+                // the Source undo that state.  Assigning Destroy here instead would make
+                // every later cleanup() take its early return, leaving the handlers attached
+                // for the rest of the channel's life.
+                chan->cleanup();
 
                 sid = -1;
             }
