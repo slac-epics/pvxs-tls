@@ -14,7 +14,9 @@
 
 #include "ownedptr.h"
 
-#define CERT_TIME_FORMAT "%a %b %d %H:%M:%S %Y UTC"
+// Year first and fixed width, so a rendered date sorts chronologically when sorted
+// as text and can be compared as a string without being parsed.
+#define CERT_TIME_FORMAT "%Y-%m-%d %H:%M:%S UTC"
 
 DEFINE_LOGGER(certs_time, "pvxs.certs.time");
 namespace pvxs {
