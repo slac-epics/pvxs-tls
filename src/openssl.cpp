@@ -787,7 +787,29 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *p
         peer_status_and_monitor = getOrCreatePeerStatus(serial_number);
     }
 
-    peer_status_and_monitor->updateStatus(new_status);
+    // Carry a stapled status across to the connection.
+    //
+    // Stapling runs during the handshake, before any connection holds this peer status, and
+    // peer_statuses keeps only weak references, so the peer status created here is destroyed
+    // as soon as the stapling callback returns.  Remember the status and apply it when the
+    // connection subscribes, otherwise the connection starts from UNKNOWN and defers every
+    // channel until a subscription reports GOOD.  Where the status process variable is only
+    // reachable through the peer being gated, as with a gateway that serves TLS alone, that
+    // subscription can never complete and the connection never carries anything.
+    auto effective_status = new_status;
+    if (fn) {
+        const auto stapled = stapled_statuses.find(serial_number);
+        if (stapled != stapled_statuses.end()) {
+            if (new_status.getStatusClass() == certs::cert_status_class_t::UNKNOWN) effective_status = stapled->second;
+            // The connection owns the peer status from here, and its subscription carries
+            // every later change, so the stapled copy has done its job.
+            stapled_statuses.erase(stapled);
+        }
+    } else if (new_status.getStatusClass() != certs::cert_status_class_t::UNKNOWN) {
+        stapled_statuses[serial_number] = new_status;
+    }
+
+    peer_status_and_monitor->updateStatus(effective_status);
     return peer_status_and_monitor;
 }
 

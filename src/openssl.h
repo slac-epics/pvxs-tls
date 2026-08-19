@@ -190,6 +190,15 @@ struct CertStatusExData {
     // if it does then we still use the serial number but we error out with a clash if there is a clash
     // of serial numbers across different CAs when creating the second subscription
     std::map<serial_number_t, std::weak_ptr<SSLPeerStatusAndMonitor>> peer_statuses{};
+    // Statuses stapled into a TLS handshake, keyed by the serial number of the peer's
+    // certificate, held until the connection for that peer creates its own peer status.
+    //
+    // A stapled status arrives while the handshake is still running, which is before any
+    // connection exists to hold the peer status.  The map above keeps only weak references,
+    // so the peer status created for a stapled result is destroyed as soon as the stapling
+    // callback returns, and the result is lost with it.  The status itself is kept here and
+    // applied to the peer status the connection creates a moment later.
+    std::map<serial_number_t, certs::CertificateStatus> stapled_statuses{};
     // map to keep status validity expiration handler parameters from going stale
     std::map<serial_number_t, StatusValidityExpirationHandlerParam> sveh_params{};
 
