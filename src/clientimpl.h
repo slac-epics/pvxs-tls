@@ -148,6 +148,19 @@ public:
 
 #ifdef PVXS_ENABLE_OPENSSL
     void configureClientOCSPCallback(SSL *ssl) const;
+
+    /** Whether this connection may take the standing of our own certificate from the server.
+     *
+     * True only for a TLS connection to a configured name server, and only when remote
+     * verification is enabled.  A name server reached over TLS is the case where we may have no
+     * other route to the certificate manager: the server checks the certificate we present and
+     * refuses the connection unless it stands, so it has already made the check we cannot.
+     *
+     * Deliberately false for plain TCP, for UDP search, and for any server we did not name as a
+     * name server.  In each of those the certificate manager is reachable by some route, so the
+     * standing of our own certificate must be established rather than assumed.
+     */
+    bool ownStatusTakenFromServer() const;
 #endif
 
 #define CASE(Op) virtual void handle_##Op() override final;

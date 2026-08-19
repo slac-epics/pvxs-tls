@@ -125,6 +125,12 @@ struct PVXS_API ConfigCommon {
     bool tls_disable_stapling{false};
 
     /**
+     * @brief True if a client may take the standing of its own certificate from the servers it
+     * connects to, rather than from the certificate manager directly
+     */
+    bool tls_remote_verification{false};
+
+    /**
      * @brief The request timeout specified in a user call
      * @note Cannot be set by an environment variable, but is passed in by commandline tools, or set programmatically
      */
@@ -165,6 +171,36 @@ struct PVXS_API ConfigCommon {
      * @brief Is stapling disabled?
      */
     bool isStaplingDisabled() const {return tls_disable_stapling;}
+
+    /**
+     * @brief Let a client take the standing of its own certificate from the servers it reaches
+     *
+     * A holder normally confirms its own certificate with the certificate manager before it will
+     * use it, and stays on plain TCP until that answer arrives. Where the certificate manager can
+     * only be reached through a server that accepts TLS alone, that answer can never arrive and
+     * the holder can never use the certificate it was issued.
+     *
+     * With this enabled the holder relies on the server to say otherwise: a server checks the
+     * standing of the certificate presented to it and refuses the connection unless it is good, so
+     * a revoked holder is turned away where it connects rather than by its own reckoning.
+     *
+     * This applies to one case only: a connection to a name server named with the `pvas://` scheme,
+     * which is the case where there may be no other route to the certificate manager. Plain TCP,
+     * UDP search, and any server not named as a name server are unaffected and still establish the
+     * standing of the certificate rather than assuming it, because for those a route exists. The
+     * state of the context is not changed, so nothing else the holder does is relaxed.
+     *
+     * This places the decision with the name servers the holder talks to, so enable it only where
+     * those servers are trusted to make it.
+     *
+     * @param enable enable remote verification - defaults to true
+     */
+    void enableRemoteVerification(const bool enable = true) {tls_remote_verification = enable;}
+
+    /**
+     * @brief Does this client take the standing of its own certificate from the servers it reaches?
+     */
+    bool isRemoteVerificationEnabled() const {return tls_remote_verification;}
 
     /**
      * @brief Set the request timeout

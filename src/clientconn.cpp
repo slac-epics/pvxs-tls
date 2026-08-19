@@ -249,13 +249,20 @@ void Connection::createChannels()
  * If the peer certificate status is being monitored but has not yet been validated, it will set the state to AwaitingPeerCertValidity
  * and return, waiting for the certificate status to be validated before proceeding with creating channels
  */
+#ifdef PVXS_ENABLE_OPENSSL
+bool Connection::ownStatusTakenFromServer() const
+{
+    return isTLS && nameserver && context && context->tls_context && context->tls_context->remote_verification;
+}
+#endif
+
 void Connection::proceedWithCreatingChannels()
 {
     if(!ready) {
 #ifdef PVXS_ENABLE_OPENSSL
         // Re-evaluate readiness: the context's TLS state may have
         // changed since handle_CONNECTION_VALIDATED() first set ready.
-        if(isTLS && state >= ConnBase::Validated && context->isTlsReady()) {
+        if(isTLS && state >= ConnBase::Validated && (context->isTlsReady() || ownStatusTakenFromServer())) {
             ready = true;
             log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Connection::ready", "true", "proceedWithCreatingChannels() re-eval", peerName.c_str());
         } else
@@ -560,7 +567,7 @@ void Connection::handle_CONNECTION_VALIDATED()
     }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    ready = !isTLS || context->isTlsReady();
+    ready = !isTLS || context->isTlsReady() || ownStatusTakenFromServer();
 #else
     ready = true;
 #endif

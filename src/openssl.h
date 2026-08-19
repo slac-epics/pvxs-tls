@@ -399,6 +399,10 @@ struct SSLContext {
     bool status_check_disabled{false};
     // Whether stapling is disabled.  Copied from the config
     bool stapling_disabled{false};
+    // Whether a client takes the standing of its own certificate from the servers it reaches
+    // rather than waiting for the certificate manager to answer.  Copied from the config, and
+    // acted on for clients only: a server is the side that does the checking.
+    bool remote_verification{false};
 
     /**
      * @brief Monitors the entity certificate status and sets the state of the TLS context when the status changes

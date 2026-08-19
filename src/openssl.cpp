@@ -274,6 +274,7 @@ SSLContext::SSLContext(const SSLContext &o)
     , state(o.state)
     , status_check_disabled(o.status_check_disabled)
     , stapling_disabled(o.stapling_disabled)
+    , remote_verification(o.remote_verification)
     , cert_monitor(o.cert_monitor)  // Copy the monitor
     , cert_status(o.cert_status)    // Copy the status
     , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create a new timer for this instance
@@ -293,6 +294,7 @@ SSLContext::SSLContext(SSLContext &o) noexcept
     , state(o.state)
     , status_check_disabled(o.status_check_disabled)
     , stapling_disabled(o.stapling_disabled)
+    , remote_verification(o.remote_verification)
     , cert_monitor(std::move(o.cert_monitor))  // Move the monitor
     , cert_status(std::move(o.cert_status))    // Move the status
     , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create new timer
@@ -496,6 +498,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
 
     tls_context->status_check_disabled = conf.isStatusCheckDisabled();
     tls_context->stapling_disabled = conf.isStaplingDisabled();
+    tls_context->remote_verification = conf.isRemoteVerificationEnabled();
     tls_context->ctx = ossl_shared_ptr<SSL_CTX>(SSL_CTX_new_ex(ossl_gbl->libctx.get(), nullptr, method));
     if (!tls_context->ctx) throw SSLError("Unable to allocate SSL_CTX");
 
