@@ -391,7 +391,27 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 #endif
     std::map<std::pair<SockAddr, bool>, std::weak_ptr<Connection>> connByAddr;
 
-    std::vector<std::pair<SockEndpoint, std::shared_ptr<Connection>>> nameServers;
+    /** A configured name server, and the connection to it if there is one.
+     *
+     * The endpoint as configured is kept, not the address it resolved to, because the name is
+     * dialled again every time the connection is lost. A peer that is restarted comes back on a
+     * different address in most container runtimes, and a peer that has not started yet has no
+     * address at all; resolving once and keeping the answer gets both wrong, and gets them wrong
+     * permanently. Resolution happens where the connection is made, and failing it is retried
+     * rather than discarded.
+     */
+    struct NameServer {
+        //! `host[:port]`, optionally `pva://` or `pvas://`, exactly as configured
+        std::string spec;
+        //! The connection, where one has been made
+        std::shared_ptr<Connection> conn;
+        //! Whether the last attempt to resolve `spec` failed, so the complaint is made once
+        bool resolutionFailed = false;
+    };
+    std::vector<NameServer> nameServers;
+
+    //! Resolve a name server and connect to it, quietly doing nothing if it cannot be resolved yet
+    void connectNameServer(NameServer& ns);
 
     const evevent searchRx4, searchRx6;
     const evevent searchTimer;

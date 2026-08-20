@@ -654,18 +654,12 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
     }
 
     for(auto& addr : effective.nameServers) {
-        SockEndpoint saddr;
-        try {
-            SockEndpoint temp(addr.c_str(), &effective);
-            if(!temp.iface.empty() || temp.ttl!=-1)
-                throw std::runtime_error(SB()<<"interface or TTL restriction not supported for nameserver: "<<addr);
-            saddr = std::move(temp);
-        }catch(std::runtime_error& e) {
-            log_err_printf(setup, "%s  Ignoring...\n", e.what());
-        }
-
-        log_info_printf(io, "Searching to TCP %s\n", std::string(SB()<<saddr).c_str());
-        nameServers.emplace_back(saddr, nullptr);
+        // Neither resolved nor rejected here. A name that does not answer yet is kept, because
+        // it is dialled again on a timer and may answer by then.
+        log_info_printf(io, "Searching to TCP %s\n", addr.c_str());
+        NameServer ns;
+        ns.spec = addr;
+        nameServers.push_back(std::move(ns));
     }
 
     if(searchDest.empty() && nameServers.empty())
@@ -713,6 +707,40 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
 
 ContextImpl::~ContextImpl() {}
 
+void ContextImpl::connectNameServer(NameServer& ns)
+{
+    SockEndpoint serv;
+    try {
+        SockEndpoint temp(ns.spec.c_str(), &effective);
+        if(!temp.iface.empty() || temp.ttl!=-1)
+            throw std::runtime_error(SB()<<"interface or TTL restriction not supported for nameserver: "<<ns.spec);
+        serv = std::move(temp);
+
+    }catch(std::exception& e) {
+        // Said once and then not again. A name server that is only late says this while its
+        // peer is still starting, and would otherwise repeat it every ten seconds for ever.
+        if(!ns.resolutionFailed) {
+            ns.resolutionFailed = true;
+            log_warn_printf(setup, "Cannot resolve nameserver %s : %s.  Trying again periodically.\n",
+                            ns.spec.c_str(), e.what());
+        } else {
+            log_debug_printf(setup, "Still cannot resolve nameserver %s : %s\n", ns.spec.c_str(), e.what());
+        }
+        return; // kept, and tried again on the next tick
+    }
+
+    if(ns.resolutionFailed) {
+        ns.resolutionFailed = false;
+        log_warn_printf(setup, "Nameserver %s resolves again\n", ns.spec.c_str());
+    }
+
+    ns.conn = Connection::build(shared_from_this(), serv.addr, false,
+                                serv.scheme == SockEndpoint::TLS);
+    ns.conn->nameserver = true;
+    log_debug_printf(io, "Connecting to nameserver %s%s\n",
+                     ns.conn->peerName.c_str(), ns.conn->isTLS ? " TLS" : "");
+}
+
 void ContextImpl::startNS()
 {
     if(nameServers.empty()) // vector size const after ctor, contents remain mutable
@@ -720,15 +748,8 @@ void ContextImpl::startNS()
 
     tcp_loop.call([this]() {
         // start connections to name servers
-        for(auto& ns : nameServers) {
-            const auto& serv = ns.first;
-            ns.second = Connection::build(shared_from_this(), serv.addr, false,
-                                         serv.scheme == SockEndpoint::TLS
-            );
-            ns.second->nameserver = true;
-            log_debug_printf(io, "Connecting to nameserver %s%s\n",
-                             ns.second->peerName.c_str(), ns.second->isTLS ? " TLS" : "");
-        }
+        for(auto& ns : nameServers)
+            connectNameServer(ns);
 
         if(event_add(nsChecker.get(), &tcpNSCheckInterval))
             log_err_printf(setup, "Error enabling TCP search reconnect timer\n%s", "");
@@ -1280,10 +1301,10 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
         // so zero out the meaningless response port.
         pport[0] = pport[1] = 0;
 
-        for(auto& pair : nameServers) {
-            auto& serv = pair.second;
+        for(auto& ns : nameServers) {
+            auto& serv = ns.conn;
 
-            if(!serv->ready || !serv->connection())
+            if(!serv || !serv->ready || !serv->connection())
                 continue;
 
             auto tx = bufferevent_get_output(serv->connection());
@@ -1390,14 +1411,12 @@ void ContextImpl::certExpirationHandlerS(evutil_socket_t, short, void* raw) {
 void ContextImpl::onNSCheck()
 {
     for(auto& ns : nameServers) {
-        if(ns.second && ns.second->state != ConnBase::Disconnected) // hold-off, connecting, or connected
+        if(ns.conn && ns.conn->state != ConnBase::Disconnected) // hold-off, connecting, or connected
             continue;
 
-        ns.second = Connection::build(shared_from_this(), ns.first.addr, false,
-                                    ns.first.scheme == SockEndpoint::TLS
-        );
-        ns.second->nameserver = true;
-        log_debug_printf(io, "Reconnecting nameserver %s\n", ns.second->peerName.c_str());
+        // Resolved afresh, so a peer that has moved is followed and one that was not up yet is
+        // picked up once it is.
+        connectNameServer(ns);
     }
 }
 
