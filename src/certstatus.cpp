@@ -428,8 +428,16 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
                                // (which would ~evbase -> join() this very worker thread -> self-join).
                                const auto cb = weak_callback.lock();
                                if (!cb) return;
-                               const auto update = s.pop();
-                               if (update) {
+                               // Drained, not read once.
+                               //
+                               // A subscription only asks to be woken again once the reader has
+                               // taken everything waiting for it: popping a single update and
+                               // stopping leaves the queue holding something, and the next update
+                               // is queued without a wakeup. Every later change is then pushed by
+                               // the certificate manager and never seen here, so a certificate
+                               // that is revoked while a connection is up goes on being treated
+                               // as good for as long as that connection lasts. Read until empty.
+                               while (const auto update = s.pop()) {
                                    try {
                                         auto status_update{PVACertificateStatus(update, trusted_store_ptr, cert_id)};
                                         log_debug_printf(status, "Status subscription %s received: %s\n", s.name().c_str(), status_update.status.s.c_str());
