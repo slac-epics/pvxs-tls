@@ -53,7 +53,14 @@ ConnBase::ConnBase(bool isClient, bool isTLS, bool sendBE, evbufferevent&& bev, 
     }
 }
 
-ConnBase::~ConnBase() {}
+ConnBase::~ConnBase() {
+#ifdef PVXS_ENABLE_OPENSSL
+    // Stop being told about the peer's certificate. The holder is shared with every other
+    // connection presented the same certificate and outlives this one, so leaving the
+    // registration behind would leave it calling into a connection that has gone.
+    if (peer_status) peer_status->removeListener(this);
+#endif
+}
 
 const char* ConnBase::peerLabel() const
 {
@@ -162,11 +169,14 @@ void ConnBase::bevEvent(const short events) {
                         // peer status updates can originate from other threads (eg. cert status client)
                         // so never capture a raw ConnBase* here.
                         const auto weakself = std::weak_ptr<ConnBase>(self_from_this());
+                        // Keyed by this connection, because the peer status is shared by every
+                        // connection presented the same certificate and each of them has to be
+                        // told. Removed again in ~ConnBase.
                         peer_status = ossl::SSLContext::subscribeToPeerCertStatus(ctx, [weakself](certs::cert_status_class_t status_class) {
                             if (const auto self = weakself.lock()) {
                                 self->peerStatusCallback(status_class);
                             }
-                        });
+                        }, this);
                     } catch (certs::CertStatusNoExtensionException &e) {
                         log_debug_printf(connio, "no status to monitor for peer %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
                     } catch (std::exception &e) {

@@ -732,11 +732,11 @@ SSLPeerStatusAndMonitor::~SSLPeerStatusAndMonitor() {
  * @param raw Pointer to the SSLPeerStatusAndMonitor instance managing the certificate status
  */
 void SSLPeerStatusAndMonitor::statusValidityTimerCallback(evutil_socket_t fd, short evt, void* raw) {
-    const auto* peer_status_and_monitor = static_cast<SSLPeerStatusAndMonitor*>(raw);
+    auto* peer_status_and_monitor = static_cast<SSLPeerStatusAndMonitor*>(raw);
     log_debug_printf(watcher, "Certificate status validity expired - notifying listeners%s\n", "");
 
     // Set notify listeners that status has changed
-    if (peer_status_and_monitor->fn) peer_status_and_monitor->fn(certs::cert_status_class_t::UNKNOWN);
+    peer_status_and_monitor->notify(certs::cert_status_class_t::UNKNOWN);
 }
 
 /**
@@ -779,15 +779,16 @@ void SSLPeerStatusAndMonitor::restartStatusValidityTimerFromCertStatus() {
  * @return The peer status that was set
  */
 std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *peer_cert_ptr,
-    const certs::CertificateStatus &new_status, const std::function<void(certs::cert_status_class_t)> &fn) {
+    const certs::CertificateStatus &new_status, const std::function<void(certs::cert_status_class_t)> &fn,
+    const void* owner) {
     const auto serial_number = getSerialNumber(peer_cert_ptr);
     std::shared_ptr<SSLPeerStatusAndMonitor> peer_status_and_monitor;
     if (status_check_enabled && fn) {
         const auto status_pv = certs::CertStatusManager::getStatusPvFromCert(peer_cert_ptr);
         const auto cert_id = certs::CertStatusManager::getCertIdFromStatusPv(status_pv);
-        peer_status_and_monitor = getOrCreatePeerStatus(serial_number, status_pv, cert_id, fn);
+        peer_status_and_monitor = getOrCreatePeerStatus(serial_number, owner, status_pv, cert_id, fn);
     } else {
-        peer_status_and_monitor = getOrCreatePeerStatus(serial_number);
+        peer_status_and_monitor = getOrCreatePeerStatus(serial_number, owner);
     }
 
     // Carry a stapled status across to the connection.
@@ -816,11 +817,12 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *p
     return peer_status_and_monitor;
 }
 
-std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus(const serial_number_t serial_number, const std::string &status_pv,
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus(const serial_number_t serial_number, const void* owner,
+                                                                                 const std::string &status_pv,
                                                                                  const std::string& cert_id,
                                                                                  const std::function<void(certs::cert_status_class_t)> &fn) {
     // Create a holder for peer status or return current holder if already exists
-    auto peer_status = createPeerStatus(serial_number, fn);
+    auto peer_status = createPeerStatus(serial_number, fn, owner);
 
     // Subscribe if we have a pv and a function and we're not yet subscribed
     if (!status_pv.empty() && !cert_id.empty() && fn && status_check_enabled && !peer_status->isSubscribed()) {
@@ -850,27 +852,34 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
  * @param fn optional function that will be called as status changes if provided
  * @return the existing or new peer status
  */
-std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::createPeerStatus(serial_number_t serial_number, const std::function<void(certs::cert_status_class_t)> &fn) {
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::createPeerStatus(serial_number_t serial_number, const std::function<void(certs::cert_status_class_t)> &fn,
+                                                                           const void* owner) {
     const auto existing_peer_status_entry = peer_statuses.find(serial_number);
     if (existing_peer_status_entry != peer_statuses.end()) {
         auto peer_status (existing_peer_status_entry->second.lock());
         if (peer_status) {
+            // Whoever is asking now is watching this certificate too, and has to be told when
+            // its standing changes. Returning the existing holder without adding them left only
+            // whichever connection got here first being told, and in a long lived server that
+            // one is usually already gone, so nothing was told at all.
+            peer_status->addListener(owner, fn);
             return peer_status;
         }
         peer_statuses.erase(serial_number);
     }
 
     std::shared_ptr<SSLPeerStatusAndMonitor> new_peer_status;
-    if (fn) new_peer_status = std::make_shared<SSLPeerStatusAndMonitor>(serial_number, this, fn);
-    else new_peer_status = std::make_shared<SSLPeerStatusAndMonitor>(serial_number, this, nullptr);
+    if (fn) new_peer_status = std::make_shared<SSLPeerStatusAndMonitor>(serial_number, this, fn, owner);
+    else new_peer_status = std::make_shared<SSLPeerStatusAndMonitor>(serial_number, this, nullptr, owner);
     peer_statuses.emplace(serial_number, new_peer_status);
     return new_peer_status;
 };
 
-SSLPeerStatusAndMonitor::SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, const std::function<void(certs::cert_status_class_t)>& fn)
-    : fn(fn), serial_number{serial_number}, ex_data_ptr{ex_data_ptr}
+SSLPeerStatusAndMonitor::SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, const std::function<void(certs::cert_status_class_t)>& fn,
+                                                 const void* owner)
+    : serial_number{serial_number}, ex_data_ptr{ex_data_ptr}
     , status_validity_timer(event_new(ex_data_ptr->loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create a new timer for this instance
-    {}
+    { addListener(owner, fn); }
 
 SSLPeerStatusAndMonitor::SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, const certs::CertificateStatus& status)
     : serial_number{serial_number}, ex_data_ptr{ex_data_ptr}, status{status}
@@ -904,9 +913,9 @@ void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_s
             status_class = self->status.getStatusClass();
         }
 
-        // Call the callback if there has been any change in the cert status class
-        if (self->fn && status_class != prior_status_class)
-            self->fn(status_class);
+        // Tell everything watching this certificate, if its standing actually changed
+        if (status_class != prior_status_class)
+            self->notify(status_class);
 
         // Restart status validity countdown timer for this new status
         self->restartStatusValidityTimerFromCertStatus();
@@ -916,10 +925,11 @@ void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_s
     }
 }
 
-std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::subscribeToPeerCertStatus(X509 *cert_ptr, const std::function<void(certs::cert_status_class_t)> &fn) {
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::subscribeToPeerCertStatus(X509 *cert_ptr, const std::function<void(certs::cert_status_class_t)> &fn,
+                                                                                     const void* owner) {
     Guard G(lock);
     assert(cert_ptr && "Peer Cert NULL");
-    return setPeerStatus(cert_ptr, fn);
+    return setPeerStatus(cert_ptr, fn, owner);
 }
 
 /**
@@ -1244,14 +1254,15 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
  * @param fn the function to call when the certificate status changes
  * @return true if the peer certificate status was successfully subscribed, false otherwise
  */
-std::shared_ptr<SSLPeerStatusAndMonitor> SSLContext::subscribeToPeerCertStatus(const SSL *ssl, const std::function<void(certs::cert_status_class_t)> &fn) {
+std::shared_ptr<SSLPeerStatusAndMonitor> SSLContext::subscribeToPeerCertStatus(const SSL *ssl, const std::function<void(certs::cert_status_class_t)> &fn,
+                                                                              const void* owner) {
     if (!ssl) throw std::invalid_argument("NULL");
 
     if (const auto cert = SSL_get0_peer_certificate(ssl)) {
         // Subscribe to peer certificate status if necessary
         const auto ex_data = CertStatusExData::fromSSL(const_cast<SSL *>(ssl));
         if (ex_data) {
-            return ex_data->subscribeToPeerCertStatus(cert, [=](const certs::cert_status_class_t status) { fn(status); });
+            return ex_data->subscribeToPeerCertStatus(cert, [=](const certs::cert_status_class_t status) { fn(status); }, owner);
         }
     }
     throw certs::CertStatusNoExtensionException("No Certificate");
