@@ -82,6 +82,26 @@ policy requires a restart):
 The negation token is case-insensitive (``NO``, ``no``, ``off``, ``false``, ``disabled``).
 These values apply to servers only; clients ignore them.
 
+Name servers for peer certificate status
+----------------------------------------
+
+A server presented with a client certificate asks the certificate manager that issued it
+whether it still stands, and it does that with an inner client of its own. Where that
+certificate manager cannot be reached from where the server stands, as with a peer
+department behind a gateway, ``$EPICS_PVAS_STATUS_NAME_SERVERS`` names something that can
+answer for it:
+
+* it is read into ``server::Config::statusNameServers`` and used by the inner client alone,
+  so it affects certificate status and nothing else the process does;
+* left unset, the inner client falls back to ``$EPICS_PVA_NAME_SERVERS`` from the process
+  environment, which is the behaviour it has always had;
+* it is the only route for a server whose configuration is supplied programmatically rather
+  than through the environment. The p4p gateway is the case that matters: it builds its
+  server from a configuration file with ``useenv=False``, and any key beginning ``EPICS_PVA``
+  in the server section of that file is passed through to the server configuration.
+
+A server whose own certificate manager is reachable needs none of this; searching finds it.
+
 Disabling both TCP and TLS leaves no transport to serve and is a fatal error at server
 construction.
 

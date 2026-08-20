@@ -182,7 +182,13 @@ client::Config Server::clientConfig(const Config &server_config) {
     ret.disableStatusCheck(server_config.isStatusCheckDisabled());
     ret.disableStapling(server_config.isStaplingDisabled());
 
-    ret.nameServers = client::Config::fromEnv().nameServers;
+    // What the server names wins, and the environment answers when it names nothing. A server
+    // configured programmatically cannot set the environment, and a server that could would be
+    // setting it for everything else in the process at the same time; a server that is configured
+    // from the environment in the ordinary way keeps working as it always has.
+    ret.nameServers = server_config.statusNameServers.empty()
+                    ? client::Config::fromEnv().nameServers
+                    : server_config.statusNameServers;
 
     return ret;
 }

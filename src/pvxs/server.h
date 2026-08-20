@@ -183,6 +183,23 @@ struct PVXS_API Config : public impl::ConfigCommon {
     //! Whether to populate the beacon address list automatically.  (recommended)
     bool auto_beacon = true;
 
+    //! Name servers the server's inner client uses, and nothing else uses.
+    //!
+    //! A server presented with a client certificate must ask the certificate manager that issued
+    //! it whether it still stands, and it does that with an inner client of its own. Where that
+    //! certificate manager cannot be reached from here, as with a peer department behind a
+    //! gateway, this names something that can answer for it. The server never resolves names
+    //! itself, so this affects certificate status and nothing else.
+    //!
+    //! Set from `$EPICS_PVAS_STATUS_NAME_SERVERS`. Left empty the inner client falls back to
+    //! `$EPICS_PVA_NAME_SERVERS` from the process environment, which is what it has always used,
+    //! so a server configured the ordinary way is unaffected. Naming it here is the only route
+    //! for a server whose configuration is supplied programmatically rather than through the
+    //! environment, such as the p4p gateway, and it keeps the peer route off everything else in
+    //! the process.
+    //! @since UNRELEASED
+    std::vector<std::string> statusNameServers;
+
     //! Server unique ID.  Only meaningful in readback via Server::config()
     ServerGUID guid;
 

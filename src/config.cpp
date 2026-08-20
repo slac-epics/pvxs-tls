@@ -540,6 +540,12 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         split_addr_into(pickone.name.c_str(), self.beaconDestinations, pickone.val, nullptr, self.udp_port);
     }
 
+    // Read here rather than left to the environment because a server configured programmatically
+    // has no other way to say it, and because it must not reach anything but the inner client.
+    if(pickone({"EPICS_PVAS_STATUS_NAME_SERVERS"})) {
+        split_addr_into(pickone.name.c_str(), self.statusNameServers, pickone.val, &self, 0);
+    }
+
     if(pickone({"EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "EPICS_PVA_AUTO_ADDR_LIST"})) {
         parse_bool(self.auto_beacon, pickone.name, pickone.val);
     }
@@ -632,6 +638,8 @@ void Config::updateDefs(defs_t& defs) const {
     defs["EPICS_PVA_AUTO_ADDR_LIST"] = defs["EPICS_PVAS_AUTO_BEACON_ADDR_LIST"] = auto_beacon ? "YES" : "NO";
 
     if (!beaconDestinations.empty()) defs["EPICS_PVA_ADDR_LIST"] = defs["EPICS_PVAS_BEACON_ADDR_LIST"] = join_addr(beaconDestinations);
+
+    if (!statusNameServers.empty()) defs["EPICS_PVAS_STATUS_NAME_SERVERS"] = join_addr(statusNameServers);
     if (!interfaces.empty()) defs["EPICS_PVA_INTF_ADDR_LIST"] = defs["EPICS_PVAS_INTF_ADDR_LIST"] = join_addr(interfaces);
     if (!ignoreAddrs.empty()) defs["EPICS_PVAS_IGNORE_ADDR_LIST"] = join_addr(ignoreAddrs);
     defs["EPICS_PVA_CONN_TMO"] = std::to_string(tcpTimeout / tmoScale);
