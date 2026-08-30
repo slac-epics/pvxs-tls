@@ -659,6 +659,12 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
         log_info_printf(io, "Searching to TCP %s\n", addr.c_str());
         NameServer ns;
         ns.spec = addr;
+        // Whether this client searches over TLS is decided here, from what it was configured
+        // with, and not when a search goes out. Readiness is settled as a connection is
+        // validated, which happens before any search has been written to it, so a fact
+        // recorded at send time would always be false at the moment it is read.
+        if(addr.compare(0, 7, "pvas://")==0)
+            searched_over_tls = true;
         nameServers.push_back(std::move(ns));
     }
 

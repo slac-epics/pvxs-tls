@@ -160,7 +160,7 @@ public:
      * name server.  In each of those the certificate manager is reachable by some route, so the
      * standing of our own certificate must be established rather than assumed.
      */
-    bool ownStatusTakenFromServer() const;
+    bool skipOwnCertStatusCheck() const;
 #endif
 
 #define CASE(Op) virtual void handle_##Op() override final;
@@ -491,6 +491,15 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
      * Also the peer certificate must have also been checked if required
      * @return True if the tls context is completely ready for TLS connections
      */
+    /**
+     * @brief Whether any search this context made was carried over a TLS connection.
+     *
+     * Set when the context is configured with a name server named pvas://. It is what entitles
+     * a holder to use its certificate without first establishing its own standing, and it holds
+     * for the channels those searches find however they are later connected.
+     */
+    bool searched_over_tls{false};
+
     bool isTlsReady() const {
         return tls_context && tls_context->state == ossl::SSLContext::TlsReady;
     }

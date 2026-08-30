@@ -469,11 +469,11 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
                 conf.disableStapling();
             else
                 log_warn_printf(config, "Ignore unknown TLS option `no_stapling` value %s.  no value expected\n", opt.c_str());
-        } else if (key == "remote_verification") {
+        } else if (key == "no_own_cert_status_check") {
             if ( val.empty())
-                conf.enableRemoteVerification();
+                conf.disableOwnCertStatusCheck();
             else
-                log_warn_printf(config, "Ignore unknown TLS option `remote_verification` value %s.  no value expected\n", opt.c_str());
+                log_warn_printf(config, "Ignore unknown TLS option `no_own_cert_status_check` value %s.  no value expected\n", opt.c_str());
         } else {
             log_warn_printf(config, "Ignore unknown TLS option key %s\n", opt.c_str());
         }
@@ -507,8 +507,8 @@ std::string printTLSOptions(const ConfigCommon& conf) {
         opts.push_back("no_revocation_check");
     if ( conf.isStaplingDisabled())
         opts.push_back("no_stapling");
-    if ( conf.isRemoteVerificationEnabled())
-        opts.push_back("remote_verification");
+    if ( !conf.isOwnCertStatusCheckEnabled())
+        opts.push_back("no_own_cert_status_check");
     return join_addr(opts);
 }
 #endif

@@ -450,7 +450,7 @@ struct SSLContext {
     // Whether a client takes the standing of its own certificate from the servers it reaches
     // rather than waiting for the certificate manager to answer.  Copied from the config, and
     // acted on for clients only: a server is the side that does the checking.
-    bool remote_verification{false};
+    bool own_cert_status_check{true};
 
     /**
      * @brief Monitors the entity certificate status and sets the state of the TLS context when the status changes

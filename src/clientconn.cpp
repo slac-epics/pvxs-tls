@@ -250,9 +250,12 @@ void Connection::createChannels()
  * and return, waiting for the certificate status to be validated before proceeding with creating channels
  */
 #ifdef PVXS_ENABLE_OPENSSL
-bool Connection::ownStatusTakenFromServer() const
+bool Connection::skipOwnCertStatusCheck() const
 {
-    return isTLS && nameserver && context && context->tls_context && context->tls_context->remote_verification;
+    // The search was carried over TLS, so the server has already checked what it was shown.
+    // The flag is per context, so a plain name server alongside a TLS one relaxes both.
+    return isTLS && context && context->searched_over_tls
+        && context->tls_context && !context->tls_context->own_cert_status_check;
 }
 #endif
 
@@ -262,7 +265,7 @@ void Connection::proceedWithCreatingChannels()
 #ifdef PVXS_ENABLE_OPENSSL
         // Re-evaluate readiness: the context's TLS state may have
         // changed since handle_CONNECTION_VALIDATED() first set ready.
-        if(isTLS && state >= ConnBase::Validated && (context->isTlsReady() || ownStatusTakenFromServer())) {
+        if(isTLS && state >= ConnBase::Validated && (context->isTlsReady() || skipOwnCertStatusCheck())) {
             ready = true;
             log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Connection::ready", "true", "proceedWithCreatingChannels() re-eval", peerName.c_str());
         } else
@@ -567,7 +570,7 @@ void Connection::handle_CONNECTION_VALIDATED()
     }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    ready = !isTLS || context->isTlsReady() || ownStatusTakenFromServer();
+    ready = !isTLS || context->isTlsReady() || skipOwnCertStatusCheck();
 #else
     ready = true;
 #endif
