@@ -149,7 +149,7 @@ public:
 #ifdef PVXS_ENABLE_OPENSSL
     void configureClientOCSPCallback(SSL *ssl) const;
 
-    /** Whether this connection may take the standing of our own certificate from the server.
+    /** Whether this connection may take the operational status of our own certificate from the server.
      *
      * True only for a TLS connection to a configured name server, and only when remote
      * verification is enabled.  A name server reached over TLS is the case where we may have no
@@ -158,7 +158,7 @@ public:
      *
      * Deliberately false for plain TCP, for UDP search, and for any server we did not name as a
      * name server.  In each of those the certificate manager is reachable by some route, so the
-     * standing of our own certificate must be established rather than assumed.
+     * operational status of our own certificate must be established rather than assumed.
      */
     bool skipOwnCertStatusCheck() const;
 #endif
@@ -393,12 +393,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     /** A configured name server, and the connection to it if there is one.
      *
-     * The endpoint as configured is kept, not the address it resolved to, because the name is
-     * dialled again every time the connection is lost. A peer that is restarted comes back on a
-     * different address in most container runtimes, and a peer that has not started yet has no
-     * address at all; resolving once and keeping the answer gets both wrong, and gets them wrong
-     * permanently. Resolution happens where the connection is made, and failing it is retried
-     * rather than discarded.
+     * The endpoint as configured is kept, because the name is resolved again every time the
+     * connection is lost.
      */
     struct NameServer {
         //! `host[:port]`, optionally `pva://` or `pvas://`, exactly as configured
@@ -495,7 +491,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
      * @brief Whether any search this context made was carried over a TLS connection.
      *
      * Set when the context is configured with a name server named pvas://. It is what entitles
-     * a holder to use its certificate without first establishing its own standing, and it holds
+     * a holder to use its certificate without first establishing its own status, and it holds
      * for the channels those searches find however they are later connected.
      */
     bool searched_over_tls{false};

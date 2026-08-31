@@ -111,7 +111,7 @@ struct SSLPeerStatusAndMonitor : public std::enable_shared_from_this<SSLPeerStat
     certs::cert_status_ptr<certs::CertStatusManager> cert_status_manager;
     bool subscribed{false};
 
-    // Everything watching this certificate, and what to call when its standing changes.
+    // Everything watching this certificate, and what to call when its status changes.
     //
     // One of these exists per certificate, not per connection, because the status is a property
     // of the certificate. More than one connection can be presented the same certificate at the
@@ -121,7 +121,7 @@ struct SSLPeerStatusAndMonitor : public std::enable_shared_from_this<SSLPeerStat
     // long as the process runs.
     std::map<const void*, std::function<void(certs::cert_status_class_t)>> listeners;
 
-    //! Add something to be told when this certificate's standing changes, keyed by the watcher
+    //! Add something to be told when this certificate's operational status changes, keyed by the watcher
     //! itself so it can stop being told without anything having to be handed back to it.
     void addListener(const void* owner, const std::function<void(certs::cert_status_class_t)>& fn) {
         if (!fn || !owner) return;
@@ -145,7 +145,7 @@ struct SSLPeerStatusAndMonitor : public std::enable_shared_from_this<SSLPeerStat
         return !listeners.empty();
     }
 
-    //! Tell everything watching this certificate that its standing has changed.
+    //! Tell everything watching this certificate that its operational status has changed.
     //!
     //! The list is copied before anything is called, so a listener that adds or removes one
     //! while being told, which tearing a connection down does, cannot invalidate the walk.
@@ -353,6 +353,7 @@ struct CertStatusExData {
      * sets up the function to call when the peer status changes. If the peer status already exists then it is returned.
      *
      * @param serial_number the serial number of the peer certificate to monitor
+     * @param owner
      * @param status_pv - status pv
      * @param cert_id the ID of the peer certificate to monitor
      * @param fn - Function to call when the peer status changes
@@ -447,7 +448,7 @@ struct SSLContext {
     bool status_check_disabled{false};
     // Whether stapling is disabled.  Copied from the config
     bool stapling_disabled{false};
-    // Whether a client takes the standing of its own certificate from the servers it reaches
+    // Whether a client takes the operational status of its own certificate from the servers it reaches
     // rather than waiting for the certificate manager to answer.  Copied from the config, and
     // acted on for clients only: a server is the side that does the checking.
     bool own_cert_status_check{true};

@@ -723,8 +723,6 @@ void ContextImpl::connectNameServer(NameServer& ns)
         serv = std::move(temp);
 
     }catch(std::exception& e) {
-        // Said once and then not again. A name server that is only late says this while its
-        // peer is still starting, and would otherwise repeat it every ten seconds for ever.
         if(!ns.resolutionFailed) {
             ns.resolutionFailed = true;
             log_warn_printf(setup, "Cannot resolve nameserver %s : %s.  Trying again periodically.\n",

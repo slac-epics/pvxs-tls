@@ -252,10 +252,7 @@ void testDNS()
 MAIN(testconfig)
 {
     // The keychain password checks in testParse() are the only ones that need a build with
-    // TLS in it, and there are eight of them. Counted here rather than left at the larger
-    // number, because a plan that is never reached reads as eight failures on every build
-    // without OpenSSL - RTEMS, EPICS 3.14, and any host whose OpenSSL is older than 3.0 -
-    // rather than as tests that were never meant to run there.
+    // TLS in it, and there are eight of them, so the plan drops by eight without OpenSSL.
 #ifdef PVXS_ENABLE_OPENSSL
     testPlan(42);
 #else

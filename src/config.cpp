@@ -540,12 +540,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         split_addr_into(pickone.name.c_str(), self.beaconDestinations, pickone.val, nullptr, self.udp_port);
     }
 
-    // Read here rather than left to the environment because a server configured programmatically
-    // has no other way to say it, and because it must not reach anything but the inner client.
-    //
-    // Kept as written and not resolved here, for the reason the client's name servers are not:
-    // these name a peer, and two servers naming each other cannot both be up when the first of
-    // them reads its configuration. The inner client resolves them when it dials, and retries.
+    // the inner client resolves them when used.
     if(pickone({"EPICS_PVAS_STATUS_NAME_SERVERS"})) {
         self.statusNameServers.clear();
         split_into(self.statusNameServers, pickone.val);
@@ -775,15 +770,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     }
 
     if(pickone({"EPICS_PVA_NAME_SERVERS"})) {
-        // Kept as written rather than resolved and rewritten here.
-        //
-        // A name server is dialled again whenever its connection is lost, so what matters is
-        // the name, not the address it happened to have when this was read. Resolving here
-        // discards a name that does not answer yet, permanently, and pins one that does to an
-        // address it may not keep. Both are wrong wherever a peer is restarted or comes up
-        // second, which is to say wherever this runs in containers. An address list is a fixed
-        // set of destinations and is still resolved here; a name server is a service, and is
-        // resolved each time it is dialled. Syntax is reported then too, for the same reason.
+        // names resolved when used
         self.nameServers.clear(); // replaced, not added to, as every other list here is
         split_into(self.nameServers, pickone.val);
     }

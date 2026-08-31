@@ -18,11 +18,7 @@ RUN apt-get update && \
             libcurl4-openssl-dev \
             pkg-config
 
-# VCS_VERSION carries `git describe` in from the host: .dockerignore keeps .git
-# out of the build context (its bookkeeping churns constantly and would wreck the
-# layer cache), but without it the built library could not say which commit it is.
-# Record it in CONFIG_SITE.local rather than on one make command line, so images
-# built on top of this one that rebuild the tree inherit it too.
+# VCS_VERSION carries `git describe` in from the host. It is recorded in CONFIG_SITE.local.
 ARG VCS_VERSION=unknown
 
 # Set up RELEASE.local

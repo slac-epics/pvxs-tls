@@ -1061,7 +1061,7 @@ void Server::reconfigure(const Config& inconf) {
         Server newsrv(newconf);
         pvt = std::move(newsrv.pvt);
     } catch (std::exception& e) {
-        // old server is already destroyed; surface rather than continue with null pvt
+        // old server is already destroyed; surface the error
         log_err_printf(serversetup, "Server Reconfiguration failed, server stopped: %s\n", e.what());
         throw;
     }

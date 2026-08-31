@@ -1048,9 +1048,7 @@ std::string statusReplyCertId(const X509* authority, const X509* subject) {
  * @brief testTwoAnchorsConnectsUnderOwnRoot checks that a keychain carrying a foreign
  * anchor still reaches a server under the root the identity itself chains to.
  *
- * This is the case that would have failed while the context was being built, if
- * SSL_CTX_build_cert_chain had refused the foreign anchor added to the presented chain
- * instead of dropping it.
+ * Regression test: a foreign anchor added to the presented chain is dropped.
  */
 void testTwoAnchorsConnectsUnderOwnRoot() {
     testShow() << __func__;

@@ -791,11 +791,7 @@ int main(int argc, char *argv[])
 
         {
             // client1_two_anchors_reversed.p12 - the same identity and the same two anchors,
-            // with the foreign root written ahead of the root the identity chains to.  The
-            // pvxs-cms tools never write this layout, because the root the identity chains to
-            // always follows element 0.  It is written by hand so that the tests can show that
-            // anchors are found by the self-signed flag rather than by where they sit, and that
-            // no anchor carries more weight for being written earlier.
+            // with the foreign root written ahead of the root the identity chains to.
             PKCS12Writer p12(outdir);
             p12.friendlyName = "client1";
             p12.key = client1_key.get();

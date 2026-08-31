@@ -776,6 +776,7 @@ void SSLPeerStatusAndMonitor::restartStatusValidityTimerFromCertStatus() {
  * @param peer_cert_ptr - Peer certificate pointer
  * @param new_status - Certificate status
  * @param fn function to be configured to be called for updates
+ * @param owner
  * @return The peer status that was set
  */
 std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *peer_cert_ptr,
@@ -796,10 +797,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *p
     // Stapling runs during the handshake, before any connection holds this peer status, and
     // peer_statuses keeps only weak references, so the peer status created here is destroyed
     // as soon as the stapling callback returns.  Remember the status and apply it when the
-    // connection subscribes, otherwise the connection starts from UNKNOWN and defers every
-    // channel until a subscription reports GOOD.  Where the status process variable is only
-    // reachable through the peer being gated, as with a gateway that serves TLS alone, that
-    // subscription can never complete and the connection never carries anything.
+    // connection subscribes.
     auto effective_status = new_status;
     if (fn) {
         const auto stapled = stapled_statuses.find(serial_number);
@@ -850,6 +848,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
  * @brief Create a peer status in the list of statuses or return an existing one
  * @param serial_number the serial number to index into the list
  * @param fn optional function that will be called as status changes if provided
+ * @param owner
  * @return the existing or new peer status
  */
 std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::createPeerStatus(serial_number_t serial_number, const std::function<void(certs::cert_status_class_t)> &fn,
@@ -859,7 +858,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::createPeerStatus(seri
         auto peer_status (existing_peer_status_entry->second.lock());
         if (peer_status) {
             // Whoever is asking now is watching this certificate too, and has to be told when
-            // its standing changes. Returning the existing holder without adding them left only
+            // its operational status changes. Returning the existing holder without adding them left only
             // whichever connection got here first being told, and in a long lived server that
             // one is usually already gone, so nothing was told at all.
             peer_status->addListener(owner, fn);
@@ -913,7 +912,7 @@ void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_s
             status_class = self->status.getStatusClass();
         }
 
-        // Tell everything watching this certificate, if its standing actually changed
+        // Tell everything watching this certificate, if its operational status actually changed
         if (status_class != prior_status_class)
             self->notify(status_class);
 
@@ -1035,11 +1034,8 @@ bool subjectValueNeedsQuoting(const std::string &value) {
 
 /** Characters a subject value cannot be written with, there being no escape for either.
  *
- * Held as a plain array rather than a std::string because a string here would be built when
- * the library loads and taken down when it unloads, and this library does not allow either:
- * the order against every other translation unit is unspecified, and on unload it can run
- * after the code that would use it. It also has to carry an embedded NUL, so its length is
- * passed rather than measured.
+ * A plain array, so it needs no run time construction and can carry an embedded NUL. Its
+ * length is passed.
  */
 constexpr char kUnwritableInSubjectValue[] = {'\'', '\0'};
 

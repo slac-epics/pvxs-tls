@@ -372,9 +372,7 @@ void ServerConn::handle_CREATE_CHANNEL()
                 sts.trace = "pvx:serv:refusechan:";
                 // A Source may already have registered handlers and per-channel state while
                 // its onCreate() ran, so go through cleanup() to detach the handlers and let
-                // the Source undo that state.  Assigning Destroy here instead would make
-                // every later cleanup() take its early return, leaving the handlers attached
-                // for the rest of the channel's life.
+                // the Source undo that state.
                 chan->cleanup();
 
                 sid = -1;

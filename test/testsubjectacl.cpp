@@ -98,8 +98,7 @@ void testIdentitiesOffered() {
     testTrue(offersIdentity(full, "CN=alice,OU=staff,O=acme"));
     testTrue(offersIdentity(full, "alice"));
 
-    // A subject naming nothing but a common name would match nothing the bare
-    // common name does not already match, so it is not offered
+    // A subject naming only a common name matches the bare common name and adds nothing
     testFalse(offersIdentity(tlsPeer("alice", "CN=alice"), "CN=alice"));
 
     // Neither is a subject on a connection that is not authenticated by certificate
@@ -128,7 +127,7 @@ void testAccessDecision() {
     testFalse(canWrite(tlsPeer("eve", "CN=eve,OU=controls,O=lbnl")));
 
     // Naming the units the other way round asks a different question - beamline
-    // within staff rather than staff within beamline - and is not satisfied.
+    // within staff, which is the opposite, and is not satisfied.
     // This is why the string is built in one canonical order.
     testFalse(canWrite(tlsPeer("dave", "CN=dave,OU=beamline,OU=staff,O=lbnl")));
 
