@@ -45,7 +45,9 @@ class PVXS_IOC_API SecurityClient {
   ~SecurityClient();
   void update(dbChannel* ch, Credentials& cred);
   void update(ASMEMBERPVT mem, int asl, Credentials& cred);
+  bool canRead() const;
   bool canWrite() const;
+  bool canRPC() const;
 };
 
 } // ioc

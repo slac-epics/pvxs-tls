@@ -58,6 +58,18 @@ SecurityClient::~SecurityClient() {
     }
 }
 
+bool SecurityClient::canRead() const {
+    return std::any_of(cli.begin(), cli.end(), [](ASCLIENTPVT asc) {
+        return asCheckGet(asc);
+    });
+}
+
+bool SecurityClient::canRPC() const {
+    return std::any_of(cli.begin(), cli.end(), [](ASCLIENTPVT asc) {
+        return asCheckRPC(asc);
+    });
+}
+
 bool SecurityClient::canWrite() const {
     return std::any_of(cli.begin(), cli.end(), [](ASCLIENTPVT asc) {
         return asCheckPut(asc);

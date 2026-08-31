@@ -155,6 +155,17 @@ void GroupSource::onOp(Group& group,
 
     // register handler for pvxs group get
     channelConnectOperation->onGet([&group](std::unique_ptr<server::ExecOp>&& getOperation) {
+        // Every field the group reads has to be readable by this caller.
+        Credentials credentials(*getOperation->credentials());
+        for (auto& field : group.fields) {
+            if (!field.value) continue;
+            SecurityClient securityClient;
+            securityClient.update(field.value, credentials);
+            if (!securityClient.canRead()) {
+                getOperation->error("Get not permitted");
+                return;
+            }
+        }
         get(group, getOperation);
     });
 
@@ -349,6 +360,20 @@ void subscriptionPropertiesCallback(void* userArg, dbChannel* pChannel,
  */
 void GroupSource::onSubscribe(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx,
         std::unique_ptr<server::MonitorSetupOp>&& subscriptionOperation) const {
+    {
+        // Every field the group reads has to be readable by this caller.
+        Credentials credentials(*subscriptionOperation->credentials());
+        for (auto& field : groupSubscriptionCtx->group.fields) {
+            if (!field.value) continue;
+            SecurityClient securityClient;
+            securityClient.update(field.value, credentials);
+            if (!securityClient.canRead()) {
+                subscriptionOperation->error("Get not permitted");
+                return;
+            }
+        }
+    }
+
     // inform peer of data type and acquire control of the subscription queue
     groupSubscriptionCtx->subscriptionControl = subscriptionOperation
             ->connect(groupSubscriptionCtx->group.valueTemplate);

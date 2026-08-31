@@ -54,6 +54,7 @@ public:
     static void doPostProcessing(dbChannel* pDbChannel, TriState forceProcessing);
     static void doPreProcessing(dbChannel* pDbChannel, SecurityLogger& securityLogger, const Credentials& credentials,
             const SecurityClient& securityClient);
+    static void doReadCheck(const SecurityClient& securityClient);
     static void doFieldPreProcessing(const SecurityClient& securityClient);
 
     //////////////////////////////

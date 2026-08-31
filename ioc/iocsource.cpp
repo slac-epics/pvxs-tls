@@ -379,6 +379,18 @@ IOCSource::doPreProcessing(dbChannel* pDbChannel, SecurityLogger& securityLogger
  *
  * @param securityClient security client applied to this execution context
  */
+/**
+ * Check that this client may read.  Called before a get is answered and before a
+ * subscription is set up.
+ *
+ * @param securityClient security client applied to this execution context
+ */
+void IOCSource::doReadCheck(const SecurityClient& securityClient) {
+    if (!securityClient.canRead()) {
+        throw std::runtime_error("Get not permitted");
+    }
+}
+
 void IOCSource::doFieldPreProcessing(const SecurityClient& securityClient) {
     if (!securityClient.canWrite()) {
         // TODO this will abort the whole group put operation, so may be a behavior change, need to check

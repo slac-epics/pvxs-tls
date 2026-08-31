@@ -139,6 +139,16 @@ void onSubscribe(const std::shared_ptr<SingleSourceSubscriptionCtx>& subscriptio
     if(!dbe)
         dbe = DBE_VALUE | DBE_ALARM;
 
+    {
+        Credentials credentials(*subscriptionOperation->credentials());
+        SecurityClient securityClient;
+        securityClient.update(subscriptionContext->info->chan, credentials);
+        if (!securityClient.canRead()) {
+            subscriptionOperation->error("Get not permitted");
+            return;
+        }
+    }
+
     // inform peer of data type and acquire control of the subscription queue
     subscriptionContext->subscriptionControl = subscriptionOperation->connect(subscriptionContext->currentValue);
 
@@ -276,6 +286,12 @@ void singleGet(const SingleInfo& info,
                const Value& valuePrototype) {
     auto& pDbChannel(info.chan);
     try {
+        {
+            Credentials credentials(*getOperation->credentials());
+            SecurityClient securityClient;
+            securityClient.update(pDbChannel, credentials);
+            IOCSource::doReadCheck(securityClient);
+        }
         auto returnValue = valuePrototype.cloneEmpty();
         // TODO: MappingInfo::nsecMask
         IOCSource::initialize(returnValue, info, pDbChannel);
