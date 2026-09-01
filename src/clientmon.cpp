@@ -252,7 +252,8 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
 
                 ret.reset(strong.get(), [strong](Subscription*) mutable {
                     // on worker?
-                    auto junk(std::move(strong));
+                    decltype(strong) junk;
+                    junk.swap(strong);
                     // need to do cleanup on worker if running
                     auto loop(junk->loop);
                     loop.tryCall(std::bind([](std::shared_ptr<SubscriptionImpl>& junk) noexcept {
@@ -272,7 +273,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
     virtual void _onEvent(std::function<void(Subscription&)>&& fn) override final {
         decltype (event) junk;
         loop.call([this, &junk, &fn]() {
-            junk = std::move(event);
+            junk.swap(event);
             this->event = std::move(fn);
         });
     }
@@ -282,7 +283,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
         bool ret = false;
         (void)loop.tryCall([this, &junk, &ret](){
             ret = _cancel(false);
-            junk = std::move(event);
+            junk.swap(event);
             // leave opByIOID for GC
         });
         return ret;

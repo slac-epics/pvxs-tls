@@ -457,11 +457,19 @@ struct Tester {
 
 struct ErrorSource : public server::Source
 {
-    const bool phase = false;
+    const enum phase_t {
+        phaseCreate,
+        phaseOp,
+        phaseGet,
+    } phase;
     const Value type;
-    explicit ErrorSource(bool phase)
-        :phase(phase)
+    epicsEvent& closedChan;
+    epicsEvent& closedOp;
+    explicit ErrorSource(phase_t pha, epicsEvent& clCh, epicsEvent& clOp)
+        :phase(pha)
         ,type(nt::NTScalar{TypeCode::Int32}.create())
+        ,closedChan(clCh)
+        ,closedOp(clOp)
     {}
 
     virtual void onSearch(Search &op) override final
@@ -474,8 +482,20 @@ struct ErrorSource : public server::Source
     {
         auto chan = std::move(op);
 
+        auto& clo(closedChan);
+        chan->onClose([&clo](const std::string&) {
+            clo.signal();
+        });
+
+        if(phase==phaseCreate)
+            throw std::runtime_error("Refuse create");
+
         chan->onOp([this](std::unique_ptr<server::ConnectOp>&& op) {
-            if(!phase) {
+            auto& clo(closedOp);
+            op->onClose([&clo](const std::string&) {
+                clo.signal();
+            });
+            if(phase==phaseOp) {
                 op->error("haha");
                 return;
             }
@@ -487,13 +507,14 @@ struct ErrorSource : public server::Source
     }
 };
 
-void testError(bool phase)
+void testError(ErrorSource::phase_t phase)
 {
     testShow()<<__func__<<" phase="<<phase;
 
+    epicsEvent closedChan, closedOp;
     auto serv = server::Config::isolated()
             .build()
-            .addSource("err", std::make_shared<ErrorSource>(phase))
+            .addSource("err", std::make_shared<ErrorSource>(phase, closedChan, closedOp))
             .start();
 
     auto cli = serv.clientConfig().build();
@@ -510,7 +531,11 @@ void testError(bool phase)
 
     cli.hurryUp();
 
-    if(testOk1(done.wait(5.0))) {
+    if(phase==ErrorSource::phaseCreate) {
+        // client will silently re-try until cancelled
+        testSkip(2, "client will silently re-try create until cancelled");
+
+    } else if(testOk1(done.wait(5.0))) {
         testThrows<client::RemoteError>([&actual]() {
             auto val = actual();
             testShow()<<"unexpected result\n"<<val;
@@ -519,13 +544,24 @@ void testError(bool phase)
     } else {
         testSkip(1, "timeout");
     }
+    if(phase==ErrorSource::phaseCreate) {
+        // early failure during channel creation
+        testSkip(2, "Op not yet created");
+    } else {
+        // later failure during op creation or execution
+        testOk(closedOp.wait(2.0), "wait for operation onClose phase=%d", phase);
+        testOk(!closedChan.tryWait(), "channel not failed");
+        op->cancel();
+        cli.cacheClear("", client::Context::Disconnect); // force close channel
+    }
+    testOk(closedChan.wait(2.0), "wait for channel onClose phase=%d", phase);
 }
 
 } // namespace
 
 MAIN(testget)
 {
-    testPlan(63);
+    testPlan(74);
     testSetup();
     logger_config_env();
     const bool canIPv6 = pvxs::impl::evsocket::canIPv6;
@@ -547,8 +583,9 @@ MAIN(testget)
     Tester().badRequest();
     Tester().delayExec();
     Tester().ordering();
-    testError(false);
-    testError(true);
+    testError(ErrorSource::phaseCreate);
+    testError(ErrorSource::phaseOp);
+    testError(ErrorSource::phaseGet);
     cleanup_for_valgrind();
     return testDone();
 }
