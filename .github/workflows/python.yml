@@ -27,6 +27,10 @@ jobs:
           skip: true
 
         - ml: manylinux2014_x86_64
+          py: cp38-cp38
+          skip: true  # 3.8 reached end-of-life; dropped from manylinux2014 image
+
+        - ml: manylinux2014_x86_64
           py: cp39-cp39
 
         - ml: manylinux2014_x86_64
@@ -41,6 +45,10 @@ jobs:
         - ml: manylinux2014_x86_64
           py: cp313-cp313
 
+        - ml: manylinux2014_x86_64
+          py: cp313-cp313t
+          skip: true  # free-threaded 3.13 dropped from manylinux2014; cp314-cp314t below covers free-threaded
+
         - ml: manylinux_2_28_x86_64
           py: cp314-cp314
 
@@ -49,17 +57,18 @@ jobs:
           src: true
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@v6
         with:
             submodules: recursive
 
       - name: Automatic core dumper analysis
-        uses: mdavidsaver/ci-core-dumper@cda67d63a56db36aca1126d8d00aa5f7ff1ee1db # master
+        uses: mdavidsaver/ci-core-dumper@master
 
       - name: Detect pre-release
         run: python ./gha-set-pre.py
 
       - name: Build
+        if: ${{ ! matrix.skip }}
         run: |
             # emit script to be executed in container.
             cat <<EOF > runit.sh
@@ -117,11 +126,12 @@ jobs:
                 /io/runit.sh
 
       - name: Result
+        if: ${{ ! matrix.skip }}
         run: ls -lhtr output
 
       - name: Save wheels
         if: ${{ ! matrix.skip }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@v6
         with:
           retention-days: 1
           name: whl-${{ matrix.py }}-${{ matrix.ml }}
@@ -129,7 +139,7 @@ jobs:
 
       - name: Save source
         if: ${{ matrix.src }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@v6
         with:
           retention-days: 1
           name: whl-source
@@ -197,11 +207,11 @@ jobs:
             arch: macosx_11_0_universal2
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@v6
         with:
             submodules: recursive
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.py }}
 
@@ -244,7 +254,7 @@ jobs:
 
       - name: Save wheels
         if: ${{ ! matrix.skip }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@v6
         with:
           retention-days: 1
           name: whl-${{ matrix.py }}-${{ matrix.os }}
@@ -255,13 +265,13 @@ jobs:
     needs: [manylinux, native]
     steps:
       - name: Download
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@v7
         with:
             merge-multiple: true
 
       - run: ls -lhtr
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-python@v6
         with:
           python-version: 3.11
 
