@@ -198,7 +198,7 @@ void ServerConn::handle_SEARCH()
         if(proto=="tcp")
             foundtcp = true;
 #else
-        if(proto=="tcp" && iface->server->canRespondToTcpSearch() )
+        if(proto=="tcp" && !iface->server->effective.tcp_disabled && iface->server->canRespondToTcpSearch())
             foundtcp = true;
         else if(proto=="tls" && iface->server->canRespondToTlsSearch())
             foundtls = true;
@@ -241,11 +241,17 @@ void ServerConn::handle_SEARCH()
             nreply++;
     }
 
-    if(nreply==0 && !mustReply && !foundtcp )
 #ifdef PVXS_ENABLE_OPENSSL
-      if (!foundtls)
-#endif
+    // no usable transport arm: a reply would carry no endpoint (malformed); stay silent
+    if(!foundtcp && !foundtls) {
+        if(mustReply)
+            log_debug_printf(connio, "%s suppressing discover reply: no usable transport arm\n", peerName.c_str());
         return;
+    }
+#else
+    if(nreply==0 && !mustReply && !foundtcp)
+        return;
+#endif
 
     {
         (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
