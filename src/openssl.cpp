@@ -66,7 +66,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
     if (!status_check_disabled) {
         try {
             const auto status_pv = certs::CertStatusManager::getStatusPvFromCert(cert.get());
-            const auto cert_id = certs::CertStatusManager::getCertIdFromStatusPv(status_pv);
+            const auto cert_id = certs::CertStatusManager::getCertIdFromCert(cert.get());
 
             log_debug_printf(watcher, "Installing Certificate Status Monitor: %s\n", status_pv.c_str());
             cert_monitor = certs::CertStatusManager::subscribe(getCertStatusExData()->client, trusted_store_ptr, status_pv, cert_id,
@@ -116,8 +116,19 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
             });
             log_debug_printf(watcher, "Installed Certificate Status Monitor: %s\n", status_pv.c_str());
         } catch (certs::CertStatusNoExtensionException &e) {
+            // Extension absent
             no_status_extension = true;
             log_debug_printf(watcher, "No certificate status extension found in certificate: %s\n", e.what());
+        } catch (certs::CertStatusExtensionDecodeException &e) {
+            // Unable to decode the status extension: DegradedMode
+            log_err_printf(watcher, "Certificate status extension present but undecodable; failing secure: %s\n", e.what());
+            setDegradedMode(true);
+            return;
+        } catch (certs::CertStatusIdException &e) {
+            // Malformed certificate: DegradedMode
+            log_err_printf(watcher, "Cannot derive certificate ID for status monitoring; failing secure: %s\n", e.what());
+            setDegradedMode(true);
+            return;
         }
     } else {
         log_debug_printf(watcher, "Status check is disabled%s", "\n");
@@ -767,7 +778,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *p
     std::shared_ptr<SSLPeerStatusAndMonitor> peer_status_and_monitor;
     if (status_check_enabled && fn) {
         const auto status_pv = certs::CertStatusManager::getStatusPvFromCert(peer_cert_ptr);
-        const auto cert_id = certs::CertStatusManager::getCertIdFromStatusPv(status_pv);
+        const auto cert_id = certs::CertStatusManager::getCertIdFromCert(peer_cert_ptr);
         peer_status_and_monitor = getOrCreatePeerStatus(serial_number, status_pv, cert_id, fn);
     } else {
         peer_status_and_monitor = getOrCreatePeerStatus(serial_number);

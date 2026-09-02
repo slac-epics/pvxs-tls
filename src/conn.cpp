@@ -168,7 +168,18 @@ void ConnBase::bevEvent(const short events) {
                             }
                         });
                     } catch (certs::CertStatusNoExtensionException &e) {
+                        // Extension absent: Proceed without status monitoring.
                         log_debug_printf(connio, "no status to monitor for peer %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
+                    } catch (certs::CertStatusExtensionDecodeException &e) {
+                        // Malformed peer certificate: reject the peer.
+                        state = Disconnected;
+                        log_err_printf(connio, "peer %s %s cert status extension undecodable; Disconnected: %s\n", peerLabel(), peerName.c_str(), e.what());
+                        bev.reset();
+                    } catch (certs::CertStatusIdException &e) {
+                        // Malformed peer certificate: reject the peer.
+                        state = Disconnected;
+                        log_err_printf(connio, "peer %s %s cant get cert ID from cert; Disconnected: %s\n", peerLabel(), peerName.c_str(), e.what());
+                        bev.reset();
                     } catch (std::exception &e) {
                         log_err_printf(connio, "unexpected error subscribing to peer %s %s certificate status: %s\n", peerLabel(), peerName.c_str(), e.what());
                     }
