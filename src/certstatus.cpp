@@ -43,7 +43,7 @@ OCSPStatus::OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const ui
 void OCSPStatus::init(X509_STORE *trusted_store_ptr, const std::string& cert_id) {
     if (ocsp_bytes.empty()) {
         ocsp_status = OCSPCertStatus(OCSP_CERTSTATUS_UNKNOWN);
-        status_date = time(nullptr);
+        status_date = timeNow();
     } else {
         const auto parsed_status = CertStatusManager::parse(ocsp_bytes, trusted_store_ptr, cert_id);
         ocsp_status = std::move(parsed_status.ocsp_status);
@@ -65,7 +65,7 @@ void OCSPStatus::init(X509_STORE* trusted_store_ptr, const std::string& issuer_i
  * @param rhs The PVACertificateStatus to convert
  * @return CertificateStatus The converted CertificateStatus
  */
-PVACertificateStatus::operator CertificateStatus() const noexcept {
+PVACertificateStatus::operator CertificateStatus() const {
     return (status == UNKNOWN) ? static_cast<CertificateStatus>(UnknownCertificateStatus{}) : static_cast<CertificateStatus>(CertifiedCertificateStatus{*this});
 }
 
@@ -75,7 +75,7 @@ PVACertificateStatus::operator CertificateStatus() const noexcept {
  * @param rhs The OCSPStatus to convert
  * @return CertificateStatus The converted CertificateStatus
  */
-OCSPStatus::operator CertificateStatus() const noexcept {
+OCSPStatus::operator CertificateStatus() const {
     return (ocsp_status == OCSP_CERTSTATUS_UNKNOWN) ? static_cast<CertificateStatus>(UnknownCertificateStatus{})
                                                     : static_cast<CertificateStatus>(CertifiedCertificateStatus{*this});
 }

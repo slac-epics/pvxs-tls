@@ -288,7 +288,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
             const certs::CertDate expiry_date = X509_get_notAfter(cert);
 
             // If not yet expired
-            const auto now = time(nullptr);
+            const auto now = timeNow();
             if (expiry_date.t > now) {
                 // Set up the callback to point to this context
                 event_assign(cert_expiration_timer.get(), tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &certExpirationHandlerS, context_impl);

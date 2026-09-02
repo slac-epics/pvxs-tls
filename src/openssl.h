@@ -416,7 +416,7 @@ struct SSLContext {
 
     explicit SSLContext(evbase loop, bool is_client);
     SSLContext(const SSLContext& o);
-    SSLContext(SSLContext& o) noexcept;
+    SSLContext(SSLContext& o);
     ~SSLContext();
 
     explicit operator bool() const { return ctx.get(); }

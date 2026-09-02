@@ -19,8 +19,10 @@
 #endif
 
 #include <atomic>
+#include <ctime>
 #include <memory>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <sstream>
 #include <type_traits>
@@ -32,6 +34,7 @@
 
 #include <compilerDependencies.h>
 #include <epicsThread.h>
+#include <epicsTime.h>
 #include <errlog.h>
 
 #include <pvxs/version.h>
@@ -74,6 +77,25 @@ struct promote_print<uint8_t> { static unsigned op(const char& v) { return v; }}
 
 PVXS_API
 bool inUnitTest();
+
+/** @brief Current wall-clock time as POSIX seconds, from the EPICS time source.
+ *
+ * Routing every "now" through this single wrapper lets the clock be overridden
+ * globally in tests via the epicsTimeGetCurrent() time provider. That call
+ * yields EPICS-epoch seconds (since 1990); adding POSIX_TIME_AT_EPICS_EPOCH
+ * converts to POSIX seconds (since 1970). Throws if the EPICS time source is
+ * unavailable, rather than silently substituting a different clock.
+ *
+ * @return POSIX seconds since 1970-01-01 UTC.
+ * @throws std::runtime_error if epicsTimeGetCurrent() fails.
+ */
+inline time_t timeNow() {
+    epicsTimeStamp ts;
+    if (epicsTimeGetCurrent(&ts) != epicsTimeOK) {
+        throw std::runtime_error("impl::timeNow(): epicsTimeGetCurrent() failed");
+    }
+    return static_cast<time_t>(ts.secPastEpoch) + POSIX_TIME_AT_EPICS_EPOCH;
+}
 
 /* specialization of bad_alloc which notes the location from which
  * the exception originates.
