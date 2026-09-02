@@ -72,9 +72,9 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
             cert_monitor = certs::CertStatusManager::subscribe(getCertStatusExData()->client, trusted_store_ptr, status_pv, cert_id,
                                                                [=](const certs::PVACertificateStatus &pva_status) {
             const auto cert_status_class = static_cast<certs::CertificateStatus>(pva_status).getStatusClass();
-            log_debug_printf(watcher, "Received: %s certificate status\n", pva_status.status.s.c_str());
+            log_debug_printf(watcher, "Received: %s certificate status\n", pva_status.status.s);
             if (cert_status_class != certs::cert_status_class_t::GOOD) {
-                log_warn_printf(watcher, "Certificate not valid: %s\n", pva_status.status.s.c_str());
+                log_warn_printf(watcher, "Certificate not valid: %s\n", pva_status.status.s);
             }
 
             {
@@ -105,7 +105,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
                     delay.tv_usec = 0;
                     event_add(status_validity_timer.get(), &delay);
                 } else {
-                    log_debug_printf(watcher, "Certificate status is no longer valid: %s\n", pva_status.status.s.c_str());
+                    log_debug_printf(watcher, "Certificate status is no longer valid: %s\n", pva_status.status.s);
                     setTlsOrTcpMode(certs::cert_status_class_t::UNKNOWN);
                     return;
                 }
@@ -191,7 +191,7 @@ void SSLContext::setDegradedMode(const bool clear) {
  * @param cert_status_class the given cert status class
  */
 void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_class) {
-    log_debug_printf(watcher, "Received a %s certificate status from the status monitor\n", cert_status.status.s.c_str());
+    log_debug_printf(watcher, "Received a %s certificate status from the status monitor\n", cert_status.status.s);
     if (state == DegradedMode) {
         log_warn_printf(watcher, "Logic Error. Should not be monitoring certificate status: Because the context state is %s\n", "DegradedMode");
         return;
@@ -794,10 +794,10 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
         peer_status->cert_status_manager =
             certs::CertStatusManager::subscribe(client, trusted_store_ptr, status_pv, cert_id,
                                                 [weak_peer_status](const certs::PVACertificateStatus &status) {
-                log_debug_printf(watcher, "Received: %s PEER certificate status\n", status.status.s.c_str());
+                log_debug_printf(watcher, "Received: %s PEER certificate status\n", status.status.s);
                 const auto peer_status_update = weak_peer_status.lock();
                 if (!status.isGood())
-                    log_warn_printf(watcher, "Peer certificate not VALID: %s\n", status.status.s.c_str());
+                    log_warn_printf(watcher, "Peer certificate not VALID: %s\n", status.status.s);
                 // Update the cached state
                 if (peer_status_update) peer_status_update->updateStatus(static_cast<const certs::CertificateStatus>(status));
             });
@@ -973,13 +973,6 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
             temp.method = "x509";
             temp.account = name;
 
-            // Get serial number
-            const ASN1_INTEGER* serial_asn1 = X509_get_serialNumber(cert);
-            if (!serial_asn1) throw std::runtime_error("Failed to retrieve serial number from peer certificate");
-            serial_number_t serial = 0;
-            for (int i = 0; i < serial_asn1->length; ++i) serial = serial << 8 | serial_asn1->data[i];
-            temp.serial = std::to_string(serial);
-
             // try to use certificate chain authority names to qualify
             if (const auto chain = SSL_get0_verified_chain(ctx)) {
                 const auto N = sk_X509_num(chain);
@@ -1006,10 +999,6 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
                             }
                             authority += common_name;
 
-                            // If this is the issuer cert (first in the chain after entity), also set the issuer_id
-                            if (i == start_index) {
-                                temp.issuer_id = certs::CertStatus::getSkId(chain_cert);
-                            }
                             if (i == N - 1 && !(X509_check_ca(chain_cert) || (X509_get_extension_flags(chain_cert) & EXFLAG_SS))) {
                                 log_warn_printf(io, "Last cert in peer chain is not root Root certificate authority certificate? %s\n",
                                                 std::string(SB() << ossl::ShowX509{chain_cert}).c_str());

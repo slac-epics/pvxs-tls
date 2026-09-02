@@ -13,6 +13,7 @@
 #define PVXS_CERTSTATUS_H_
 
 #include <iomanip>
+#include <limits>
 #include <utility>
 
 #include <openssl/evp.h>
@@ -30,8 +31,6 @@
 #include "evhelper.h"
 #include "ownedptr.h"
 
-#define CERT_TIME_FORMAT "%a %b %d %H:%M:%S %Y UTC"
-
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 
@@ -39,13 +38,7 @@ DEFINE_LOGGER(status_setup, "pvxs.certs.status.setup");
 DEFINE_LOGGER(status, "pvxs.certs.status");
 
 // Define permanently valid status time
-#if defined(__TIME_T_MAX__)
-#define PERMANENTLY_VALID_STATUS __TIME_T_MAX__
-#elif defined(__INT_MAX__)
-#define PERMANENTLY_VALID_STATUS (time_t)(__INT_MAX__)
-#else
-#define PERMANENTLY_VALID_STATUS (time_t)(((unsigned long long)~0) >> 1)
-#endif
+#define PERMANENTLY_VALID_STATUS (std::numeric_limits<time_t>::max)()
 
 namespace pvxs {
 namespace certs {
@@ -101,15 +94,10 @@ enum ocspcertstatus_t { OCSP_CERT_STATUS_LIST };
 #define CERT_STATES {CERT_STATUS_LIST}
 #define OCSP_CERT_STATES {OCSP_CERT_STATUS_LIST}
 
-// Gets status name based on index (portable: GCC/Clang compound literal -> static array)
-inline const char* CERT_STATE(std::size_t index) {
-    static const char* const _names[] = CERT_STATES;
-    return _names[index];
-}
-inline const char* OCSP_CERT_STATE(std::size_t index) {
-    static const char* const _names[] = OCSP_CERT_STATES;
-    return _names[index];
-}
+// Gets status name based on index (defined out-of-line in certstatus.cpp, with
+// bounds checking, to avoid duplicating the name tables in every translation unit)
+const char* CERT_STATE(std::size_t index);
+const char* OCSP_CERT_STATE(std::size_t index);
 
 // Certificate status classes
 //
@@ -137,8 +125,8 @@ struct OCSPCertStatus;
 struct CertStatus {
     // enum value of the status
     uint32_t i{0};
-    // string representation of the status
-    std::string s{};
+    // string representation of the status (points into a static name table)
+    const char* s{""};
     // Default constructor
     CertStatus() = default;
     CertStatus(const CertStatus&) = default;
@@ -148,41 +136,6 @@ struct CertStatus {
     bool operator==(const CertStatus& rhs) const { return i == rhs.i; }
     bool operator!=(const CertStatus& rhs) const { return !(*this == rhs); }
 
-    /**
-     * @brief  Get the first 8 hex digits of the hex SKID (subject key identifier)
-     *
-     * Note that the given cert must contain the SKID extension in the first place
-     *
-     * @param cert  the cert from which to get the subject key identifier extension
-     * @return first 8 hex digits of the hex SKID (subject key identifier)
-     */
-    static std::string getSkId(const ossl_ptr<X509>& cert) { return getSkId(cert.get()); }
-
-    /**
-     * @brief Get the first 8 hex digits of the hex SKID (subject key identifier)
-     *
-     * Note that the given cert must contain the SKID extension in the first place
-     *
-     * @param cert_ptr the cert pointer from which to get the subject key identifier extension
-     * @return first 8 hex digits of the hex SKID (subject key identifier)
-     */
-    static std::string getSkId(const X509* cert_ptr) {
-        const ossl_ptr<ASN1_OCTET_STRING> skid(static_cast<ASN1_OCTET_STRING*>(X509_get_ext_d2i(cert_ptr, NID_subject_key_identifier, nullptr, nullptr)),
-                                               false);
-        if (!skid) {
-            throw std::runtime_error("Failed to get Subject Key Identifier.");
-        }
-
-        // Convert the first 8 chars to hex
-        const auto buf = skid->data;
-        std::stringstream ss;
-        for (int i = 0; i < skid->length && ss.tellp() < 8; i++) {
-            ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buf[i]);
-        }
-
-        return ss.str();
-    }
-
    protected:
     /**
      * @brief Constructor for CertStatus only to be used by PVACertStatus and OCSPCertStatus
@@ -190,7 +143,7 @@ struct CertStatus {
      * @param status the enum index of the status
      * @param status_string the string representation of the status
      */
-    explicit CertStatus(const uint32_t status, std::string  status_string) : i(status), s(std::move(status_string)) {}
+    explicit CertStatus(const uint32_t status, const char* status_string) : i(status), s(status_string) {}
 
     // Friend declarations to allow cross-comparisons only between specific types
     friend struct PVACertStatus;
@@ -229,7 +182,7 @@ struct PVACertStatus : CertStatus {
      * @param status the enum index of the status
      * @return the string representation of the status
      */
-    static std::string toString(const certstatus_t status) { return CERT_STATE(status); }
+    static const char* toString(const certstatus_t status) { return CERT_STATE(status); }
 };
 
 /**
@@ -259,7 +212,7 @@ struct OCSPCertStatus : CertStatus {
      * @param status the enum index of the status
      * @return the string representation of the status
      */
-    static std::string toString(const ocspcertstatus_t& status) { return OCSP_CERT_STATE(status); }
+    static const char* toString(const ocspcertstatus_t& status) { return OCSP_CERT_STATE(status); }
 };
 
 /**
@@ -435,12 +388,10 @@ bool operator!=(certstatus_t& lhs, OCSPStatus& rhs);
  */
 struct PVACertificateStatus final : OCSPStatus {
     PVACertStatus status{UNKNOWN};
-    CertDate renew_by{};
     bool operator==(const PVACertificateStatus& rhs) const override {
         return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date &&
                this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date;
     }
-    bool renewal_due{false};
     bool operator!=(const PVACertificateStatus& rhs) const override { return !(*this == rhs); }
 
     bool operator==(certstatus_t& rhs) const override { return this->status == rhs; }
@@ -497,8 +448,8 @@ struct PVACertificateStatus final : OCSPStatus {
      * @param revocation_time Revocation date
      */
     explicit PVACertificateStatus(const certstatus_t status, const ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes,
-                                  const CertDate& status_date, const CertDate& status_valid_until_time, const CertDate& revocation_time, const CertDate& renew_by={}, const bool renewal_due=false)
-        : OCSPStatus(ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time), status(status), renew_by(renew_by), renewal_due(renewal_due) {}
+                                  const CertDate& status_date, const CertDate& status_valid_until_time, const CertDate& revocation_time)
+        : OCSPStatus(ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time), status(status) {}
 
     /**
      * @brief Check if the PVACertificateStatus is self-consistent,
@@ -818,17 +769,6 @@ class CertStatusManager {
      */
     static std::string getStatusPvFromCert(const ossl_ptr<X509> &cert);
 
-    /**
-     * @brief Get the config PV from a Cert.
-     * This function gets the PVA extension that stores the config PV in the certificate
-     * if the certificate can be used in conjunction with a config monitor to check for
-     * expired status.
-     * @param cert the certificate to check for the config PV extension
-     * @return a blank string if no extension exists, otherwise contains the config PV
-     *         e.g. CERT:CONFIG:0293823f:098294739483904875
-     */
-    static std::string getConfigPvFromCert(const ossl_ptr<X509> &cert);
-
 
     /**
      * @brief Get the certificate issuer from a Cert.
@@ -864,15 +804,6 @@ class CertStatusManager {
      *         e.g. CERT:STATUS:0293823f:098294739483904875
      */
     static std::string getStatusPvFromCert(const X509 *cert_ptr);
-
-    /**
-     * @brief Get the certificate configuration PV from a Cert.
-     * This function gets the PVA certificate extension that holds the certificate configuration PV
-     * @param cert_ptr the certificate to check
-     * @return a blank string if no extension exists, otherwise contains the certificate configuration PV
-     *         e.g. CERT:CONFIG:0293823f:098294739483904875
-     */
-    static std::string getConfigPvFromCert(const X509 *cert_ptr);
 
     /**
      * @brief Get the expiration date from a Cert.
@@ -931,7 +862,6 @@ class CertStatusManager {
      * @throws CertStatusNoExtensionException if no extension is present in the certificate
      */
     static X509_EXTENSION *getStatusExtension(const X509 *certificate);
-    static X509_EXTENSION *getConfigExtension(const X509 *certificate);
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t> &ocsp_bytes);
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const uint8_t *ocsp_bytes, size_t ocsp_bytes_len);
     static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic_response, X509_STORE *trusted_store_ptr);

@@ -10,12 +10,26 @@
  *
  */
 
+#include <array>
+
 #include "certstatus.h"
 
 #include "opensslgbl.h"
 
 namespace pvxs {
 namespace certs {
+
+// Status-name tables, defined once here rather than duplicated into every
+// translation unit that includes certstatus.h.  Out-of-range indices return a
+// safe fallback rather than reading past the end of the array.
+const char* CERT_STATE(std::size_t index) {
+    static const std::array<const char*, 7> names = CERT_STATES;
+    return index < names.size() ? names[index] : "UNKNOWN";
+}
+const char* OCSP_CERT_STATE(std::size_t index) {
+    static const std::array<const char*, 3> names = OCSP_CERT_STATES;
+    return index < names.size() ? names[index] : "OCSP_CERTSTATUS_UNKNOWN";
+}
 
 /**
  * @brief Constructor for the OCSPStatus class
@@ -288,6 +302,30 @@ uint64_t ASN1ToUint64(const ASN1_INTEGER* asn1_number) {
 
 namespace {
 
+// Format the first 8 hex digits of an octet buffer (e.g. a key identifier or
+// issuer key hash), as used for the issuer part of a certificate ID.
+std::string firstEightHex(const unsigned char* data, const int length) {
+    std::stringstream ss;
+    for (int i = 0; i < length && ss.tellp() < 8; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
+    }
+    return ss.str();
+}
+
+// Convert an ASN1_INTEGER to its decimal string representation.
+std::string asn1IntegerToDecimalString(const ASN1_INTEGER* value) {
+    const ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(value, nullptr), false);
+    if (!bn) throw OCSPParseException("Failed to convert integer to BIGNUM");
+    if (BN_is_negative(bn.get())) throw OCSPParseException("Serial number is negative");
+    if (BN_num_bits(bn.get()) > 64) throw OCSPParseException("Serial number overflow: value exceeds uint64_t");
+
+    char* decimal_str = BN_bn2dec(bn.get());
+    if (!decimal_str) throw OCSPParseException("Failed to convert integer to string");
+    const std::string result(decimal_str);
+    OPENSSL_free(decimal_str);
+    return result;
+}
+
 std::string certIdFromOCSPCertId(const OCSP_CERTID* cert_id_ptr)
 {
     if (!cert_id_ptr)                 throw OCSPParseException("No OCSP_CERTID found in OCSP response");
@@ -299,23 +337,10 @@ std::string certIdFromOCSPCertId(const OCSP_CERTID* cert_id_ptr)
         throw OCSPParseException("Failed to extract issuer key hash and serial from OCSP_CERTID");
     }
 
-    std::stringstream issuer;
-    for (int i = 0; i < issuer_key_hash->length && issuer.tellp() < 8; i++) {
-        issuer << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(issuer_key_hash->data[i]);
-    }
-    if (issuer.tellp() != 8)       throw OCSPParseException("Issuer key hash too short to construct cert_id");
+    const auto issuer = firstEightHex(issuer_key_hash->data, issuer_key_hash->length);
+    if (issuer.size() != 8)        throw OCSPParseException("Issuer key hash too short to construct cert_id");
 
-    const ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr), false);
-    if (!bn)                          throw OCSPParseException("Failed to convert OCSP serial number to BIGNUM");
-    if (BN_is_negative(bn.get()))  throw OCSPParseException("OCSP serial number is negative");
-    if (BN_num_bits(bn.get()) > 64) throw OCSPParseException("OCSP serial number overflow: value exceeds uint64_t");
-
-    char* decimal_str = BN_bn2dec(bn.get());
-    if (!decimal_str)                 throw OCSPParseException("Failed to convert OCSP serial number to string");
-    const std::string serial_s(decimal_str);
-    OPENSSL_free(decimal_str);
-
-    return CertStatusManager::getCertIdFromSerialAndIssuer(issuer.str(), serial_s);
+    return CertStatusManager::getCertIdFromSerialAndIssuer(issuer, asn1IntegerToDecimalString(serial));
 }
 
 }
@@ -345,15 +370,28 @@ ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_re
     // Verify OCSP response is signed by provided trusted root certificate authority
     verifyOCSPResponse(basic_response, trusted_store_ptr);
 
-    OCSP_SINGLERESP *single_response = OCSP_resp_get0(basic_response.get(), 0);
-    if (!single_response)                                   throw OCSPParseException("No entries found in OCSP response");
+    // An OCSP response may carry several SINGLERESPs; scan them for the one whose
+    // cert_id matches the certificate we are asking about rather than assuming index 0.
+    const int response_count = OCSP_resp_count(basic_response.get());
+    if (response_count <= 0)                                throw OCSPParseException("No entries found in OCSP response");
+
+    OCSP_SINGLERESP *single_response = nullptr;
+    const OCSP_CERTID *ocsp_cert_id = nullptr;
+    for (int i = 0; i < response_count; i++) {
+        OCSP_SINGLERESP *candidate = OCSP_resp_get0(basic_response.get(), i);
+        if (!candidate) continue;
+        const OCSP_CERTID *candidate_cert_id = OCSP_SINGLERESP_get0_id(candidate);
+        if (certIdFromOCSPCertId(candidate_cert_id) == cert_id) {
+            single_response = candidate;
+            ocsp_cert_id = candidate_cert_id;
+            break;
+        }
+    }
+    if (!single_response)                                   throw OCSPParseException(SB() << "OCSP response contains no entry for cert_id " << cert_id);
 
     ASN1_GENERALIZEDTIME *this_update = nullptr, *next_update = nullptr, *revocation_time = nullptr;
     int reason = 0;
 
-    const OCSP_CERTID *ocsp_cert_id = OCSP_SINGLERESP_get0_id(single_response);
-    const auto observed_cert_id = certIdFromOCSPCertId(ocsp_cert_id);
-    if (observed_cert_id != cert_id)                        throw OCSPParseException(SB() << "OCSP response cert_id mismatch. Expected: " << cert_id << ", Got: " << observed_cert_id);
     ASN1_INTEGER *serial = nullptr;
     if (OCSP_id_get0_info(nullptr, nullptr, nullptr, &serial, const_cast<OCSP_CERTID *>(ocsp_cert_id)) != 1 || !serial) {
         throw OCSPParseException("Failed to extract serial from OCSP_CERTID");
@@ -432,22 +470,22 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
                                if (update) {
                                    try {
                                         auto status_update{PVACertificateStatus(update, trusted_store_ptr, cert_id)};
-                                        log_debug_printf(status, "Status subscription %s received: %s\n", s.name().c_str(), status_update.status.s.c_str());
+                                        log_debug_printf(status, "Status subscription %s received: %s\n", s.name().c_str(), status_update.status.s);
                                         log_debug_printf(status, "Calling (*cb)(status_update)%s\n", "");
                                         (*cb)(status_update);
                                         log_debug_printf(status, "Called (*cb)(status_update)%s\n", "");
                                    } catch (OCSPParseException &e) {
-                                       log_debug_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
+                                       log_err_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
                                    } catch (std::invalid_argument &e) {
-                                       log_debug_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
+                                       log_err_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
                                    } catch (std::exception &e) {
                                        log_err_printf(status, "Error processing %s status update: %s\n", s.name().c_str(), e.what());
                                    }
                                }
                            } catch (client::Connected &conn) {
-                               log_debug_printf(status, "Connected Subscription %s: %s\n", s.name().c_str(), conn.peerName.c_str());
+                               log_info_printf(status, "Connected Subscription %s: %s\n", s.name().c_str(), conn.peerName.c_str());
                            } catch (client::Disconnect &conn) {
-                               log_debug_printf(status, "Disconnected Subscription %s: %s\n", s.name().c_str(), conn.what());
+                               log_info_printf(status, "Disconnected Subscription %s: %s\n", s.name().c_str(), conn.what());
                            } catch (std::exception &e) {
                                log_err_printf(status, "Error Getting Subscription %s: %s\n", s.name().c_str(), e.what());
                            }
@@ -512,8 +550,6 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic
  */
 std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509> &cert) { return getStatusPvFromCert(cert.get()); }
 
-std::string CertStatusManager::getConfigPvFromCert(const ossl_ptr<X509> &cert) { return getConfigPvFromCert(cert.get()); }
-
 time_t CertStatusManager::getExpirationDateFromCert(const ossl_ptr<X509> &cert) { return getExpirationDateFromCert(cert.get()); }
 
 
@@ -538,39 +574,12 @@ X509_EXTENSION *CertStatusManager::getStatusExtension(const X509 *certificate) {
     return extension;
 }
 
-/**
- * @brief Get the extension from the certificate.
- * This method retrieves the extension from the given certificate using the NID_PvaCertConfigURI.
- * If the extension is not found, it throws a CertConfigNoExtensionException.
- * @param certificate the certificate to retrieve the extension from
- * @return the X509_EXTENSION object, if found, otherwise throws an exception
- */
-X509_EXTENSION *CertStatusManager::getConfigExtension(const X509 *certificate) {
-    // Make sure the custom extensions are configured before querying them
-    ossl::osslInit();
-    const int extension_index = X509_get_ext_by_NID(certificate, ossl::NID_SPvaCertConfigURI, -1);
-    if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find Certificate-Config-PV extension in certificate.");
-
-    // Get the extension object from the certificate
-    X509_EXTENSION *extension = X509_get_ext(certificate, extension_index);
-    if (!extension) {
-        throw CertStatusNoExtensionException("Failed to get Certificate-Config-PV extension from the certificate.");
-    }
-    return extension;
-}
-
 std::string CertStatusManager::getIssuerIdFromCert(const X509* cert_ptr) {
     const ossl_ptr<AUTHORITY_KEYID> akid(static_cast<AUTHORITY_KEYID*>(X509_get_ext_d2i(cert_ptr, NID_authority_key_identifier, nullptr, nullptr)),
                                        false);
     if (!akid || !akid->keyid) throw CertStatusNoExtensionException("Failed to get Authority Key Identifier.");
 
-    // Convert the first 8 chars to hex
-    std::stringstream ss;
-    for (int i = 0; i < akid->keyid->length && ss.tellp() < 8; i++) {
-        ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(akid->keyid->data[i]);
-    }
-
-    return ss.str();
+    return firstEightHex(akid->keyid->data, akid->keyid->length);
 }
 
 std::string CertStatusManager::getSerialFromCert(const X509* cert_ptr) {
@@ -578,24 +587,7 @@ std::string CertStatusManager::getSerialFromCert(const X509* cert_ptr) {
     if (!serial) {
         throw CertStatusNoExtensionException("Failed to get Serial Number from certificate.");
     }
-
-    // Convert ASN1_INTEGER to BIGNUM
-    const ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr), false);
-    if (!bn) {
-        throw CertStatusNoExtensionException("Failed to convert Serial Number to BIGNUM.");
-    }
-
-    // Convert BIGNUM to decimal string
-    char* decimal_str = BN_bn2dec(bn.get());
-    if (!decimal_str) {
-        throw CertStatusNoExtensionException("Failed to convert Serial Number to string.");
-    }
-
-    // Create a C++ string and free the C string
-    std::string result(decimal_str);
-    OPENSSL_free(decimal_str);
-
-    return result;
+    return asn1IntegerToDecimalString(serial);
 }
 
 std::string CertStatusManager::getCertIdFromCert(const X509 *cert_ptr) {
@@ -633,53 +625,6 @@ std::string CertStatusManager::getStatusPvFromCert(const X509 *cert) {
     // Retrieve the extension data which is an ASN1_OCTET_STRING object containing DER-encoded IA5String
     const ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(extension);
     if (!ext_data) throw CertStatusNoExtensionException("Failed to get data from the Certificate-Status-PV extension.");
-
-    // Get the DER-encoded data
-    const unsigned char *data = ASN1_STRING_get0_data(ext_data);
-    if (!data) throw CertStatusNoExtensionException("Failed to extract data from ASN1_STRING.");
-
-    const int length = ASN1_STRING_length(ext_data);
-    if (length < 0) throw CertStatusNoExtensionException("Invalid length of ASN1_STRING data.");
-
-    // Decode the DER-encoded IA5String
-    const unsigned char *p = data;
-    const ossl_ptr<ASN1_IA5STRING> ia5_str(d2i_ASN1_IA5STRING(nullptr, &p, length), false);
-    if (!ia5_str) {
-        throw CertStatusNoExtensionException("Failed to decode DER-encoded IA5String from extension.");
-    }
-
-    // Extract the string value from the IA5String
-    const auto str_data = reinterpret_cast<const char *>(ASN1_STRING_get0_data(ia5_str.get()));
-    if (!str_data) {
-        throw CertStatusNoExtensionException("Failed to get data from decoded IA5String.");
-    }
-
-    const size_t str_length = ASN1_STRING_length(ia5_str.get());
-    if (str_length < 0) {
-        throw CertStatusNoExtensionException("Invalid length of decoded IA5String data.");
-    }
-
-    // Return the data as a std::string
-    return {str_data, str_length};
-}
-
-/**
- * @brief Get the string value of a custom extension by NID from a certificate.
- *
- * This will return the PV name to monitor for config of the given certificate.
- * It is stored in the certificate using a custom extension.
- * Exceptions are thrown if it is unable to retrieve the value of the extension
- * or it does not exist.
- *
- * @param cert the certificate to examine
- * @return the PV name to call for config on that certificate
- */
-std::string CertStatusManager::getConfigPvFromCert(const X509 *cert) {
-    const auto extension = getConfigExtension(cert);
-
-    // Retrieve the extension data, which is an ASN1_OCTET_STRING object containing DER-encoded IA5String
-    const ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(extension);
-    if (!ext_data) throw CertStatusNoExtensionException("Failed to get data from the Certificate-Config-PV extension.");
 
     // Get the DER-encoded data
     const unsigned char *data = ASN1_STRING_get0_data(ext_data);

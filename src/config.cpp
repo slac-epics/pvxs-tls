@@ -488,9 +488,8 @@ std::string printTLSOptions(const ConfigCommon& conf) {
 
 namespace server {
 
-void Config::fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
+void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
     PickOne pickone{defs, useenv};
-    PickOne pick_another_one{defs, useenv};
 
     if(pickone({"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
         try {
@@ -537,30 +536,16 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
             // Split on semicolon: part before is the keychain filename, the part after is the keychain file password
             self.tls_keychain_file = pickone.val.substr(0, sep);
             self.setKeychainPassword(pickone.val.substr(sep + 1));
-            ensureDirectoryExists(self.tls_keychain_file);
         } else {
-            // No semicolon: value is the file, look for a password file separately
-            ensureDirectoryExists(self.tls_keychain_file = pickone.val);
-            // EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE
-            std::string password_filename;
-            if (pickone.name == "EPICS_PVAS_TLS_KEYCHAIN") {
-                pick_another_one({"EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"});
-                password_filename = pick_another_one.val;
-            } else {
-                pick_another_one({"EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"});
-                password_filename = pick_another_one.val;
-            }
-            ensureDirectoryExists(password_filename);
-            try {
-                self.setKeychainPassword(getFileContents(password_filename));
-            } catch (std::exception& e) {
-                log_err_printf(serversetup, "error reading password file: %s. %s", password_filename.c_str(), e.what());
-            }
+            // No semicolon: the whole value is the keychain filename
+            self.tls_keychain_file = pickone.val;
+            self.setKeychainPassword({});
         }
+        ensureDirectoryExists(self.tls_keychain_file);
     } else {
         std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "server.p12";
         std::ifstream file(filename.c_str());
-        if (file.good()) tls_keychain_file = filename;
+        if (file.good()) self.tls_keychain_file = filename;
 }
 
     // EPICS_PVAS_TLS_OPTIONS
@@ -577,11 +562,10 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         }
     }
 
-    if (pickone({"EPICS_PVAS_CERT_PV_PREFIX", "EPICS_PVA_CERT_PV_PREFIX"})) self.setCertPvPrefix(pickone.val);
 #endif  // PVXS_ENABLE_OPENSSL
 }
 Config& Config::applyEnv() {
-    fromDefs(*this, std::map<std::string, std::string>(), true);
+    _fromDefs(*this, std::map<std::string, std::string>(), true);
     return *this;
 }
 
@@ -620,7 +604,7 @@ Config Config::isolated(int family) {
 }
 
 Config& Config::applyDefs(const std::map<std::string, std::string>& defs) {
-    fromDefs(*this, defs, false);
+    _fromDefs(*this, defs, false);
     return *this;
 }
 
@@ -638,20 +622,18 @@ void Config::updateDefs(defs_t& defs) const {
     defs["XDG_CONFIG_HOME"] = getXdgConfigHome();
 
 #ifdef PVXS_ENABLE_OPENSSL
-    // EPICS_PVAS_TLS_KEYCHAIN
-    if (!tls_keychain_file.empty()) defs["EPICS_PVAS_TLS_KEYCHAIN"] = tls_keychain_file;
-
-    // EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE
-    if (!getKeychainPassword().empty()) defs["EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
+    // EPICS_PVAS_TLS_KEYCHAIN (with optional ";<password>" postfix)
+    if (!tls_keychain_file.empty()) {
+        std::string keychain = tls_keychain_file;
+        if (!getKeychainPassword().empty()) keychain += ";<password read>";
+        defs["EPICS_PVAS_TLS_KEYCHAIN"] = keychain;
+    }
 
     // EPICS_PVAS_TLS_OPTIONS
     defs["EPICS_PVAS_TLS_OPTIONS"] = printTLSOptions(*this);
 
     // EPICS_PVAS_TLS_PORT
     defs["EPICS_PVA_TLS_PORT"] = defs["EPICS_PVAS_TLS_PORT"] = std::to_string(tls_port);
-
-    // EPICS_PVAS_CERT_PV_PREFIX
-    if (!getCertPvPrefix().empty()) defs["EPICS_PVAS_CERT_PV_PREFIX"] = getCertPvPrefix();
 #endif  // PVXS_ENABLE_OPENSSL
 }
 
@@ -723,7 +705,7 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf) {
 
 namespace client {
 
-void Config::fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
+void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
     PickOne pickone{defs, useenv};
 
     if(pickone({"EPICS_PVA_BROADCAST_PORT"})) {
@@ -773,27 +755,20 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 #ifdef PVXS_ENABLE_OPENSSL
     // EPICS_PVA_TLS_KEYCHAIN
     if (pickone({"EPICS_PVA_TLS_KEYCHAIN"})) {
+        // Check if value contains semicolon separator (file;password)
         auto sep = pickone.val.find(';');
         if (sep != std::string::npos) {
             self.tls_keychain_file = pickone.val.substr(0, sep);
             self.setKeychainPassword(pickone.val.substr(sep + 1));
-            ensureDirectoryExists(self.tls_keychain_file);
         } else {
-            ensureDirectoryExists(self.tls_keychain_file = pickone.val);
-            if (pickone({"EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"})) {
-                std::string password_filename(pickone.val);
-                try {
-                    ensureDirectoryExists(password_filename);
-                    self.setKeychainPassword(getFileContents(password_filename));
-                } catch (std::exception& e) {
-                    log_err_printf(serversetup, "error reading password file: %s. %s", password_filename.c_str(), e.what());
-                }
-            }
+            self.tls_keychain_file = pickone.val;
+            self.setKeychainPassword({});
         }
+        ensureDirectoryExists(self.tls_keychain_file);
     } else {
         std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "client.p12";
         std::ifstream file(filename.c_str());
-        if (file.good()) tls_keychain_file = filename;
+        if (file.good()) self.tls_keychain_file = filename;
     }
 
     // EPICS_PVA_TLS_OPTIONS
@@ -810,17 +785,16 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         }
     }
 
-    if (pickone({"EPICS_PVA_CERT_PV_PREFIX"})) self.setCertPvPrefix(pickone.val);
 #endif  // PVXS_ENABLE_OPENSSL
 }
 
 Config& Config::applyEnv() {
-    fromDefs(*this, std::map<std::string, std::string>(), true);
+    _fromDefs(*this, std::map<std::string, std::string>(), true);
     return *this;
 }
 
 Config& Config::applyDefs(const std::map<std::string, std::string>& defs) {
-    fromDefs(*this, defs, false);
+    _fromDefs(*this, defs, false);
     return *this;
 }
 
@@ -837,20 +811,18 @@ void Config::updateDefs(defs_t& defs) const {
     defs["XDG_CONFIG_HOME"] = getXdgConfigHome();
 
 #ifdef PVXS_ENABLE_OPENSSL
-    // EPICS_PVA_TLS_KEYCHAIN
-    if (!tls_keychain_file.empty()) defs["EPICS_PVA_TLS_KEYCHAIN"] = tls_keychain_file;
-
-    // EPICS_PVA_TLS_KEYCHAIN_PWD_FILE
-    if (!getKeychainPassword().empty()) defs["EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
+    // EPICS_PVA_TLS_KEYCHAIN (with optional ";<password>" postfix)
+    if (!tls_keychain_file.empty()) {
+        std::string keychain = tls_keychain_file;
+        if (!getKeychainPassword().empty()) keychain += ";<password read>";
+        defs["EPICS_PVA_TLS_KEYCHAIN"] = keychain;
+    }
 
     // EPICS_PVA_TLS_OPTIONS
     defs["EPICS_PVA_TLS_OPTIONS"] = printTLSOptions(*this);
 
     // EPICS_PVA_TLS_PORT
     defs["EPICS_PVA_TLS_PORT"] = std::to_string(tls_port);
-
-    // EPICS_PVA_CERT_PV_PREFIX
-    if (!getCertPvPrefix().empty()) defs["EPICS_PVA_CERT_PV_PREFIX"] = getCertPvPrefix();
 
 #endif  // PVXS_ENABLE_OPENSSL
 }
