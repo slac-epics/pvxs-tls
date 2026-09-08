@@ -1236,8 +1236,47 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
             FixedBuf H(true, searchMsg.data(), 8);
             to_wire(H, Header{CMD_SEARCH, 0, uint32_t(consumed-8u)});
         }
+
+        auto getSearchPort = [this](evsocket& sock) {
+            auto local(SockAddr::any(sock.af));
+            socklen_t alen = local.capacity();
+            if(getsockname(sock.sock, &local->sa, &alen)) {
+                log_warn_printf(io, "Unable to read UDP search port: %s\n",
+                                evutil_socket_error_to_string(evutil_socket_geterror(sock.sock)));
+                return searchRxPort;
+            }
+
+            if(!local.port()) {
+                local.setPort(searchRxPort);
+                if(bind(sock.sock, &local->sa, local.size())) {
+                    local.setPort(0u);
+                    if(bind(sock.sock, &local->sa, local.size())) {
+                        log_warn_printf(io, "Unable to restore UDP search port: %s\n",
+                                        evutil_socket_error_to_string(evutil_socket_geterror(sock.sock)));
+                        return searchRxPort;
+                    }
+                }
+
+                alen = local.capacity();
+                if(getsockname(sock.sock, &local->sa, &alen)) {
+                    log_warn_printf(io, "Unable to read restored UDP search port: %s\n",
+                                    evutil_socket_error_to_string(evutil_socket_geterror(sock.sock)));
+                    return searchRxPort;
+                }
+                log_info_printf(io, "Rebound UDP search port %u\n", local.port());
+            }
+            return local.port();
+        };
+        const auto searchRxPort4 = getSearchPort(searchTx4);
+        const auto searchRxPort6 = getSearchPort(searchTx6);
+
         for(auto& pair : searchDest) {
             auto& dest = pair.dest.addr.family()==AF_INET ? searchTx4 : searchTx6;
+
+            {
+                FixedBuf P(true, pport, 2u);
+                to_wire(P, uint16_t(dest.af==AF_INET ? searchRxPort4 : searchRxPort6));
+            }
 
             if(pair.isucast) {
                 *pflags |= pva_search_flags::Unicast;
