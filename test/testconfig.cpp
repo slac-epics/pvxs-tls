@@ -251,7 +251,11 @@ void testDNS()
 
 MAIN(testconfig)
 {
+#ifdef PVXS_ENABLE_OPENSSL
     testPlan(42);
+#else
+    testPlan(34);
+#endif
     testSetup();
     testDefs();
     logger_config_env();
