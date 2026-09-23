@@ -74,8 +74,9 @@ int main(int argc, char *argv[])
             }
         }
 
-        // Build the context
+        // Get the timeout from the environment and build the context
         auto conf = client::Config::fromEnv();
+        conf.setRequestTimeout(timeout);
 
         auto ctxt = conf.build();
 

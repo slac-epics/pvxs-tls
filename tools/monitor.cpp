@@ -38,8 +38,11 @@ void usage(const char* argv0)
                "  -# <cnt>  Maximum number of elements to print for each array field.\n"
                "            Set to zero 0 for unlimited.\n"
                "            Default: 20\n"
-                "  -F <fmt>  Output format mode: delta, tree\n"
-                ;
+               "  -F <fmt>  Output format mode: delta, tree\n"
+#ifdef PVXS_ENABLE_OPENSSL
+               "  -w <sec>  Timeout for certificate status verification if configured.  default 5 sec.\n"
+#endif
+               ;
 }
 
 }
@@ -48,6 +51,9 @@ int main(int argc, char *argv[])
 {
     try {
         logger_config_env(); // from $PVXS_LOG
+#ifdef PVXS_ENABLE_OPENSSL
+        double timeout{5.0};
+#endif
         bool verbose = false;
         std::string request;
         Value::Fmt::format_t format = Value::Fmt::Delta;
@@ -55,7 +61,11 @@ int main(int argc, char *argv[])
 
         {
             int opt;
+#ifdef PVXS_ENABLE_OPENSSL
+            while ((opt = getopt(argc, argv, "hVvw:dr:#:F:")) != -1) {
+#else
             while ((opt = getopt(argc, argv, "hVvdr:#:F:")) != -1) {
+#endif
                 switch(opt) {
                 case 'h':
                     usage(argv[0]);
@@ -70,6 +80,11 @@ int main(int argc, char *argv[])
                 case 'd':
                     logger_level_set("pvxs.*", Level::Debug);
                     break;
+#ifdef PVXS_ENABLE_OPENSSL
+                case 'w':
+                    timeout = parseTo<double>(optarg);
+                    break;
+#endif
                 case 'r':
                     request = optarg;
                     break;
@@ -93,9 +108,11 @@ int main(int argc, char *argv[])
             }
         }
 
-        // Build the context
+        // Get the timeout from the environment and build the context
         auto conf = client::Config::fromEnv();
-
+#ifdef PVXS_ENABLE_OPENSSL
+        conf.setRequestTimeout(timeout);
+#endif
         auto ctxt = conf.build();
 
         if(verbose)
