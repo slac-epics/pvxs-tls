@@ -1150,6 +1150,17 @@ SSLError::SSLError(const std::string &msg)
 
 SSLError::~SSLError() = default;
 
+namespace {
+// Year-first form for display, matching how PVACMS renders dates.
+std::string showCertDate(std::time_t t) {
+    const std::tm* tm = std::gmtime(&t);
+    if (!tm) return "PERMANENTLY VALID";
+    char buf[32];
+    if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S UTC", tm)) return buf;
+    return "";
+}
+}  // namespace
+
 std::ostream &operator<<(std::ostream &strm, const ShowX509 &cert) {
     if (cert.cert) {
         const auto name = X509_get_subject_name(cert.cert);
@@ -1170,12 +1181,12 @@ std::ostream &operator<<(std::ostream &strm, const ShowX509 &cert) {
         if (const auto atm = X509_get0_notBefore(cert.cert)) {
             const certs::CertDate the_date(atm);
             (void)BIO_printf(io.get(), "\nValid From     : ");
-            (void)BIO_printf(io.get(), the_date.s.c_str());
+            (void)BIO_printf(io.get(), showCertDate(the_date.t).c_str());
         }
         if (const auto atm = X509_get0_notAfter(cert.cert)) {
             const certs::CertDate the_date(atm);
             (void)BIO_printf(io.get(), "\nExpires On     : ");
-            (void)BIO_printf(io.get(), the_date.s.c_str());
+            (void)BIO_printf(io.get(), showCertDate(the_date.t).c_str());
         }
         {
             char *str = nullptr;
