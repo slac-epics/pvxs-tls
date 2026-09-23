@@ -148,6 +148,19 @@ public:
 
 #ifdef PVXS_ENABLE_OPENSSL
     void configureClientOCSPCallback(SSL *ssl) const;
+
+    /** Whether this connection may take the standing of our own certificate from the server.
+     *
+     * True only for a TLS connection to a configured name server, and only when remote
+     * verification is enabled.  A name server reached over TLS is the case where we may have no
+     * other route to the certificate manager: the server checks the certificate we present and
+     * refuses the connection unless it stands, so it has already made the check we cannot.
+     *
+     * Deliberately false for plain TCP, for UDP search, and for any server we did not name as a
+     * name server.  In each of those the certificate manager is reachable by some route, so the
+     * standing of our own certificate must be established rather than assumed.
+     */
+    bool skipOwnCertStatusCheck() const;
 #endif
 
 #define CASE(Op) virtual void handle_##Op() override final;
@@ -458,6 +471,15 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
      * Also the peer certificate must have also been checked if required
      * @return True if the tls context is completely ready for TLS connections
      */
+    /**
+     * @brief Whether any search this context made was carried over a TLS connection.
+     *
+     * Set when the context is configured with a name server named pvas://. It is what entitles
+     * a holder to use its certificate without first establishing its own standing, and it holds
+     * for the channels those searches find however they are later connected.
+     */
+    bool searched_over_tls{false};
+
     bool isTlsReady() const {
         return tls_context && tls_context->state == ossl::SSLContext::TlsReady;
     }

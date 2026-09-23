@@ -125,6 +125,19 @@ struct PVXS_API ConfigCommon {
     bool tls_disable_stapling{false};
 
     /**
+     * @brief Whether this client waits to establish the standing of its own certificate before
+     * it will use that certificate.
+     *
+     * True, the default, is the ordinary case: a holder checks its own standing first.
+     *
+     * Turned off where a holder cannot reach the certificate manager at all, which is the
+     * position of a workstation outside a boundary. The search it makes is carried over TLS,
+     * the server on the other side checks what it is shown and refuses a holder that does not
+     * stand, so the check is made where the connection is accepted rather than here.
+     */
+    bool tls_own_cert_status_check{true};
+
+    /**
      * @brief The request timeout specified in a user call
      * @note Cannot be set by an environment variable, but is passed in by commandline tools, or set programmatically
      */
@@ -165,6 +178,36 @@ struct PVXS_API ConfigCommon {
      * @brief Is stapling disabled?
      */
     bool isStaplingDisabled() const {return tls_disable_stapling;}
+
+    /**
+     * @brief Let a client take the standing of its own certificate from the servers it reaches
+     *
+     * A holder normally confirms its own certificate with the certificate manager before it will
+     * use it, and stays on plain TCP until that answer arrives. Where the certificate manager can
+     * only be reached through a server that accepts TLS alone, that answer can never arrive and
+     * the holder can never use the certificate it was issued.
+     *
+     * With this enabled the holder relies on the server to say otherwise: a server checks the
+     * standing of the certificate presented to it and refuses the connection unless it is good, so
+     * a revoked holder is turned away where it connects rather than by its own reckoning.
+     *
+     * This applies to one case only: a connection to a name server named with the `pvas://` scheme,
+     * which is the case where there may be no other route to the certificate manager. Plain TCP,
+     * UDP search, and any server not named as a name server are unaffected and still establish the
+     * standing of the certificate rather than assuming it, because for those a route exists. The
+     * state of the context is not changed, so nothing else the holder does is relaxed.
+     *
+     * This places the decision with the name servers the holder talks to, so enable it only where
+     * those servers are trusted to make it.
+     *
+     * @param disable stop waiting for our own certificate's standing - defaults to true
+     */
+    void disableOwnCertStatusCheck(const bool disable = true) {tls_own_cert_status_check = !disable;}
+
+    /**
+     * @brief Does this client wait to establish the standing of its own certificate?
+     */
+    bool isOwnCertStatusCheckEnabled() const {return tls_own_cert_status_check;}
 
     /**
      * @brief Set the request timeout
