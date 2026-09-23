@@ -125,10 +125,17 @@ struct PVXS_API ConfigCommon {
     bool tls_disable_stapling{false};
 
     /**
-     * @brief True if a client may take the standing of its own certificate from the servers it
-     * connects to, rather than from the certificate manager directly
+     * @brief Whether this client waits to establish the standing of its own certificate before
+     * it will use that certificate.
+     *
+     * True, the default, is the ordinary case: a holder checks its own standing first.
+     *
+     * Turned off where a holder cannot reach the certificate manager at all, which is the
+     * position of a workstation outside a boundary. The search it makes is carried over TLS,
+     * the server on the other side checks what it is shown and refuses a holder that does not
+     * stand, so the check is made where the connection is accepted rather than here.
      */
-    bool tls_remote_verification{false};
+    bool tls_own_cert_status_check{true};
 
     /**
      * @brief The request timeout specified in a user call
@@ -193,14 +200,14 @@ struct PVXS_API ConfigCommon {
      * This places the decision with the name servers the holder talks to, so enable it only where
      * those servers are trusted to make it.
      *
-     * @param enable enable remote verification - defaults to true
+     * @param disable stop waiting for our own certificate's standing - defaults to true
      */
-    void enableRemoteVerification(const bool enable = true) {tls_remote_verification = enable;}
+    void disableOwnCertStatusCheck(const bool disable = true) {tls_own_cert_status_check = !disable;}
 
     /**
-     * @brief Does this client take the standing of its own certificate from the servers it reaches?
+     * @brief Does this client wait to establish the standing of its own certificate?
      */
-    bool isRemoteVerificationEnabled() const {return tls_remote_verification;}
+    bool isOwnCertStatusCheckEnabled() const {return tls_own_cert_status_check;}
 
     /**
      * @brief Set the request timeout
