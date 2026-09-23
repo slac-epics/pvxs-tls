@@ -46,6 +46,21 @@ struct PVXS_API ConfigCommon {
     //! @since UNRELEASED
     unsigned short tls_port = 5076;
 
+    /** @brief When true, the server does not bind the plaintext PVAccess TCP
+     *  listener and advertises only the TLS endpoint in SEARCH replies and
+     *  beacons.  Ignored by clients.
+     *  @since UNRELEASED
+     *  @see EPICS_PVAS_SERVER_PORT=NO
+     */
+    bool tcp_disabled = false;
+
+    /** @brief When true, the server binds no UDP search listeners and sends no
+     *  beacons.  Discovery then requires a name server.  Ignored by clients.
+     *  @since UNRELEASED
+     *  @see EPICS_PVAS_BROADCAST_PORT=NO
+     */
+    bool udp_disabled = false;
+
     /** @brief Set to true to disable TLS.  This will override the environment TLS configuration
      *  settings and will also override config TLS configuration fields.  Suitable for testing.
      *  server

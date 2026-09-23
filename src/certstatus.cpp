@@ -577,7 +577,7 @@ X509_EXTENSION *CertStatusManager::getStatusExtension(const X509 *certificate) {
 std::string CertStatusManager::getIssuerIdFromCert(const X509* cert_ptr) {
     const ossl_ptr<AUTHORITY_KEYID> akid(static_cast<AUTHORITY_KEYID*>(X509_get_ext_d2i(cert_ptr, NID_authority_key_identifier, nullptr, nullptr)),
                                        false);
-    if (!akid || !akid->keyid) throw CertStatusNoExtensionException("Failed to get Authority Key Identifier.");
+    if (!akid || !akid->keyid) throw CertStatusIdException("Failed to get Authority Key Identifier.");
 
     return firstEightHex(akid->keyid->data, akid->keyid->length);
 }
@@ -585,7 +585,7 @@ std::string CertStatusManager::getIssuerIdFromCert(const X509* cert_ptr) {
 std::string CertStatusManager::getSerialFromCert(const X509* cert_ptr) {
     const ASN1_INTEGER* serial = X509_get0_serialNumber(cert_ptr);
     if (!serial) {
-        throw CertStatusNoExtensionException("Failed to get Serial Number from certificate.");
+        throw CertStatusIdException("Failed to get Serial Number from certificate.");
     }
     return asn1IntegerToDecimalString(serial);
 }
@@ -599,14 +599,6 @@ std::string CertStatusManager::getCertIdFromCert(const X509 *cert_ptr) {
 std::string CertStatusManager::getCertIdFromSerialAndIssuer(const std::string &issuer_id, const std::string &serial) {
     return SB() << issuer_id << ":" << std::setw(20) << std::setfill('0') << serial;
 }
-
-std::string CertStatusManager::getCertIdFromStatusPv(const std::string &status_pv) {
-    if (status_pv.empty()) throw CertStatusNoExtensionException("status_pv cannot be empty.");
-    const size_t len = status_pv.length();
-    if (len < 30) throw CertStatusNoExtensionException("status_pv must be at least 30 characters long.");
-    return status_pv.substr(len - 29); // {prefix}{issuer_8}:{serial_20}
-}
-
 
 /**
  * @brief Get the string value of a custom extension by NID from a certificate.
@@ -624,31 +616,31 @@ std::string CertStatusManager::getStatusPvFromCert(const X509 *cert) {
 
     // Retrieve the extension data which is an ASN1_OCTET_STRING object containing DER-encoded IA5String
     const ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(extension);
-    if (!ext_data) throw CertStatusNoExtensionException("Failed to get data from the Certificate-Status-PV extension.");
+    if (!ext_data) throw CertStatusExtensionDecodeException("Failed to get data from the Certificate-Status-PV extension.");
 
     // Get the DER-encoded data
     const unsigned char *data = ASN1_STRING_get0_data(ext_data);
-    if (!data) throw CertStatusNoExtensionException("Failed to extract data from ASN1_STRING.");
+    if (!data) throw CertStatusExtensionDecodeException("Failed to extract data from ASN1_STRING.");
 
     const int length = ASN1_STRING_length(ext_data);
-    if (length < 0) throw CertStatusNoExtensionException("Invalid length of ASN1_STRING data.");
+    if (length < 0) throw CertStatusExtensionDecodeException("Invalid length of ASN1_STRING data.");
 
     // Decode the DER-encoded IA5String
     const unsigned char *p = data;
     const ossl_ptr<ASN1_IA5STRING> ia5_str(d2i_ASN1_IA5STRING(nullptr, &p, length), false);
     if (!ia5_str) {
-        throw CertStatusNoExtensionException("Failed to decode DER-encoded IA5String from extension.");
+        throw CertStatusExtensionDecodeException("Failed to decode DER-encoded IA5String from extension.");
     }
 
     // Extract the string value from the IA5String
     const auto str_data = reinterpret_cast<const char *>(ASN1_STRING_get0_data(ia5_str.get()));
     if (!str_data) {
-        throw CertStatusNoExtensionException("Failed to get data from decoded IA5String.");
+        throw CertStatusExtensionDecodeException("Failed to get data from decoded IA5String.");
     }
 
     const size_t str_length = ASN1_STRING_length(ia5_str.get());
     if (str_length < 0) {
-        throw CertStatusNoExtensionException("Invalid length of decoded IA5String data.");
+        throw CertStatusExtensionDecodeException("Invalid length of decoded IA5String data.");
     }
 
     // Return the data as a std::string

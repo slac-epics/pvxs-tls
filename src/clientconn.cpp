@@ -75,6 +75,16 @@ int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
         } catch (const certs::OCSPParseException& e) {
             log_warn_printf(stapling, "Stapled OCSP response invalid: %s\n", e.what());
             return PVXS_OCSP_STAPLING_NAK;
+        } catch (const certs::CertStatusExtensionDecodeException& e) {
+            // Malformed peer certificate: status extension present but undecodable.
+            ex_data->setPeerStatus(peer_cert, certs::UnknownCertificateStatus());
+            log_err_printf(stapling, "Peer certificate status extension present but undecodable: %s\n", e.what());
+            return PVXS_OCSP_STAPLING_NAK;
+        } catch (const certs::CertStatusIdException& e) {
+            // Malformed peer certificate: cannot derive the cert ID from the certificate.
+            ex_data->setPeerStatus(peer_cert, certs::UnknownCertificateStatus());
+            log_err_printf(stapling, "Peer certificate ID underivable from certificate: %s\n", e.what());
+            return PVXS_OCSP_STAPLING_NAK;
         }
     } catch (std::exception& e) {
         ex_data->setPeerStatus(peer_cert, certs::UnknownCertificateStatus());
@@ -375,6 +385,7 @@ void Connection::peerStatusCallback(certs::cert_status_class_t status_class) {
         proceedWithCreatingChannels();
     } else if (status_class == certs::cert_status_class_t::BAD) {
         log_debug_printf(certs, "Cancel Wait to Creating Channels: BAD CERT STATUS%s\n", "");
+        cert_status_disconnect = true;
         disconnect();
     } else {
         log_debug_printf(certs, "Continue Waiting to Create Channels: UNKNOWN CERT STATUS%s\n", "");

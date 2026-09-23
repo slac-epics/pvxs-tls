@@ -352,6 +352,7 @@ void ServerConn::peerStatusCallback(certs::cert_status_class_t status_class) {
         proceedWithConnectionValidation();
     } else if (status_class == certs::cert_status_class_t::BAD) {
         log_debug_printf(certs, "Cancel Wait for Connection Validation: BAD CERT STATUS%s\n", "");
+        cert_status_disconnect = true;
         disconnect();
     } else {
         log_debug_printf(certs, "Continue Waiting for Connection Validation: UNKNOWN CERT STATUS%s\n", "");
@@ -627,6 +628,15 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
 void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw)
 {
     auto self = static_cast<ServIface*>(raw);
+#ifdef PVXS_ENABLE_OPENSSL
+    // fail fast: refuse TLS connections while the context can't complete a handshake
+    if(self->isTLS && (!self->server->tls_context || !self->server->tls_context->ctx
+                       || self->server->tls_context->state == ossl::SSLContext::DegradedMode)) {
+        log_debug_printf(connsetup, "Interface %s refusing TLS connection: context degraded\n", self->name.c_str());
+        evutil_closesocket(sock);
+        return;
+    }
+#endif
     try {
         auto conn(std::make_shared<ServerConn>(self, sock, peer, socklen));
         self->server->connections[conn.get()] = std::move(conn);
@@ -655,15 +665,17 @@ void ServerOp::cleanup()
     if(state==ServerOp::Dead)
         return;
 
-    if(state==ServerOp::Executing && onCancel) {
-        auto fn(std::move(onCancel));
-        fn();
+    if(onCancel) {
+        decltype(onCancel) fn;
+        fn.swap(onCancel);
+        if(state==ServerOp::Executing)
+            fn();
     }
 
     state = ServerOp::Dead;
 
-    onCancel = nullptr;
-    auto closer(std::move(onClose));
+    decltype(onClose) closer;
+    closer.swap(onClose);
     bool notify = closer.operator bool();
 
     if(auto ch = chan.lock()) {

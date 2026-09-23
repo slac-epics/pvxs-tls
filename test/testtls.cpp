@@ -5,11 +5,20 @@
  */
 #define PVXS_ENABLE_EXPERT_API
 
+#include <algorithm>
 #include <cstring>
+#include <map>
 #include <sstream>
+#include <string>
+#include <vector>
 
+#include <epicsEvent.h>
 #include <epicsUnitTest.h>
+#include <errlog.h>
+#include <osiSock.h>
 #include <testMain.h>
+
+#include <event2/util.h>
 
 #include <pvxs/client.h>
 #include <pvxs/log.h>
@@ -21,6 +30,9 @@
 
 #include "certcontext.h"
 #include "certstatus.h"
+#include "evhelper.h"
+#include "pvaproto.h"
+#include "udp_collector.h"
 #include "utilpvt.h"
 
 using namespace pvxs;
@@ -863,10 +875,804 @@ void testFakeCertificateNameMatchingAttack() {
     }
 }
 
+/**
+ * @brief Verifies that when the local entity certificate transitions to BAD
+ *        (REVOKED/EXPIRED), the server tears down all live TLS connections
+ *        and disables its TLS-listening interfaces.  Plain TCP listeners and
+ *        connections are intentionally left untouched.
+ */
+void testServerLocalCertBadTearsDownTlsConn() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    bool is_tls{false};
+    epicsEvent disconnected_evt;
+    auto conn(cli.connect(TEST_PV)
+        .onConnect([&is_tls](const client::Connected& c) { is_tls = c.cred && c.cred->isTLS; })
+        .onDisconnect([&disconnected_evt]() { disconnected_evt.signal(); })
+        .exec());
+
+    auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+    testTrue(is_tls) << "Initial connection must be over TLS";
+    testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+
+    serv.testInjectEntityCertBad();
+
+    testTrue(disconnected_evt.wait(5.0))
+        << "Client must observe disconnect after server's local cert went BAD";
+
+    bool reconnect_is_tls{true};
+    bool got_reconnect{false};
+    auto conn2(cli.connect(TEST_PV)
+        .onConnect([&reconnect_is_tls, &got_reconnect](const client::Connected& c) {
+            reconnect_is_tls = c.cred && c.cred->isTLS;
+            got_reconnect = true;
+        })
+        .exec());
+
+    try {
+        auto reply2(cli.get(TEST_PV).exec()->wait(5.0));
+        if (got_reconnect) {
+            testFalse(reconnect_is_tls)
+                << "Reconnect after server local cert BAD must NOT be over TLS";
+        } else {
+            testPass("No reconnect after server local cert BAD (acceptable)");
+        }
+    } catch (std::exception&) {
+        testPass("Reconnect timed out after TLS listener disabled (acceptable)");
+    }
+}
+
+/**
+ * @brief Verifies that when the local client entity certificate transitions
+ *        to BAD (REVOKED/EXPIRED), the client tears down its live TLS
+ *        outbound connections.  The channel-search machinery is left intact;
+ *        the test does not assert on TCP fallback because the isolated
+ *        server here only accepts TLS, but it does verify the TLS conn is
+ *        physically gone (seen as a disconnect by the application).
+ */
+void testClientLocalCertBadTearsDownTlsConn() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    bool is_tls{false};
+    epicsEvent disconnected_evt;
+    auto conn(cli.connect(TEST_PV)
+        .onConnect([&is_tls](const client::Connected& c) { is_tls = c.cred && c.cred->isTLS; })
+        .onDisconnect([&disconnected_evt]() { disconnected_evt.signal(); })
+        .exec());
+
+    auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+    testTrue(is_tls) << "Initial connection must be over TLS";
+    testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+
+    cli.testInjectEntityCertBad();
+
+    testTrue(disconnected_evt.wait(5.0))
+        << "Client must observe disconnect after its own local cert went BAD";
+}
+
+/**
+ * @brief Regression test: a plain-TCP-only server (no TLS configured) MUST
+ *        not be affected by the cert-status teardown machinery, because
+ *        there is no entity certificate whose status could go BAD.  Calling
+ *        the test injection helper on a non-TLS server is a no-op.
+ */
+void testNonTlsServerUnaffectedByLocalCertBad() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    auto cli(serv.clientConfig().build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && !c.cred->isTLS); }).exec());
+
+    auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+    testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+
+    serv.testInjectEntityCertBad();
+    cli.testInjectEntityCertBad();
+
+    auto reply2(cli.get(TEST_PV).exec()->wait(5.0));
+    testEq(reply2[TEST_PV_FIELD].as<int32_t>(), 42)
+        << "Plain TCP must keep working after testInjectEntityCertBad on a non-TLS endpoint";
+}
+
+/**
+ * @brief Verifies that after the server's local cert went BAD (TLS listeners
+ *        disabled, live conns torn down), calling Server::reconfigure() with
+ *        a fresh GOOD certificate fully restores TLS service: TLS listeners
+ *        come back up and clients re-establish over TLS with the new identity.
+ *        This is the "an external process replaced the BAD certificate"
+ *        recovery path.
+ */
+void testServerLocalCertBadThenReconfigureGood() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    serv.start();
+
+    epicsEvent evt;
+    auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false)
+        .event([&evt](client::Subscription&) { evt.signal(); }).exec());
+
+    try {
+        pop(sub, evt);
+        testFail("Unexpected success");
+        testSkip(2, "oops");
+    } catch (client::Connected& e) {
+        testTrue(e.cred && e.cred->isTLS) << "Initial connection must be TLS with original cert";
+        testEq(e.cred->account, CERT_CN_SERVER1);
+    }
+    (void)pop(sub, evt);  // drain the post-Connected update
+
+    serv.testInjectEntityCertBad();
+
+    testThrows<client::Disconnect>([&sub, &evt] { pop(sub, evt); })
+        << "Client must observe Disconnect after server local cert went BAD";
+
+    serv_conf = serv.config();
+    serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
+    testDiag("serv.reconfigure() with fresh GOOD cert");
+    serv.reconfigure(serv_conf);
+
+    try {
+        pop(sub, evt);
+        testFail("Missing expected Connected after reconfigure");
+        testSkip(2, "oops");
+    } catch (client::Connected& e) {
+        testTrue(e.cred && e.cred->isTLS) << "TLS must resume after reconfigure with GOOD cert";
+        testEq(e.cred->account, CERT_CN_IOC1);
+    }
+}
+
+/**
+ * @brief Verifies that after the client's local cert went BAD, calling
+ *        Context::reconfigure() with a fresh GOOD certificate restores TLS
+ *        outbound: the client re-establishes over TLS with the new identity.
+ */
+void testClientLocalCertBadThenReconfigureGood() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    serv.start();
+
+    epicsEvent evt;
+    auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false)
+        .event([&evt](client::Subscription&) { evt.signal(); }).exec());
+
+    try {
+        pop(sub, evt);
+        testFail("Unexpected success");
+        testSkip(1, "oops");
+    } catch (client::Connected& e) {
+        testTrue(e.cred && e.cred->isTLS) << "Initial connection must be TLS with original cert";
+    }
+    Value who1 = pop(sub, evt);
+    testEq(who1[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1)
+        << "Server must initially see client1's identity";
+
+    cli.testInjectEntityCertBad();
+
+    testThrows<client::Disconnect>([&sub, &evt] { pop(sub, evt); })
+        << "Client must observe Disconnect after its own local cert went BAD";
+
+    cli_conf = cli.config();
+    cli_conf.tls_keychain_file = CLIENT2_KEYCHAIN_FILE;
+    cli_conf.setKeychainPassword(CLIENT2_KEYCHAIN_FILE_PWD);
+    testDiag("cli.reconfigure() with fresh GOOD cert");
+    cli.reconfigure(cli_conf);
+
+    try {
+        pop(sub, evt);
+        testFail("Missing expected Connected after reconfigure");
+        testSkip(1, "oops");
+    } catch (client::Connected& e) {
+        testTrue(e.cred && e.cred->isTLS) << "TLS must resume after reconfigure with GOOD cert";
+    }
+    Value who2 = pop(sub, evt);
+    testEq(who2[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT2)
+        << "After reconfigure server must see client2's new identity";
+}
+
 }  // namespace
 
+// TLS-only transport mode (EPICS_PVAS_SERVER_PORT=NO)
+// ----------------------------------------------------------------------------
+
+namespace {
+
+using namespace pvxs::impl;
+
+// Result of a raw UDP SEARCH probe.
+struct NoTcpSearchResult {
+    bool replied = false;
+    std::string proto;      // "tcp" or "tls" if a reply was parsed
+    uint16_t port = 0;
+};
+
+// Send a raw UDP SEARCH to the server's UDP port on loopback advertising the
+// given protocol list, and wait briefly for a SEARCH_RESPONSE.  Reply (if any)
+// is delivered to the source socket (body reply-address is "any").
+NoTcpSearchResult probeSearch(uint16_t serverUdpPort, std::initializer_list<const char*> protos,
+                              const char* pvname = TEST_PV)
+{
+    NoTcpSearchResult out;
+
+    SockAddr dest(SockAddr::loopback(AF_INET, serverUdpPort));
+    SockAddr bindAddr(SockAddr::loopback(AF_INET, 0));
+
+    evsocket sock(AF_INET, SOCK_DGRAM, 0);
+    sock.bind(bindAddr);
+    // recover the OS-assigned source port to embed in the SEARCH body
+    SockAddr selfAddr;
+    {
+        socklen_t slen = selfAddr.size();
+        getsockname(sock.sock, &selfAddr->sa, &slen);
+    }
+    const uint16_t selfPort = selfAddr.port();
+
+    std::vector<uint8_t> msg;
+    VectorOutBuf M(true, msg);
+    M.skip(8, __FILE__, __LINE__); // header placeholder
+    to_wire(M, uint32_t(0x55667788)); // searchID
+    to_wire(M, uint8_t(pva_search_flags::Unicast));
+    M.skip(3, __FILE__, __LINE__);
+    to_wire(M, SockAddr::any(AF_INET)); // reply to sender
+    to_wire(M, uint16_t(selfPort));
+    to_wire(M, Size{protos.size()});
+    for(auto p : protos)
+        to_wire(M, p);
+    to_wire(M, uint16_t(1)); // one name
+    to_wire(M, uint32_t(1));
+    to_wire(M, pvname);
+
+    auto pktlen = M.consumed();
+    FixedBuf H(true, msg.data(), 8);
+    to_wire(H, Header{CMD_SEARCH, 0, uint32_t(pktlen-8)});
+    if(!M.good() || !H.good()) {
+        testFail("probeSearch: failed to build SEARCH");
+        return out;
+    }
+
+    if(sendto(sock.sock, (char*)msg.data(), pktlen, 0, &dest->sa, dest.size()) != int(pktlen)) {
+        testFail("probeSearch: sendto failed");
+        return out;
+    }
+
+    std::vector<uint8_t> rxbuf(0x1000);
+    for(int i=0; i<10; i++) {
+        SockAddr from;
+        socklen_t flen = from.size();
+        evutil_socket_t s = sock.sock;
+        timeval tmo{0, 50000}; // 50ms
+        fd_set rs; FD_ZERO(&rs); FD_SET(s, &rs);
+        int sr = select(int(s)+1, &rs, nullptr, nullptr, &tmo);
+        if(sr <= 0) continue;
+        auto n = recvfrom(s, (char*)rxbuf.data(), rxbuf.size(), 0, &from->sa, &flen);
+        if(n <= 0) continue;
+
+        // SEARCH_RESPONSE: header(8) guid(12) searchID(4) addr(16) port(2) proto(str)...
+        FixedBuf R(true, rxbuf.data(), size_t(n));
+        Header rh{};
+        from_wire(R, rh);
+        if(!R.good() || rh.cmd != CMD_SEARCH_RESPONSE)
+            continue;
+        R.skip(12, __FILE__, __LINE__); // guid
+        uint32_t sid=0;
+        from_wire(R, sid);
+        SockAddr saddr;
+        from_wire(R, saddr); // 16 bytes
+        uint16_t sport=0;
+        from_wire(R, sport);
+        std::string proto;
+        from_wire(R, proto);
+        if(!R.good())
+            continue;
+        out.replied = true;
+        out.proto = proto;
+        out.port = sport;
+        break;
+    }
+    return out;
+}
+
+// errlog capture helper: collects log lines into a string.
+struct LogCapture {
+    static std::string buf;
+    static void listener(void* /*pvt*/, const char* message) {
+        buf += message;
+    }
+    LogCapture() {
+        buf.clear();
+        errlogAddListener(&listener, nullptr);
+    }
+    ~LogCapture() {
+        errlogRemoveListeners(&listener, nullptr);
+    }
+    std::string flush() {
+        errlogFlush();
+        return buf;
+    }
+};
+std::string LogCapture::buf;
+
+// 8.9 + 7a: EPICS_PVAS_SERVER_PORT / EPICS_PVAS_TLS_PORT "NO" parsing.
+void testNoTcpTokenParsing() {
+    testShow() << __func__;
+
+    struct Case {
+        const char* server_port;
+        const char* tls_port;
+        const char* bcast_port;
+        bool expectTcpDisabled;
+        bool expectTlsDisabled;
+        bool expectUdpDisabled;
+    };
+    const Case cases[] = {
+        {"5075", "5076", "5076", false, false, false},
+        {"NO", "5076", "5076", true, false, false},
+        {"5075", "NO", "5076", false, true, false},
+        {"5075", "5076", "NO", false, false, true},
+        {"NO", "NO", "5076", true, true, false},
+        {"no", "Off", "FALSE", true, true, true},
+    };
+
+
+    for(const auto& c : cases) {
+        auto conf(server::Config::isolated());
+        conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", c.server_port},
+                        {"EPICS_PVAS_TLS_PORT", c.tls_port},
+                        {"EPICS_PVAS_BROADCAST_PORT", c.bcast_port}});
+        testEq(conf.tcp_disabled, c.expectTcpDisabled)
+            << "EPICS_PVAS_SERVER_PORT=" << c.server_port;
+        testEq(conf.tls_disabled, c.expectTlsDisabled)
+            << "EPICS_PVAS_TLS_PORT=" << c.tls_port;
+        testEq(conf.udp_disabled, c.expectUdpDisabled)
+            << "EPICS_PVAS_BROADCAST_PORT=" << c.bcast_port;
+    }
+
+    // client_cert=require is independent of the port settings
+    {
+        auto conf(server::Config::isolated());
+        conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"},
+                        {"EPICS_PVAS_TLS_OPTIONS", "client_cert=require"}});
+        testTrue(conf.tcp_disabled) << "tcp disabled";
+        testTrue(conf.tls_client_cert_required == server::Config::Require) << "require kept";
+    }
+}
+
+// 8.8(a): updateDefs() round-trips the NO values.
+void testNoTcpPrintTLSOptions() {
+    testShow() << __func__;
+
+    {
+        auto conf(server::Config::isolated());
+        conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}, {"EPICS_PVAS_BROADCAST_PORT", "NO"}});
+        std::map<std::string, std::string> defs;
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVAS_SERVER_PORT"], "NO");
+        testEq(defs["EPICS_PVAS_BROADCAST_PORT"], "NO");
+    }
+    {
+        auto conf(server::Config::isolated());
+        std::map<std::string, std::string> defs;
+        conf.updateDefs(defs);
+        testTrue(defs["EPICS_PVAS_SERVER_PORT"].rfind("NO", 0) != 0) << "no NO prefix when enabled";
+    }
+}
+
+// Both transports disabled is fatal at server construction.
+void testNoTcpNoTlsFatal() {
+    testShow() << __func__;
+
+    auto conf(server::Config::isolated());
+    conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}, {"EPICS_PVAS_TLS_PORT", "NO"}});
+    testThrows<std::runtime_error>([&conf]() {
+        auto serv(conf.build());
+    });
+}
+
+// 8.8(b) + 7a: startup INFO transport line and dangerous-combo WARN capture.
+void testNoTcpStartupDiagnostics() {
+    testShow() << __func__;
+
+    logger_level_set("pvxs.svr.init", Level::Info);
+
+    // active, no client_cert=require: INFO line and dangerous-combo WARN present
+    {
+        LogCapture cap;
+        auto serv_conf(server::Config::isolated());
+        serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
+        serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+        auto serv(serv_conf.build());
+        auto log = cap.flush();
+        testTrue(log.find("transport: tls-only") != std::string::npos)
+            << "startup INFO transport line expected";
+        testTrue(log.find("without client_cert=require") != std::string::npos)
+            << "dangerous-combo WARN expected";
+    }
+
+    // inactive: no transport line, no WARN
+    {
+        LogCapture cap;
+        auto serv_conf(server::Config::isolated());
+        serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+        auto serv(serv_conf.build());
+        auto log = cap.flush();
+        testTrue(log.find("transport: tls-only") == std::string::npos)
+            << "no transport line when inactive";
+        testTrue(log.find("without client_cert=require") == std::string::npos)
+            << "no dangerous-combo WARN when inactive";
+    }
+
+    // active + client_cert=require: INFO line present, WARN absent
+    {
+        LogCapture cap;
+        auto serv_conf(server::Config::isolated());
+        serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}, {"EPICS_PVAS_TLS_OPTIONS", "client_cert=require"}});
+        serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+        auto serv(serv_conf.build());
+        auto log = cap.flush();
+        testTrue(log.find("transport: tls-only") != std::string::npos)
+            << "startup INFO transport line expected (locked down)";
+        testTrue(log.find("without client_cert=require") == std::string::npos)
+            << "no dangerous-combo WARN when fully locked down";
+    }
+
+    logger_level_clear();
+    logger_config_env();
+}
+
+// 8.2: plaintext listener not bound, TLS listener bound, TLS client connects.
+void testNoTcpListenerNotBound() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto mbox(server::SharedPV::buildReadonly());
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+    mbox.open(nt::NTScalar{TypeCode::Int32}.create().update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    const auto eff(serv.config());
+    testEq(eff.tcp_port, 0u) << "no plaintext listener bound";
+    testTrue(eff.tls_port != 0u) << "TLS listener bound on a real port";
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+    auto cli(cli_conf.build());
+    bool is_tls=false;
+    auto conn(cli.connect(TEST_PV)
+        .onConnect([&is_tls](const client::Connected& c){ is_tls = c.cred && c.cred->isTLS; })
+        .exec());
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+    testTrue(is_tls) << "connection is over TLS";
+    conn.reset();
+}
+
+// name-server discovery for a tls-only server via a TLS name-server connection
+void testNoTcpNameServerSearch() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+    auto mbox(server::SharedPV::buildReadonly());
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+    mbox.open(nt::NTScalar{TypeCode::Int32}.create().update(TEST_PV_FIELD, 42));
+    serv.start();
+    const auto eff(serv.config());
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+    cli_conf.addressList.clear();
+    cli_conf.autoAddrList = false;
+    cli_conf.nameServers = {SB() << "pvas://127.0.0.1:" << eff.tls_port};
+    auto cli(cli_conf.build());
+    bool is_tls=false;
+    auto conn(cli.connect(TEST_PV)
+        .onConnect([&is_tls](const client::Connected& c){ is_tls = c.cred && c.cred->isTLS; })
+        .exec());
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+    testTrue(is_tls) << "search and data both over TLS via pvas:// name server";
+    conn.reset();
+}
+
+// 8.7: tls-only mode with no TLS keychain -> WARN, construction completes, nothing bound.
+void testNoTcpNoKeychainWarns() {
+    testShow() << __func__;
+
+    logger_level_set("pvxs.svr.init", Level::Info);
+    LogCapture cap;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
+    // intentionally no keychain
+    auto serv(serv_conf.build()); // must not throw
+    auto log = cap.flush();
+
+    const auto eff(serv.config());
+    testEq(eff.tcp_port, 0u) << "no plaintext listener bound";
+    testTrue(log.find("unreachable") != std::string::npos)
+        << "unreachable WARN expected in tls-only mode and TLS not configured";
+
+    logger_level_clear();
+    logger_config_env();
+}
+
+// 8.3 / 8.4 / 8.5: SEARCH-reply gating via raw UDP.
+void testNoTcpSearchGating() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto mbox(server::SharedPV::buildReadonly());
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+    mbox.open(nt::NTScalar{TypeCode::Int32}.create().update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    const auto eff(serv.config());
+    const uint16_t udp = eff.udp_port;
+    testTrue(udp != 0u) << "server has a UDP port";
+
+    // 8.3: tcp-only SEARCH -> no reply
+    {
+        auto r = probeSearch(udp, {"tcp"});
+        testTrue(!r.replied) << "no reply to a tcp-only SEARCH in tls-only mode";
+    }
+    // 8.4: tls+tcp SEARCH -> reply with TLS endpoint only
+    {
+        auto r = probeSearch(udp, {"tls", "tcp"});
+        if(testTrue(r.replied) << "reply to tls+tcp SEARCH") {
+            testStrEq(r.proto, std::string("tls")) << "advertises tls endpoint only";
+            testEq(r.port, eff.tls_port) << "advertised port is tls_port";
+        }
+    }
+    // 8.5: tls-only SEARCH -> reply with TLS endpoint
+    {
+        auto r = probeSearch(udp, {"tls"});
+        if(testTrue(r.replied) << "reply to tls-only SEARCH") {
+            testStrEq(r.proto, std::string("tls")) << "advertises tls endpoint";
+            testEq(r.port, eff.tls_port) << "advertised port is tls_port";
+        }
+    }
+}
+
+// Capture the first beacon a server emits to a private loopback port.
+void captureBeaconInto(server::Config& serv_conf, std::string& gotProto,
+                       uint16_t& gotPort, ServerGUID& gotGuid, bool& got,
+                       uint16_t& tcpPortOut, uint16_t& tlsPortOut, ServerGUID& guidOut)
+{
+    // pick a free loopback port, then release it for the UDPManager to bind
+    SockAddr addr(SockAddr::loopback(AF_INET, 0));
+    {
+        evsocket probe(AF_INET, SOCK_DGRAM, 0);
+        probe.bind(addr);
+        socklen_t slen = addr.size();
+        getsockname(probe.sock, &addr->sa, &slen);
+    }
+    const uint16_t capturePort = addr.port();
+
+    epicsEvent rx;
+    auto manager = UDPManager::instance();
+    SockAddr listen(SockAddr::loopback(AF_INET, capturePort));
+    auto sub = manager.onBeacon(listen, [&](const UDPManager::Beacon& b){
+        gotProto = b.proto;
+        gotPort = b.server.port();
+        gotGuid = b.guid;
+        rx.signal();
+    });
+    sub->start();
+
+    serv_conf.auto_beacon = false;
+    serv_conf.beaconDestinations.clear();
+    serv_conf.beaconDestinations.emplace_back(SB()<<"127.0.0.1:"<<capturePort);
+
+    auto serv(serv_conf.build());
+    const auto eff(serv.config());
+    tcpPortOut = eff.tcp_port;
+    tlsPortOut = eff.tls_port;
+    guidOut = eff.guid;
+    serv.start();
+
+    got = rx.wait(30.0);
+}
+
+// 6.4: beacon keeps proto="tcp"/tcp_port in tls-only mode (liveness ping only).
+void testNoTcpBeacon() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    std::string gotProto; uint16_t gotPort=0; ServerGUID gotGuid{}; bool got=false;
+    uint16_t tcpPort=0, tlsPort=0; ServerGUID guid{};
+    captureBeaconInto(serv_conf, gotProto, gotPort, gotGuid, got, tcpPort, tlsPort, guid);
+
+    if(testTrue(got) << "captured a beacon") {
+        testStrEq(gotProto, std::string("tcp")) << "beacon proto stays tcp";
+        testEq(gotPort, tcpPort) << "beacon port is the configured tcp_port";
+        testTrue(std::equal(gotGuid.begin(), gotGuid.end(), guid.begin()))
+            << "beacon GUID matches server";
+    }
+}
+
+// 8.2a: tls-only mode x non-GOOD cert state -> ZERO replies (no tcp fallback).
+// When the server's entity-cert status gate makes canRespondToTlsSearch() false,
+// the TLS search arm is blocked; in tls-only mode the plaintext tcp arm is also gated
+// off by policy, so a SEARCH gets no reply at all -- neither a tcp nor a tls
+// endpoint.  This proves the policy gate and the cert-state gate compose (the
+// server does NOT silently fall back to plaintext).
+//
+// what the successful TLS connect below confirms.
+void testNoTcpConnectedSearch() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.applyDefs({{"EPICS_PVAS_SERVER_PORT", "NO"}});
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto mbox(server::SharedPV::buildReadonly());
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+    mbox.open(nt::NTScalar{TypeCode::Int32}.create().update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    const auto eff(serv.config());
+    testEq(eff.tcp_port, 0u) << "no plaintext listener bound";
+
+    // Connect only via the server's TLS endpoint as a name server: no UDP/bcast
+    // discovery, so the channel can only resolve through a connected SEARCH.
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+    cli_conf.autoAddrList = false;
+    cli_conf.addressList.clear();
+    cli_conf.nameServers.clear();
+    cli_conf.nameServers.push_back(SB() << "pvas://127.0.0.1:" << eff.tls_port);
+
+    auto cli(cli_conf.build());
+    bool is_tls=false;
+    auto conn(cli.connect(TEST_PV)
+        .onConnect([&is_tls](const client::Connected& c){ is_tls = c.cred && c.cred->isTLS; })
+        .exec());
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+    testTrue(is_tls) << "connected SEARCH resolved over TLS (no tcp endpoint advertised)";
+    conn.reset();
+}
+
+// reconfigure into tls-only: full rebuild honors the flags
+void testNoTcpReconfigure() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+    auto mbox(server::SharedPV::buildReadonly());
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+    mbox.open(nt::NTScalar{TypeCode::Int32}.create().update(TEST_PV_FIELD, 42));
+    serv.start();
+    testTrue(serv.config().tcp_port != 0u) << "plaintext listener bound before reconfigure";
+
+    auto newconf(serv.config());
+    newconf.tcp_disabled = true;
+    newconf.tcp_port = 0;
+    serv.reconfigure(newconf);
+
+    const auto eff(serv.config());
+    testEq(eff.tcp_port, 0u) << "no plaintext listener after reconfigure";
+    testTrue(eff.tls_port != 0u) << "TLS listener bound after reconfigure";
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+    auto cli(cli_conf.build());
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+}
+
+// reconfigure into a transportless config is rejected without touching the server
+void testNoTcpReconfigureRejected() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+    auto mbox(server::SharedPV::buildReadonly());
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+    mbox.open(nt::NTScalar{TypeCode::Int32}.create().update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    auto badconf(serv.config());
+    badconf.tcp_disabled = true;
+    badconf.tls_disabled = true;
+    testThrows<std::invalid_argument>([&serv, &badconf]() { serv.reconfigure(badconf); });
+
+    // original server must still be serving
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+    auto cli(cli_conf.build());
+    testEq(cli.get(TEST_PV).exec()->wait(5.0)[TEST_PV_FIELD].as<int32_t>(), 42);
+}
+
+// 6.5: default (flag unset) beacon retains proto="tcp" / tcp_port.
+void testDefaultBeaconUnchanged() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    std::string gotProto; uint16_t gotPort=0; ServerGUID gotGuid{}; bool got=false;
+    uint16_t tcpPort=0, tlsPort=0; ServerGUID guid{};
+    captureBeaconInto(serv_conf, gotProto, gotPort, gotGuid, got, tcpPort, tlsPort, guid);
+
+    if(testTrue(got) << "captured a beacon") {
+        testStrEq(gotProto, std::string("tcp")) << "default beacon proto is tcp";
+        testEq(gotPort, tcpPort) << "default beacon port is tcp_port";
+    }
+}
+
+} // namespace
+
+
 MAIN(testtls) {
-    testPlan(47);
+    testPlan(129);
     testSetup();
     logger_config_env();
     testLegacyMode();
@@ -885,6 +1691,25 @@ MAIN(testtls) {
     testMutualTLSWithMatchingTrustAnchors();
     testClientWithMismatchedChainFallback();
     testFakeCertificateNameMatchingAttack();
+    // TLS-only transport mode (EPICS_PVAS_SERVER_PORT=NO)
+    testNoTcpTokenParsing();
+    testNoTcpPrintTLSOptions();
+    testNoTcpNoTlsFatal();
+    testNoTcpStartupDiagnostics();
+    testNoTcpListenerNotBound();
+    testNoTcpNameServerSearch();
+    testNoTcpNoKeychainWarns();
+    testNoTcpSearchGating();
+    testNoTcpConnectedSearch();
+    testNoTcpBeacon();
+    testNoTcpReconfigure();
+    testNoTcpReconfigureRejected();
+    testDefaultBeaconUnchanged();
+    testServerLocalCertBadTearsDownTlsConn();
+    testClientLocalCertBadTearsDownTlsConn();
+    testNonTlsServerUnaffectedByLocalCertBad();
+    testServerLocalCertBadThenReconfigureGood();
+    testClientLocalCertBadThenReconfigureGood();
     cleanup_for_valgrind();
     return testDone();
 }

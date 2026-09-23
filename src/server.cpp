@@ -306,6 +306,25 @@ Report Server::report(bool zero) const
     return ret;
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
+Server& Server::testInjectEntityCertBad()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    if(pvt->tls_context) {
+        pvt->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::BAD);
+    }
+    return *this;
+}
+#else
+Server& Server::testInjectEntityCertBad()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    return *this;
+}
+#endif
+
 std::ostream& operator<<(std::ostream& strm, const Server& serv)
 {
     auto detail = Detailed::level(strm);
@@ -457,6 +476,10 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 #endif
     effective.expand();
 
+    // expand() forces tls_disabled when built without TLS support
+    if(effective.tcp_disabled && effective.tls_disabled)
+        throw std::runtime_error("TCP disabled with TLS disabled or unavailable: no transport left to serve");
+
     beaconSender4.set_broadcast(true);
 
     auto manager = UDPManager::instance(effective.shareUDP());
@@ -481,7 +504,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 
         addr.addr.setPort(effective.udp_port);
 
-        listeners.push_back(manager.onSearch(addr, cb));
+        if(!effective.udp_disabled) listeners.push_back(manager.onSearch(addr, cb));
 
         // update to allow udp_port==0
         effective.udp_port = addr.addr.port();
@@ -496,14 +519,14 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
             auto any6(addr);
             any6.addr = SockAddr::any(AF_INET6);
 
-            listeners.push_back(manager.onSearch(any6, cb));
+            if(!effective.udp_disabled) listeners.push_back(manager.onSearch(any6, cb));
 
         } else if(addr.addr.family()==AF_INET6 && addr.addr.isAny()) {
             // if listening on [::], also listen on 0.0.0.0
             auto any4(addr);
             any4.addr = SockAddr::any(AF_INET);
 
-            listeners.push_back(manager.onSearch(any4, cb));
+            if(!effective.udp_disabled) listeners.push_back(manager.onSearch(any4, cb));
         }
 
         if(evsocket::ipstack!=evsocket::Winsock
@@ -516,7 +539,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
              */
             for(auto bcast : dummy.broadcasts(&addr.addr)) {
                 bcast.setPort(addr.addr.port());
-                listeners.push_back(manager.onSearch(bcast, cb));
+                if(!effective.udp_disabled) listeners.push_back(manager.onSearch(bcast, cb));
             }
         }
     }
@@ -570,6 +593,17 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 
                 tls_context = ossl::SSLContext::for_server(effective, inner_client, acceptor_loop);
                 log_debug_printf(osslsetup, "Created server TLS context for: %s\n", effective.tls_keychain_file.c_str());
+                if(effective.tcp_disabled) {
+                    // TLS is the only data transport; a permanent (BAD cert) degrade leaves nothing
+                    const bool dark = effective.udp_disabled;
+                    tls_context->setOnDegraded([this, dark]() {
+                        log_crit_printf(serversetup, "TLS certificate BAD with TCP disabled%s: no transport remains; server is unreachable%s",
+                                        dark ? " and UDP disabled" : "", "\n");
+                        onLocalCertBadTearDown();
+                    });
+                } else {
+                    tls_context->setOnDegraded([this]() { onLocalCertBadTearDown(); });
+                }
             } catch (std::exception& e) {
                 log_debug_printf(osslsetup, "Failed to configure TLS for server: %s\n", e.what());
                 log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
@@ -584,13 +618,17 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
         decltype(tcpifaces) tlsifaces(tcpifaces); // copy before any setPort()
 #endif
         bool firstiface = true;
-        for(auto& addr : tcpifaces) {
-                if (addr.port() == 0) addr.setPort(effective.tcp_port);
+        // tls-only: no plaintext listener.  Discovery still works via UDP (if
+        // enabled) or a TLS name-server connection (pvas://host:tls_port).
+        if(!effective.tcp_disabled) {
+            for(auto& addr : tcpifaces) {
+                    if (addr.port() == 0) addr.setPort(effective.tcp_port);
 
-            interfaces.emplace_back(addr, this, firstiface, false);
+                interfaces.emplace_back(addr, this, firstiface, false);
 
-                if (firstiface || effective.tcp_port == 0) effective.tcp_port = interfaces.back().bind_addr.port();
-            firstiface = false;
+                    if (firstiface || effective.tcp_port == 0) effective.tcp_port = interfaces.back().bind_addr.port();
+                firstiface = false;
+            }
         }
 
 #ifdef PVXS_ENABLE_OPENSSL
@@ -616,6 +654,25 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
                 log_debug_printf(serversetup, "Will send beacons to %s\n", std::string(SB() << beaconDest.back()).c_str());
         }
     });
+
+    if(effective.tcp_disabled) {
+        log_info_printf(serversetup, "transport: tls-only (plaintext TCP listener disabled)%s", "\n");
+
+#ifdef PVXS_ENABLE_OPENSSL
+        // Security-posture nudge: TLS-only without client_cert=require still
+        // accepts anonymous TLS clients.  Emit once at startup.
+        if(effective.tls_client_cert_required != ConfigCommon::Require) {
+            log_warn_printf(serversetup, "tls-only transport active without client_cert=require"
+                            " -- anonymous TLS clients will still be accepted%s", "\n");
+        }
+
+        // TLS unconfigured (as opposed to explicitly disabled, which throws above)
+        if(!effective.isTlsConfigured()) {
+            log_warn_printf(serversetup, "TLS-only transport mode active but TLS listener"
+                            " could not start; this server is unreachable%s", "\n");
+        }
+#endif
+    }
 
     {
         // choose new GUID.
@@ -718,7 +775,7 @@ void Server::Pvt::start()
     {
         timeval immediate = {0,0};
         // send first beacon immediately
-        if(event_add(beaconTimer.get(), &immediate))
+        if(!effective.udp_disabled && event_add(beaconTimer.get(), &immediate))
             log_err_printf(serversetup, "Error enabling beacon timer on\n%s", "");
 
         state = Running;
@@ -787,6 +844,51 @@ void Server::Pvt::stop()
     acceptor_loop.sync();
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
+void Server::Pvt::onLocalCertBadTearDown()
+{
+    /* Local entity certificate has just transitioned to REVOKED or EXPIRED.
+     * Two things must happen on the acceptor_loop, in this order:
+     *   1. Disable every TLS-listening interface so we accept no further TLS
+     *      sockets while we are tearing the live ones down (closes the bypass
+     *      that canRespondToTlsSearch() doesn't cover: a peer that already
+     *      knows our tls_port can connect directly without searching).
+     *   2. Snapshot the strong refs to all currently-accepted TLS connections
+     *      out of the registry, then disconnect()+cleanup() each.  We must
+     *      snapshot first because cleanup() erases the conn from
+     *      Server::Pvt::connections and would otherwise invalidate iterators.
+     * Plain-TCP listeners and plain-TCP connections are intentionally left
+     * untouched; only the TLS portion of the server is shut down.
+     */
+    acceptor_loop.call([this]()
+    {
+        for(auto& iface : interfaces) {
+            if(!iface.isTLS) continue;
+            if(iface.listener.get() && evconnlistener_disable(iface.listener.get())) {
+                log_err_printf(serversetup, "Error disabling TLS listener on %s after local cert went BAD\n", iface.name.c_str());
+            } else {
+                log_debug_printf(serversetup, "Disabled TLS listener on %s after local cert went BAD\n", iface.name.c_str());
+            }
+        }
+
+        std::vector<std::shared_ptr<ServerConn>> tls_conns;
+        tls_conns.reserve(connections.size());
+        for(auto& pair : connections) {
+            if(pair.first && pair.first->iface && pair.first->iface->isTLS)
+                tls_conns.push_back(pair.second);
+        }
+
+        log_warn_printf(serversetup, "Local certificate became REVOKED/EXPIRED; tearing down %zu TLS connection(s)\n", tls_conns.size());
+
+        for(auto& conn : tls_conns) {
+            conn->cert_status_disconnect = true;
+            conn->disconnect();
+            conn->cleanup();
+        }
+    });
+}
+#endif
+
 void Server::Pvt::onSearch(const UDPManager::Search& msg)
 {
     // on UDPManager worker
@@ -848,11 +950,24 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
             nreply++;
     }
 
+    // TLS-only transport: a non-TLS search must get no reply, so the plaintext
+    // TCP arm is gated off.
+    const bool tlsOnly = effective.tcp_disabled;
+
+    if(tlsOnly && nreply != 0 && msg.protoTCP && !msg.protoTLS && canRespondToTcpSearch()) {
+        // would have replied with a tcp endpoint; suppressed by policy.
+        log_debug_printf(serverio, "TLS-only policy suppresses tcp SEARCH reply%s", "\n");
+    }
+
     // "pvlist" breaks unless we honor mustReply flag
-    if (nreply == 0 && msg.mustReply) {} // discover
-    else if(nreply != 0 && msg.protoTCP && canRespondToTcpSearch()) {} // regular TCP
+    if (nreply == 0 && msg.mustReply && (!tlsOnly || canRespondToTlsSearch())) {} // discover
+    else if(nreply != 0 && msg.protoTCP && !tlsOnly && canRespondToTcpSearch()) {} // regular TCP
     else if(nreply != 0 && msg.protoTLS && canRespondToTlsSearch()) {} // TLS
     else {
+        if(tlsOnly && nreply != 0 && msg.protoTLS && !canRespondToTlsSearch()) {
+            // cert-state gate (not the policy flag) is what blocks the TLS reply.
+            log_debug_printf(serverio, "TLS-only policy: no reply, TLS not currently usable%s", "\n");
+        }
         return; // do not send
     }
 
@@ -865,7 +980,9 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     to_wire(M, msg.searchID);
     to_wire(M, SockAddr::any(AF_INET));
 
-    if(msg.protoTLS && canRespondToTlsSearch()) {
+    if((msg.protoTLS && canRespondToTlsSearch()) || tlsOnly) {
+        // TLS-only transport: only ever advertise the TLS endpoint; the tcp arm
+        // below is unreachable under the policy flag.
         to_wire(M, uint16_t(effective.tls_port));
         to_wire(M, "tls");
     } else{
@@ -899,6 +1016,8 @@ void Server::Pvt::doBeacons(short evt)
 {
     log_debug_printf(serversetup, "Server beacon timer expires\n%s", "");
 
+
+
     beaconMsg.clear();
     VectorOutBuf M(true, beaconMsg);
     M.skip(8, __FILE__, __LINE__); // fill in header after body length known
@@ -909,6 +1028,9 @@ void Server::Pvt::doBeacons(short evt)
     to_wire(M, uint16_t(beaconChange));// change count
 
     to_wire(M, SockAddr::any(AF_INET));
+    // Always "tcp": under tcp_disabled the port serves search, which is all a
+    // beacon prompts.  Advertising "tls" here would be a separate protocol
+    // decision (and makes phoebus log a warning per beacon).
     to_wire(M, uint16_t(effective.tcp_port));
     to_wire(M, "tcp");
     // "NULL" serverStatus
@@ -971,6 +1093,10 @@ void Server::reconfigure(const Config& inconf) {
     auto newconf(inconf);
     newconf.expand();  // maybe catch some errors early
 
+    // reject before destroying the running server
+    if(newconf.tcp_disabled && newconf.tls_disabled)
+        throw std::invalid_argument("TCP disabled with TLS disabled or unavailable: no transport left to serve");
+
     log_info_printf(serversetup, "Reconfiguring Server Context%s", "\n");
 
     // is the current server running?
@@ -1001,7 +1127,9 @@ void Server::reconfigure(const Config& inconf) {
         Server newsrv(newconf);
         pvt = std::move(newsrv.pvt);
     } catch (std::exception& e) {
-        log_warn_printf(serversetup, "Server Reconfiguration failed: %s\n", e.what());
+        // old server is already destroyed; surface rather than continue with null pvt
+        log_err_printf(serversetup, "Server Reconfiguration failed, server stopped: %s\n", e.what());
+        throw;
     }
 
     {
