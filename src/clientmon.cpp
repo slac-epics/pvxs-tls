@@ -601,10 +601,17 @@ void Connection::handle_MONITOR()
         }
     }
 
-    if(!M.good() || !mon) {
+    if(!M.good()) {
         log_crit_printf(io, "%s:%d Server %s sends invalid MONITOR.  Disconnecting...\n",
                         M.file(), M.line(), peerName.c_str());
         bev.reset();
+        return;
+    }
+    if(!mon) {
+        // Well-formed MONITOR for an unknown subscription id: the subscription was cancelled
+        // and its id removed while this update was in flight. Drop it as stale, the same as a
+        // handle that no longer locks above; it is not a server fault, so do not disconnect.
+        log_debug_printf(io, "Server %s ignoring MONITOR for unknown ioid %u\n", peerName.c_str(), unsigned(ioid));
         return;
     }
 
