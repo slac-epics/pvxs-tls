@@ -685,7 +685,12 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
         }
 
         log_info_printf(io, "Searching to TCP %s\n", std::string(SB()<<saddr).c_str());
+        // A pvas:// name server means searches go out over TLS; recorded here at
+        // configuration time, not at send time.
+        if(saddr.scheme == SockEndpoint::TLS)
+            searched_over_tls = true;
         nameServers.emplace_back(saddr, nullptr);
+
     }
 
     if(searchDest.empty() && nameServers.empty())
