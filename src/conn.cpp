@@ -181,7 +181,7 @@ void ConnBase::bevEvent(const short events) {
                     } catch (certs::CertStatusIdException &e) {
                         // Malformed peer certificate: reject the peer.
                         state = Disconnected;
-                        log_err_printf(connio, "peer %s %s cant get cert ID from cert; Disconnected: %s\n", peerLabel(), peerName.c_str(), e.what());
+                        log_err_printf(connio, "peer %s %s cannot get cert ID from cert; Disconnected: %s\n", peerLabel(), peerName.c_str(), e.what());
                         bev.reset();
                     } catch (std::exception &e) {
                         log_err_printf(connio, "unexpected error subscribing to peer %s %s certificate status: %s\n", peerLabel(), peerName.c_str(), e.what());
