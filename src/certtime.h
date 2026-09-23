@@ -22,6 +22,8 @@
 
 #include "ownedptr.h"
 
+// Format of the CertDate human-readable string. Not the wire format for PVACMS
+// status dates: those are informational and pvxs no longer parses them.
 #define CERT_TIME_FORMAT "%a %b %d %H:%M:%S %Y UTC"
 
 namespace pvxs {
