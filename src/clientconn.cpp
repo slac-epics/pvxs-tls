@@ -375,6 +375,7 @@ void Connection::peerStatusCallback(certs::cert_status_class_t status_class) {
         proceedWithCreatingChannels();
     } else if (status_class == certs::cert_status_class_t::BAD) {
         log_debug_printf(certs, "Cancel Wait to Creating Channels: BAD CERT STATUS%s\n", "");
+        cert_status_disconnect = true;
         disconnect();
     } else {
         log_debug_printf(certs, "Continue Waiting to Create Channels: UNKNOWN CERT STATUS%s\n", "");

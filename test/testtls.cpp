@@ -863,10 +863,266 @@ void testFakeCertificateNameMatchingAttack() {
     }
 }
 
+/**
+ * @brief Verifies that when the local entity certificate transitions to BAD
+ *        (REVOKED/EXPIRED), the server tears down all live TLS connections
+ *        and disables its TLS-listening interfaces.  Plain TCP listeners and
+ *        connections are intentionally left untouched.
+ */
+void testServerLocalCertBadTearsDownTlsConn() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    bool is_tls{false};
+    epicsEvent disconnected_evt;
+    auto conn(cli.connect(TEST_PV)
+        .onConnect([&is_tls](const client::Connected& c) { is_tls = c.cred && c.cred->isTLS; })
+        .onDisconnect([&disconnected_evt]() { disconnected_evt.signal(); })
+        .exec());
+
+    auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+    testTrue(is_tls) << "Initial connection must be over TLS";
+    testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+
+    serv.testInjectEntityCertBad();
+
+    testTrue(disconnected_evt.wait(5.0))
+        << "Client must observe disconnect after server's local cert went BAD";
+
+    bool reconnect_is_tls{true};
+    bool got_reconnect{false};
+    auto conn2(cli.connect(TEST_PV)
+        .onConnect([&reconnect_is_tls, &got_reconnect](const client::Connected& c) {
+            reconnect_is_tls = c.cred && c.cred->isTLS;
+            got_reconnect = true;
+        })
+        .exec());
+
+    try {
+        auto reply2(cli.get(TEST_PV).exec()->wait(5.0));
+        if (got_reconnect) {
+            testFalse(reconnect_is_tls)
+                << "Reconnect after server local cert BAD must NOT be over TLS";
+        } else {
+            testPass("No reconnect after server local cert BAD (acceptable)");
+        }
+    } catch (std::exception&) {
+        testPass("Reconnect timed out after TLS listener disabled (acceptable)");
+    }
+}
+
+/**
+ * @brief Verifies that when the local client entity certificate transitions
+ *        to BAD (REVOKED/EXPIRED), the client tears down its live TLS
+ *        outbound connections.  The channel-search machinery is left intact;
+ *        the test does not assert on TCP fallback because the isolated
+ *        server here only accepts TLS, but it does verify the TLS conn is
+ *        physically gone (seen as a disconnect by the application).
+ */
+void testClientLocalCertBadTearsDownTlsConn() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    bool is_tls{false};
+    epicsEvent disconnected_evt;
+    auto conn(cli.connect(TEST_PV)
+        .onConnect([&is_tls](const client::Connected& c) { is_tls = c.cred && c.cred->isTLS; })
+        .onDisconnect([&disconnected_evt]() { disconnected_evt.signal(); })
+        .exec());
+
+    auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+    testTrue(is_tls) << "Initial connection must be over TLS";
+    testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+
+    cli.testInjectEntityCertBad();
+
+    testTrue(disconnected_evt.wait(5.0))
+        << "Client must observe disconnect after its own local cert went BAD";
+}
+
+/**
+ * @brief Regression test: a plain-TCP-only server (no TLS configured) MUST
+ *        not be affected by the cert-status teardown machinery, because
+ *        there is no entity certificate whose status could go BAD.  Calling
+ *        the test injection helper on a non-TLS server is a no-op.
+ */
+void testNonTlsServerUnaffectedByLocalCertBad() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+
+    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+    auto cli(serv.clientConfig().build());
+
+    mbox.open(initial.update(TEST_PV_FIELD, 42));
+    serv.start();
+
+    auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && !c.cred->isTLS); }).exec());
+
+    auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+    testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+
+    serv.testInjectEntityCertBad();
+    cli.testInjectEntityCertBad();
+
+    auto reply2(cli.get(TEST_PV).exec()->wait(5.0));
+    testEq(reply2[TEST_PV_FIELD].as<int32_t>(), 42)
+        << "Plain TCP must keep working after testInjectEntityCertBad on a non-TLS endpoint";
+}
+
+/**
+ * @brief Verifies that after the server's local cert went BAD (TLS listeners
+ *        disabled, live conns torn down), calling Server::reconfigure() with
+ *        a fresh GOOD certificate fully restores TLS service: TLS listeners
+ *        come back up and clients re-establish over TLS with the new identity.
+ *        This is the "an external process replaced the BAD certificate"
+ *        recovery path.
+ */
+void testServerLocalCertBadThenReconfigureGood() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    serv.start();
+
+    epicsEvent evt;
+    auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false)
+        .event([&evt](client::Subscription&) { evt.signal(); }).exec());
+
+    try {
+        pop(sub, evt);
+        testFail("Unexpected success");
+        testSkip(2, "oops");
+    } catch (client::Connected& e) {
+        testTrue(e.cred && e.cred->isTLS) << "Initial connection must be TLS with original cert";
+        testEq(e.cred->account, CERT_CN_SERVER1);
+    }
+    (void)pop(sub, evt);  // drain the post-Connected update
+
+    serv.testInjectEntityCertBad();
+
+    testThrows<client::Disconnect>([&sub, &evt] { pop(sub, evt); })
+        << "Client must observe Disconnect after server local cert went BAD";
+
+    serv_conf = serv.config();
+    serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
+    testDiag("serv.reconfigure() with fresh GOOD cert");
+    serv.reconfigure(serv_conf);
+
+    try {
+        pop(sub, evt);
+        testFail("Missing expected Connected after reconfigure");
+        testSkip(2, "oops");
+    } catch (client::Connected& e) {
+        testTrue(e.cred && e.cred->isTLS) << "TLS must resume after reconfigure with GOOD cert";
+        testEq(e.cred->account, CERT_CN_IOC1);
+    }
+}
+
+/**
+ * @brief Verifies that after the client's local cert went BAD, calling
+ *        Context::reconfigure() with a fresh GOOD certificate restores TLS
+ *        outbound: the client re-establishes over TLS with the new identity.
+ */
+void testClientLocalCertBadThenReconfigureGood() {
+    testShow() << __func__;
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
+
+    auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+
+    auto cli(cli_conf.build());
+
+    serv.start();
+
+    epicsEvent evt;
+    auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false)
+        .event([&evt](client::Subscription&) { evt.signal(); }).exec());
+
+    try {
+        pop(sub, evt);
+        testFail("Unexpected success");
+        testSkip(1, "oops");
+    } catch (client::Connected& e) {
+        testTrue(e.cred && e.cred->isTLS) << "Initial connection must be TLS with original cert";
+    }
+    Value who1 = pop(sub, evt);
+    testEq(who1[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1)
+        << "Server must initially see client1's identity";
+
+    cli.testInjectEntityCertBad();
+
+    testThrows<client::Disconnect>([&sub, &evt] { pop(sub, evt); })
+        << "Client must observe Disconnect after its own local cert went BAD";
+
+    cli_conf = cli.config();
+    cli_conf.tls_keychain_file = CLIENT2_KEYCHAIN_FILE;
+    cli_conf.setKeychainPassword(CLIENT2_KEYCHAIN_FILE_PWD);
+    testDiag("cli.reconfigure() with fresh GOOD cert");
+    cli.reconfigure(cli_conf);
+
+    try {
+        pop(sub, evt);
+        testFail("Missing expected Connected after reconfigure");
+        testSkip(1, "oops");
+    } catch (client::Connected& e) {
+        testTrue(e.cred && e.cred->isTLS) << "TLS must resume after reconfigure with GOOD cert";
+    }
+    Value who2 = pop(sub, evt);
+    testEq(who2[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT2)
+        << "After reconfigure server must see client2's new identity";
+}
+
 }  // namespace
 
 MAIN(testtls) {
-    testPlan(47);
+    testPlan(67);
     testSetup();
     logger_config_env();
     testLegacyMode();
@@ -885,6 +1141,11 @@ MAIN(testtls) {
     testMutualTLSWithMatchingTrustAnchors();
     testClientWithMismatchedChainFallback();
     testFakeCertificateNameMatchingAttack();
+    testServerLocalCertBadTearsDownTlsConn();
+    testClientLocalCertBadTearsDownTlsConn();
+    testNonTlsServerUnaffectedByLocalCertBad();
+    testServerLocalCertBadThenReconfigureGood();
+    testClientLocalCertBadThenReconfigureGood();
     cleanup_for_valgrind();
     return testDone();
 }

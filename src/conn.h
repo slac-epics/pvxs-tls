@@ -110,6 +110,16 @@ protected:
 public:
     const bool isTLS;
 
+#ifdef PVXS_ENABLE_OPENSSL
+    // Set to true when this connection is being torn down because a
+    // certificate status (entity or peer) became BAD.  Both ends of a TLS
+    // connection observe the same status transition independently, so the
+    // socket close races between them and one side typically reports
+    // BEV_EVENT_ERROR on a half-closed socket.  When this flag is set we
+    // demote that expected error to a debug log.  @since UNRELEASED
+    bool cert_status_disconnect{false};
+#endif
+
     TypeStore rxRegistry;
     /* Flag if some received delta could not be decoded due to
      * a non-existent IOID, which *may* leave this rxRegistry out

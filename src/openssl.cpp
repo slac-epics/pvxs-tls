@@ -170,17 +170,34 @@ void SSLContext::restartStatusValidityTimerFromCertStatus() const {
 /**
  * @brief Set degraded mode
  *
- * Clear all monitors and statuses, then set tls context state to Degraded
+ * Clear all monitors and statuses, then set tls context state to Degraded.
+ *
+ * If `clear` is false (i.e. this is a live BAD-status transition rather than
+ * an initial-config bootstrap), schedule the registered on-degraded callback
+ * to run on the event loop.  The callback fires at most once per SSLContext
+ * and is the hook used by Server::Pvt / client::ContextImpl to tear down
+ * live TLS connections whose security guarantees have just been invalidated.
  */
 void SSLContext::setDegradedMode(const bool clear) {
     log_debug_printf(watcher, "Permanently switching TLS state to Degraded%s\n", "");
-    Guard G(lock);
-    if (clear) {
-        cert_monitor.reset();   // Unsubscribe from the certificate status monitor if any
-        cert_status = {};    // Set the certificate status to be UNKNOWN
+    bool fire_callback = false;
+    {
+        Guard G(lock);
+        if (clear) {
+            cert_monitor.reset();
+            cert_status = {};
+        }
+        const bool was_degraded = (state == DegradedMode);
+        state = DegradedMode;
+        if (!clear && !was_degraded && !degraded_callback_fired) {
+            degraded_callback_fired = true;
+            fire_callback = true;
+        }
     }
-    state = DegradedMode;
     log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-11s : SSLContext::setDegradedMode()\n", "SSLContext::state", "DegradedMode");
+    if (fire_callback && degraded_event.get()) {
+        event_active(degraded_event.get(), EV_TIMEOUT, 0);
+    }
 }
 
 /**
@@ -255,6 +272,7 @@ void SSLContext::setTlsOrTcpMode() {
 SSLContext::SSLContext(const impl::evbase loop, const bool is_client) : loop(loop), is_client(is_client)
     , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))
     , tls_ready_event(event_new(loop.base, -1, EV_TIMEOUT, &tlsReadyEventCallback, this))
+    , degraded_event(event_new(loop.base, -1, EV_TIMEOUT, &degradedEventCallback, this))
 {}
 
 SSLContext::SSLContext(const SSLContext &o)
@@ -269,6 +287,9 @@ SSLContext::SSLContext(const SSLContext &o)
     , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create a new timer for this instance
     , on_tls_ready_(o.on_tls_ready_)  // Copy the callback
     , tls_ready_event(event_new(loop.base, -1, EV_TIMEOUT, &tlsReadyEventCallback, this))
+    , on_degraded_(o.on_degraded_)
+    , degraded_event(event_new(loop.base, -1, EV_TIMEOUT, &degradedEventCallback, this))
+    , degraded_callback_fired(o.degraded_callback_fired)
 {
     // If the original timer was pending, restart ours with the remaining time
     if (o.status_validity_timer.get() && event_pending(o.status_validity_timer.get(), EV_TIMEOUT, nullptr)) {
@@ -288,6 +309,9 @@ SSLContext::SSLContext(SSLContext &o)
     , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create new timer
     , on_tls_ready_(std::move(o.on_tls_ready_))  // Move the callback
     , tls_ready_event(event_new(loop.base, -1, EV_TIMEOUT, &tlsReadyEventCallback, this))
+    , on_degraded_(std::move(o.on_degraded_))
+    , degraded_event(event_new(loop.base, -1, EV_TIMEOUT, &degradedEventCallback, this))
+    , degraded_callback_fired(o.degraded_callback_fired)
 {
     // If the original timer was pending, restart ours and cancel the original
     if (o.status_validity_timer.get() && event_pending(o.status_validity_timer.get(), EV_TIMEOUT, nullptr)) {
@@ -302,6 +326,9 @@ SSLContext::~SSLContext() {
     if (tls_ready_event.get()) {
         event_del(tls_ready_event.get());
     }
+    if (degraded_event.get()) {
+        event_del(degraded_event.get());
+    }
     if (status_validity_timer.get()) {
         event_del(status_validity_timer.get());
     }
@@ -310,6 +337,11 @@ SSLContext::~SSLContext() {
 void SSLContext::setOnTlsReady(std::function<void()> fn) {
     Guard G(lock);
     on_tls_ready_ = std::move(fn);
+}
+
+void SSLContext::setOnDegraded(std::function<void()> fn) {
+    Guard G(lock);
+    on_degraded_ = std::move(fn);
 }
 
 void SSLContext::tlsReadyEventCallback(evutil_socket_t, short, void* raw) {
@@ -324,6 +356,22 @@ void SSLContext::tlsReadyEventCallback(evutil_socket_t, short, void* raw) {
             fn();
         } catch (std::exception& e) {
             log_err_printf(watcher, "Unhandled error in TLS ready callback: %s\n", e.what());
+        }
+    }
+}
+
+void SSLContext::degradedEventCallback(evutil_socket_t, short, void* raw) {
+    auto* ctx = static_cast<SSLContext*>(raw);
+    std::function<void()> fn;
+    {
+        Guard G(ctx->lock);
+        fn = ctx->on_degraded_;
+    }
+    if (fn) {
+        try {
+            fn();
+        } catch (std::exception& e) {
+            log_err_printf(watcher, "Unhandled error in TLS degraded callback: %s\n", e.what());
         }
     }
 }

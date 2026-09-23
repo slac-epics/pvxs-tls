@@ -301,6 +301,25 @@ Report Server::report(bool zero) const
     return ret;
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
+Server& Server::testInjectEntityCertBad()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    if(pvt->tls_context) {
+        pvt->tls_context->setTlsOrTcpMode(certs::cert_status_class_t::BAD);
+    }
+    return *this;
+}
+#else
+Server& Server::testInjectEntityCertBad()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    return *this;
+}
+#endif
+
 std::ostream& operator<<(std::ostream& strm, const Server& serv)
 {
     auto detail = Detailed::level(strm);
@@ -565,6 +584,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 
                 tls_context = ossl::SSLContext::for_server(effective, inner_client, acceptor_loop);
                 log_debug_printf(osslsetup, "Created server TLS context for: %s\n", effective.tls_keychain_file.c_str());
+                tls_context->setOnDegraded([this]() { onLocalCertBadTearDown(); });
             } catch (std::exception& e) {
                 log_debug_printf(osslsetup, "Failed to configure TLS for server: %s\n", e.what());
                 log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
@@ -781,6 +801,51 @@ void Server::Pvt::stop()
      */
     acceptor_loop.sync();
 }
+
+#ifdef PVXS_ENABLE_OPENSSL
+void Server::Pvt::onLocalCertBadTearDown()
+{
+    /* Local entity certificate has just transitioned to REVOKED or EXPIRED.
+     * Two things must happen on the acceptor_loop, in this order:
+     *   1. Disable every TLS-listening interface so we accept no further TLS
+     *      sockets while we are tearing the live ones down (closes the bypass
+     *      that canRespondToTlsSearch() doesn't cover: a peer that already
+     *      knows our tls_port can connect directly without searching).
+     *   2. Snapshot the strong refs to all currently-accepted TLS connections
+     *      out of the registry, then disconnect()+cleanup() each.  We must
+     *      snapshot first because cleanup() erases the conn from
+     *      Server::Pvt::connections and would otherwise invalidate iterators.
+     * Plain-TCP listeners and plain-TCP connections are intentionally left
+     * untouched; only the TLS portion of the server is shut down.
+     */
+    acceptor_loop.call([this]()
+    {
+        for(auto& iface : interfaces) {
+            if(!iface.isTLS) continue;
+            if(iface.listener.get() && evconnlistener_disable(iface.listener.get())) {
+                log_err_printf(serversetup, "Error disabling TLS listener on %s after local cert went BAD\n", iface.name.c_str());
+            } else {
+                log_debug_printf(serversetup, "Disabled TLS listener on %s after local cert went BAD\n", iface.name.c_str());
+            }
+        }
+
+        std::vector<std::shared_ptr<ServerConn>> tls_conns;
+        tls_conns.reserve(connections.size());
+        for(auto& pair : connections) {
+            if(pair.first && pair.first->iface && pair.first->iface->isTLS)
+                tls_conns.push_back(pair.second);
+        }
+
+        log_warn_printf(serversetup, "Local certificate became REVOKED/EXPIRED; tearing down %zu TLS connection(s)\n", tls_conns.size());
+
+        for(auto& conn : tls_conns) {
+            conn->cert_status_disconnect = true;
+            conn->disconnect();
+            conn->cleanup();
+        }
+    });
+}
+#endif
 
 void Server::Pvt::onSearch(const UDPManager::Search& msg)
 {
