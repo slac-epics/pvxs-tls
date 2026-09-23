@@ -31,6 +31,8 @@ class PVXS_IOC_API Credentials {
   std::string method;
   std::string authority;
   std::string host;
+  std::string issuer_id;
+  std::string serial;
   bool isTLS = false;
   explicit Credentials(const server::ClientCredentials& clientCredentials);
   Credentials(const Credentials&) = delete;

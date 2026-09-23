@@ -47,6 +47,10 @@ std::ostream& operator<<(std::ostream& strm, const PeerCredentials& cred)
 #endif
 
     strm<<cred.method;
+    if(!cred.issuer_id.empty())
+        strm<<":"<<cred.issuer_id;
+    if(!cred.serial.empty())
+        strm<<":"<<cred.serial;
     if(!cred.authority.empty()) {
         strm<<":";
         std::string authority = cred.authority;
