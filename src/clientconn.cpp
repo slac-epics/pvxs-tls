@@ -75,6 +75,16 @@ int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
         } catch (const certs::OCSPParseException& e) {
             log_warn_printf(stapling, "Stapled OCSP response invalid: %s\n", e.what());
             return PVXS_OCSP_STAPLING_NAK;
+        } catch (const certs::CertStatusExtensionDecodeException& e) {
+            // Malformed peer certificate: status extension present but undecodable.
+            ex_data->setPeerStatus(peer_cert, certs::UnknownCertificateStatus());
+            log_err_printf(stapling, "Peer certificate status extension present but undecodable: %s\n", e.what());
+            return PVXS_OCSP_STAPLING_NAK;
+        } catch (const certs::CertStatusIdException& e) {
+            // Malformed peer certificate: cannot derive the cert ID from the certificate.
+            ex_data->setPeerStatus(peer_cert, certs::UnknownCertificateStatus());
+            log_err_printf(stapling, "Peer certificate ID underivable from certificate: %s\n", e.what());
+            return PVXS_OCSP_STAPLING_NAK;
         }
     } catch (std::exception& e) {
         ex_data->setPeerStatus(peer_cert, certs::UnknownCertificateStatus());
