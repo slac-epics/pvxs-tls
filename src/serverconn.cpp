@@ -356,6 +356,7 @@ void ServerConn::peerStatusCallback(certs::cert_status_class_t status_class) {
         proceedWithConnectionValidation();
     } else if (status_class == certs::cert_status_class_t::BAD) {
         log_debug_printf(certs, "Cancel Wait for Connection Validation: BAD CERT STATUS%s\n", "");
+        cert_status_disconnect = true;
         disconnect();
     } else {
         log_debug_printf(certs, "Continue Waiting for Connection Validation: UNKNOWN CERT STATUS%s\n", "");
@@ -668,15 +669,17 @@ void ServerOp::cleanup()
     if(state==ServerOp::Dead)
         return;
 
-    if(state==ServerOp::Executing && onCancel) {
-        auto fn(std::move(onCancel));
-        fn();
+    if(onCancel) {
+        decltype(onCancel) fn;
+        fn.swap(onCancel);
+        if(state==ServerOp::Executing)
+            fn();
     }
 
     state = ServerOp::Dead;
 
-    onCancel = nullptr;
-    auto closer(std::move(onClose));
+    decltype(onClose) closer;
+    closer.swap(onClose);
     bool notify = closer.operator bool();
 
     if(auto ch = chan.lock()) {

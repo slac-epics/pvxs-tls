@@ -7,7 +7,6 @@
 #include <cassert>
 
 #include <deque>
-#include <iomanip>
 
 #include <epicsMutex.h>
 #include <epicsGuard.h>
@@ -174,18 +173,12 @@ struct MonitorOp final : public ServerOp
                 if(ent) {
                     // Log certificate status subscriptions if requested
                     if(status_cms.test(Level::Debug)) {
-                        std::string cert_id, state;
+                        std::string state;
                         try {
                             state = ent["state"].as<std::string>();
-                            auto serial_number = ent["serial"].as<uint64_t>();
-                            std::ostringstream oss;
-                            oss << std::setw(20)
-                                << std::setfill('0')
-                                << serial_number;
-                            cert_id = "CERT:STATUS:xxxxxxxx:" + oss.str();
                         } catch (...) {}
-                        if ( !state.empty() && !cert_id.empty())
-                            log_debug_printf(status_cms, "%24.24s = %-12s : %-41s: %s\n", "Value::state", state.c_str(), "MonitorOp::doReply()", cert_id.c_str());
+                        if (!state.empty() && !ch->name.empty())
+                            log_debug_printf(status_cms, "%24.24s = %-12s : %-41s: %s\n", "Value::state", state.c_str(), "MonitorOp::doReply()", ch->name.c_str());
                     }
                     to_wire_valid(R, ent, &self->pvMask);
                     // TODO: placeholder for overrun mask

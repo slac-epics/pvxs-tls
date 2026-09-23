@@ -178,8 +178,8 @@ struct GPROp : public OperationBase
         bool ret = false;
         (void)loop.tryCall([this, &junk, &junkI, &ret](){
             ret = _cancel(false);
-            junk = std::move(done);
-            junkI = std::move(onInit);
+            junk.swap(done);
+            junkI.swap(onInit);
             // leave opByIOID for GC
         });
         return ret;
