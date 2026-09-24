@@ -595,16 +595,30 @@ void Connection::handle_MONITOR()
 
             } else if((mon->state==SubscriptionImpl::Running) && !init) {
 
+            } else if(mon->state==SubscriptionImpl::Done) {
+                // The subscription is finished or being cancelled, which happens as a
+                // connection tears down.  A MONITOR still in flight for it is stale, not a
+                // server fault; drop it without disconnecting.
+                log_debug_printf(io, "Server %s ignoring MONITOR for finished ioid %u\n", peerName.c_str(), unsigned(ioid));
+                return;
+
             } else {
                 M.fault(__FILE__, __LINE__);
             }
         }
     }
 
-    if(!M.good() || !mon) {
+    if(!M.good()) {
         log_crit_printf(io, "%s:%d Server %s sends invalid MONITOR.  Disconnecting...\n",
                         M.file(), M.line(), peerName.c_str());
         bev.reset();
+        return;
+    }
+    if(!mon) {
+        // Well-formed MONITOR for an unknown subscription id: the subscription was cancelled
+        // and its id removed while this update was in flight. Drop it as stale, the same as a
+        // handle that no longer locks above; it is not a server fault, so do not disconnect.
+        log_debug_printf(io, "Server %s ignoring MONITOR for unknown ioid %u\n", peerName.c_str(), unsigned(ioid));
         return;
     }
 
