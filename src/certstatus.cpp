@@ -337,7 +337,7 @@ std::string certIdFromOCSPCertId(const OCSP_CERTID* cert_id_ptr)
         throw OCSPParseException("Failed to extract issuer key hash and serial from OCSP_CERTID");
     }
 
-    const auto issuer = firstEightHex(issuer_key_hash->data, issuer_key_hash->length);
+    const auto issuer = firstEightHex(ASN1_STRING_get0_data(issuer_key_hash), ASN1_STRING_length(issuer_key_hash));
     if (issuer.size() != 8)        throw OCSPParseException("Issuer key hash too short to construct cert_id");
 
     return CertStatusManager::getCertIdFromSerialAndIssuer(issuer, asn1IntegerToDecimalString(serial));
@@ -560,14 +560,14 @@ time_t CertStatusManager::getExpirationDateFromCert(const ossl_ptr<X509> &cert) 
  * @param certificate the certificate to retrieve the extension from
  * @return the X509_EXTENSION object, if found, otherwise throws an exception
  */
-X509_EXTENSION *CertStatusManager::getStatusExtension(const X509 *certificate) {
+const X509_EXTENSION *CertStatusManager::getStatusExtension(const X509 *certificate) {
     // Make sure the custom extensions are configured before querying them
     ossl::osslInit();
     const int extension_index = X509_get_ext_by_NID(certificate, ossl::NID_SPvaCertStatusURI, -1);
     if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find Certificate-Status-PV extension in certificate.");
 
     // Get the extension object from the certificate
-    X509_EXTENSION *extension = X509_get_ext(certificate, extension_index);
+    const X509_EXTENSION *extension = X509_get_ext(certificate, extension_index);
     if (!extension) {
         throw CertStatusNoExtensionException("Failed to get Certificate-Status-PV extension from the certificate.");
     }
@@ -579,7 +579,7 @@ std::string CertStatusManager::getIssuerIdFromCert(const X509* cert_ptr) {
                                        false);
     if (!akid || !akid->keyid) throw CertStatusIdException("Failed to get Authority Key Identifier.");
 
-    return firstEightHex(akid->keyid->data, akid->keyid->length);
+    return firstEightHex(ASN1_STRING_get0_data(akid->keyid), ASN1_STRING_length(akid->keyid));
 }
 
 std::string CertStatusManager::getSerialFromCert(const X509* cert_ptr) {
@@ -615,7 +615,7 @@ std::string CertStatusManager::getStatusPvFromCert(const X509 *cert) {
     const auto extension = getStatusExtension(cert);
 
     // Retrieve the extension data which is an ASN1_OCTET_STRING object containing DER-encoded IA5String
-    const ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(extension);
+    const ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(const_cast<X509_EXTENSION *>(extension));
     if (!ext_data) throw CertStatusExtensionDecodeException("Failed to get data from the Certificate-Status-PV extension.");
 
     // Get the DER-encoded data

@@ -398,7 +398,8 @@ struct CertCreator {
         // symbolic name for this cert.  Could have multiple entries.
         // but we only add commonName (CN)
         {
-            const auto sub(X509_get_subject_name(cert.get()));
+            const pvxs::ossl_ptr<X509_NAME> subject(X509_NAME_new());
+            const auto sub(subject.get());
             if(CN) {
                 MUST(1, X509_NAME_add_entry_by_txt(sub, "CN", MBSTRING_ASC,
                                                   reinterpret_cast<const unsigned char*>(CN),
@@ -413,6 +414,7 @@ struct CertCreator {
             MUST(1, X509_NAME_add_entry_by_txt(sub, "OU", MBSTRING_ASC,
                                                reinterpret_cast<const unsigned char*>("epics.org Certificate Authority"),
                                                -1, -1, 0));
+            MUST(1, X509_set_subject_name(cert.get(), sub));
         }
         if(!issuer) {
             issuer = cert.get(); // self-signed

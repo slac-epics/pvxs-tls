@@ -42,10 +42,11 @@ ossl_ptr<X509> makeBareCert() {
     X509_gmtime_adj(X509_getm_notBefore(cert.get()), 0);
     X509_gmtime_adj(X509_getm_notAfter(cert.get()), 60 * 60);
 
-    auto* name = X509_get_subject_name(cert.get());
-    X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
+    const ossl_ptr<X509_NAME> name(X509_NAME_new());
+    X509_NAME_add_entry_by_txt(name.get(), "CN", MBSTRING_ASC,
                                reinterpret_cast<const unsigned char*>("testcertstatuspv"), -1, -1, 0);
-    X509_set_issuer_name(cert.get(), name);  // self-signed
+    X509_set_subject_name(cert.get(), name.get());
+    X509_set_issuer_name(cert.get(), name.get());  // self-signed
     X509_set_pubkey(cert.get(), key.get());
     if (!X509_sign(cert.get(), key.get(), EVP_sha256()))
         throw std::runtime_error("X509_sign failed");

@@ -692,15 +692,16 @@ std::string subjectIdentityOf(const std::vector<SubjectField>& fields) {
         // and then emptied.  Another implementation can produce such a subject
         // and this is the only way to build one here to try it against.
         const auto empty = field.length == 0;
-        if (!X509_NAME_add_entry_by_txt(subject.get(), field.key, MBSTRING_ASC,
+        const ossl_ptr<X509_NAME_ENTRY> entry(X509_NAME_ENTRY_create_by_txt(nullptr, field.key, MBSTRING_ASC,
                                         reinterpret_cast<const unsigned char*>(empty ? "placeholder" : field.value),
-                                        empty ? -1 : field.length, -1, 0))
+                                        empty ? -1 : field.length));
+        if (!entry)
+            throw std::runtime_error(SB() << "could not make subject field " << field.key);
+        // V_ASN1_UNDEF keeps the type chosen for the placeholder
+        if (empty && !X509_NAME_ENTRY_set_data(entry.get(), V_ASN1_UNDEF, reinterpret_cast<const unsigned char*>(""), 0))
+            throw std::runtime_error(SB() << "could not empty subject field " << field.key);
+        if (!X509_NAME_add_entry(subject.get(), entry.get(), -1, 0))
             throw std::runtime_error(SB() << "could not add subject field " << field.key);
-        if (empty) {
-            const auto entry = X509_NAME_get_entry(subject.get(), X509_NAME_entry_count(subject.get()) - 1);
-            if (!ASN1_STRING_set(X509_NAME_ENTRY_get_data(entry), "", 0))
-                throw std::runtime_error(SB() << "could not empty subject field " << field.key);
-        }
     }
     return ossl::makeSubjectIdentity(subject.get());
 }
