@@ -1011,7 +1011,7 @@ bool SSLContext::hasExpired() const {
     const auto now = timeNow();
     const auto cert = getEntityCertificate();
     if (!cert) return false;
-    const certs::CertDate expiry_date = X509_get_notAfter(cert);
+    const certs::CertDate expiry_date = X509_get0_notAfter(cert);
     return expiry_date.t < now;
 }
 
@@ -1208,7 +1208,8 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
             const ASN1_INTEGER* serial_asn1 = X509_get_serialNumber(cert);
             if (!serial_asn1) throw std::runtime_error("Failed to retrieve serial number from peer certificate");
             serial_number_t serial = 0;
-            for (int i = 0; i < serial_asn1->length; ++i) serial = serial << 8 | serial_asn1->data[i];
+            const unsigned char *serial_bytes = ASN1_STRING_get0_data(serial_asn1);
+            for (int i = 0; i < ASN1_STRING_length(serial_asn1); ++i) serial = serial << 8 | serial_bytes[i];
             temp.serial = std::to_string(serial);
 
             // try to use certificate chain authority names to qualify

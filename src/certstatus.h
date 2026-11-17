@@ -179,9 +179,10 @@ struct CertStatus {
         }
 
         // Convert the first 8 chars to hex
-        const auto buf = skid->data;
+        const auto buf = ASN1_STRING_get0_data(skid.get());
+        const int len = ASN1_STRING_length(skid.get());
         std::stringstream ss;
-        for (int i = 0; i < skid->length && ss.tellp() < 8; i++) {
+        for (int i = 0; i < len && ss.tellp() < 8; i++) {
             ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buf[i]);
         }
 
@@ -904,7 +905,7 @@ class CertStatusManager {
      * @return the extension
      * @throws CertStatusNoExtensionException if no extension is present in the certificate
      */
-    static X509_EXTENSION *getStatusExtension(const X509 *certificate);
+    static const X509_EXTENSION *getStatusExtension(const X509 *certificate);
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t> &ocsp_bytes);
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const uint8_t *ocsp_bytes, size_t ocsp_bytes_len);
     static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic_response, X509_STORE *trusted_store_ptr);
